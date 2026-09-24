@@ -1,6 +1,6 @@
 # B2C 商城 V1.0｜数据与 API 契约草案
 
-状态：待评审草案，2026-09-24。本文是研发契约，不改变《B2C商城小程序V1.0需求文档.md》的业务规则。阶段 A 先列核心字段、接口和约束，完整请求结构、组件配置与权限矩阵在下文继续细化；阶段 B、C 的交易对象先固定一致性边界，后续再补完整字段表。当前没有可运行工程、数据库迁移或联调结果。
+状态：阶段 A 的分类、状态、编码与规格、素材上限、默认权限和主账号方案已获项目确认，2026-09-24；接口细节及阶段 B、C 交易契约仍是设计稿。本文是研发契约，不改变《B2C商城小程序V1.0需求文档.md》的业务规则。当前没有可运行工程、数据库迁移或联调结果。
 
 ## 1. 契约通则
 
@@ -19,21 +19,23 @@
 
 | 表/实体 | 关键字段 | 必要约束与用途 |
 |---|---|---|
-| `admin_account` | `id uuid`、`login_name text`、`display_name text`、`password_hash text`、`kind OWNER/STAFF`、`enabled bool`、`revision int`、`auth_version int`、`failed_count int`、`locked_until timestamptz`、`last_active_at timestamptz` | `login_name` 唯一。资料/权限编辑校验 `revision`；账号停用、凭据重置、账号组关系变化及所属组权限变化/停用时，使受影响账号旧会话失效或即时重算权限。主账号不能被子账号管理。登录失败限制、空闲超时依需求文档第 12.1 节。 |
+| `admin_account` | `id uuid`、`login_name text`、`display_name text`、`password_hash text`、`kind OWNER/STAFF`、`enabled bool`、`revision int`、`auth_version int`、`failed_count int`、`locked_until timestamptz`、`last_active_at timestamptz` | `login_name` 唯一；数据库约束全库至多一个 `OWNER`。资料/权限编辑校验 `revision`；账号停用、凭据重置、账号组关系变化及所属组权限变化/停用时，使受影响账号旧会话失效或即时重算权限。主账号不能被子账号管理。登录失败限制、空闲超时依需求文档第 12.1 节。 |
 | `permission_group`、`account_group`、`group_permission` | 组 ID/名称/启用状态/`revision int`；账号与组；组与操作权限码 | 账号可入多个组，关联对分别唯一。更新组权限时比较并提升 `revision`，拒绝过期提交；操作权限由服务端集中枚举，默认拒绝未授权操作。 |
 | `audit_log` | `id`、`actor_id`、`action_code`、`object_type/id`、`before/after jsonb`、`result`、`request_id`、`occurred_at` | 高影响操作保留前后值与结果；敏感字段脱敏或只记变化类型。业务修改与成功审计在同一事务内写入。 |
-| `category` | `id`、`parent_id`、`name`、`sort_order`、`status`、`revision` | 最多二级；父级不能指向自身或二级分类。商品只绑定有效分类；是否允许绑定一级在评审时明确，当前建议绑定二级。 |
-| `product` | `id`、`product_no`、`name`、`category_id`、`fulfillment_kind SHIP/REDEEM`、`status`、`description_content`、`revision` | `product_no` 唯一。富文本必须净化。商品与 SKU 状态分离，只有双方均在售才可售。 |
-| `product_spec_axis`、`product_spec_option`、`sku_spec_selection` | 规格项名、排序；规格值、排序；SKU 与选中值 | 每商品最多 2 个规格项、每项最多 20 个值、组合最多 100 个。选中值必须属于该商品的规格项；同商品 SKU 组合唯一。 |
-| `sku` | `id`、`product_id`、`sku_code`、`list_price_fen bigint`、`sale_status`、`unit_version_id`、`revision` | `sku_code` 在单商户内唯一；与商品编号、规格名值分列。`list_price_fen >= 0`。已有订单或库存流水的 SKU 编码及规格含义不直接覆盖。 |
+| `category` | `id`、`parent_id`、`name`、`sort_order`、`status ACTIVE/INACTIVE`、`revision` | 最多二级；父级不能指向自身或二级分类。商品只绑定启用的二级分类；一级分类只用于导航。停用有在售商品的分类须先处理关联商品。 |
+| `product` | `id`、`product_no`、`name`、`category_id`、`fulfillment_kind SHIP/REDEEM`、`status DRAFT/ON_SALE/OFF_SALE`、`description_content`、`revision` | 新建先保存草稿。`product_no` 全库大小写不重复，1—64 字符；名称最多 120 字符。富文本必须净化。商品、SKU 和分类状态共同决定可售性。 |
+| `product_spec_axis`、`product_spec_option`、`sku_spec_selection` | 规格项名、排序；规格值、排序；SKU 与选中值 | 每商品最多 2 个规格项、每项最多 20 个值、组合最多 100 个。选中值必须属于该商品的规格项；同商品 SKU 组合由稳定 ID 生成唯一键，不用展示名称。 |
+| `sku` | `id`、`product_id`、`sku_code`、`list_price_fen bigint`、`sale_status ON_SALE/OFF_SALE`、`unit_version_id`、`revision` | `sku_code` 在单商户内大小写不重复，1—64 字符；与商品编号、规格名值分列。`list_price_fen >= 0`。已有订单或库存流水的 SKU 编码及规格含义不直接覆盖。 |
 | `member_grade` | `id`、`code`、`name`、`rank`、`enabled`、`revision` | 阶段 A 建立等级字典，供 SKU 等级价引用和展示；默认等级按需求文档，自动升降级及运营配置留待阶段 D。`code` 和 `rank` 各自唯一。 |
 | `sku_grade_price` | `sku_id`、`grade_id`、`price_fen bigint`、`effective_at` | 同一 SKU、等级和生效版本不能重复。实际成交价由服务端根据会员等级选取，历史订单保留快照。 |
 | `sku_unit_version` | `id`、`sku_id`、`base_unit`、`sale_unit`、`ratio_positive_int`、`effective_at` | 比例为正整数；启用新版本不改写历史订单和库存流水。阶段 A 建立版本结构，阶段 B 接入实际记账。 |
-| `media_asset`、`product_media` | 素材 ID、存储键、MIME、字节数、宽高、摘要、状态；商品关联与排序 | 校验内容类型、实际文件和尺寸；商品最多 9 张图片与 1 条视频。正式容量限制经设备与存储验证后定稿。存储键不等于公开 URL。 |
+| `media_asset`、`product_media` | 素材 ID、存储键、MIME、字节数、宽高、摘要、状态；商品关联与排序 | 校验声明与实际文件类型、尺寸、用途和引用；商品最多 9 张图片与 1 条视频。本机可配置临时上传上限：图片 10 MB、GIF 5 MB、视频 50 MB；正式体积与加载目标经目标设备验证后定稿。存储键不等于公开 URL。 |
 | `micro_page`、`page_config_version`、`page_publication` | 页面 `id`、类型 `HOME/MICRO`、名称、状态；版本 `id`、`page_id`、`revision`、`config_json jsonb`、草稿/已发布状态、发布人/时间；每页当前发布版本指针 | 首页是唯一的 `HOME` 页面，可关联已发布微页面。草稿可改；发布时从草稿生成不可变版本，并原子切换指针。校验组件字段、素材、链接目标发布状态和权限；失败保留旧版。首页主题三色属于版本配置。历史版本在阶段 A 保存，页面回退操作在阶段 E 交付。 |
 | `startup_config_version`、`startup_publication` | 配置版本 `id`、`gif_asset_id`、`fallback_asset_id`、`revision`、状态、发布人/时间；当前发布版本指针 | GIF 与兜底图独立引用；发布时生成不可变版本并原子切换指针，失败保留旧素材。用户端只读已发布版本。3 秒倒计时从页面实际呈现后开始，分享/扫码目标由客户端恢复。 |
 
-建议索引：`sku(product_id, sale_status)`、`product(category_id, status)`、`product_spec_selection(sku_id)`、`page_config_version(page_id, revision)`；唯一索引包括 `product_no`、`sku_code`、`member_grade(code)`、`(page_id, revision)`、`(product_id, 规格组合签名)`。规格组合签名的生成和迁移规则待数据库评审确定。
+建议索引：`sku(product_id, sale_status)`、`product(category_id, status)`、`product_spec_selection(sku_id)`、`page_config_version(page_id, revision)`；唯一索引包括 `upper(product_no)`、`upper(sku_code)`、`member_grade(code)`、`(page_id, revision)`、`(product_id, spec_key)`，以及仅对 `kind='OWNER'` 生效的唯一约束。`product_no` 和 `sku_code` 只接受英文字母、数字、`-`、`_`；`spec_key` 由服务端按稳定规格项 ID 排序后连接所选规格值 ID，同商品内唯一，不用展示名称或顺序生成身份。无规格商品使用固定的单 SKU 键。具体索引 SQL 在首批迁移时核对。
+
+公开读取仅把启用分类下、商品与 SKU 均为 `ON_SALE` 且后续具备真实可售库存的组合标为可购买。下架或不可售的旧链接返回明确状态与提示，不允许继续提交购买。
 
 阶段 A 尚未实现库存和下单时，小程序商品接口必须返回明确的不可购买或库存未配置状态；不能用样板数字伪造可售库存或开放提交订单。
 
@@ -69,9 +71,9 @@
 
 | 对象 | 请求字段 | 校验 |
 |---|---|---|
-| 商品 | `productNo`、`name`、`categoryId`、`fulfillmentKind`、`status`、`descriptionHtml`、`mainImageAssetId`、`galleryAssetIds[]`、可选 `videoAssetId` | 编号唯一；分类为已启用二级分类；履约类型固定为发货或核销；富文本净化；主图计入图片总数，合计最多 9 张、视频最多 1 条。 |
+| 商品 | `productNo`、`name`、`categoryId`、`fulfillmentKind`、`status`、`descriptionHtml`、`mainImageAssetId`、`galleryAssetIds[]`、可选 `videoAssetId` | 新建状态为 `DRAFT`；编号 1—64 字符且大小写不重复，名称最多 120 字符；分类为已启用二级分类；履约类型固定为发货或核销；富文本净化；主图计入图片总数，合计最多 9 张、视频最多 1 条。 |
 | 规格项 | `specAxes[{clientKey,name,sortOrder,options:[{clientKey,value,sortOrder}]}]` | 每商品最多 2 项、每项最多 20 值；同项内值不重复，排序唯一。`clientKey` 只用于单次请求关联，不进入业务编号。 |
-| SKU | `skus[{id?,skuCode,specOptionKeys[],listPriceFen,saleStatus,gradePrices:[{gradeId,priceFen}],unit:{baseUnit,saleUnit,ratio}}]` | 最多 100 个不同组合；规格值必须来自本商品；编码唯一、金额非负、换算比为正整数；等级 ID 必须存在且启用。 |
+| SKU | `skus[{id?,skuCode,specOptionKeys[],listPriceFen,saleStatus,gradePrices:[{gradeId,priceFen}],unit:{baseUnit,saleUnit,ratio}}]` | 最多 100 个不同组合；规格值必须来自本商品；编码 1—64 字符且大小写不重复，金额非负、换算比为正整数；等级 ID 必须存在且启用。规格组合唯一键使用服务端稳定 ID，不信任客户端名称。 |
 
 创建响应返回 `productId`、`productRevision`、每个 `clientKey` 对应的服务端规格 ID、每个 SKU 的 `skuId` 和 `skuRevision`。修改请求同时带 `expectedRevision`，已有 SKU 带 `id` 与 `expectedSkuRevision`；新增 SKU 无 `id`。若 SKU 已产生订单或库存流水，更改编码、规格选值或已生效单位版本必须被拒绝，并返回该 SKU 的具体错误。商品及其 SKU 的一次保存要么全部成功，要么全部失败。
 
@@ -104,7 +106,7 @@
 | 库存管理 | 无阶段 A 业务操作权限；阶段 B 增加库存权限时再配置，不获得 SKU 改价权限。 |
 | 会员营销 | 首页/微页面与启动配置读取、草稿编辑、素材读取/上传；默认无发布权。阶段 D 再增加会员与营销权限。 |
 
-主账号首次建立建议由本机管理命令交互输入凭据，不提供代码内默认密码。PC 会话采用服务端存储、HttpOnly Cookie 与 CSRF 防护；每次请求检查账号启用状态、会话空闲时间和当前授权版本，不信任登录时返回的 `permissionCodes` 缓存。账号组变更、组权限修改或组停用时，事务内提升所有受影响账号的 `auth_version`；资金与发布等高影响动作还需二次确认并重新校验会话。登录失败 5 次限制 15 分钟、空闲 30 分钟会话失效，来源频率限制按需求文档第 12.1 节执行。
+主账号首次建立由本机管理命令交互输入凭据，仅允许建立一个 `OWNER`，不提供代码内默认密码；实际初始化前指定凭据保管与交接人。PC 会话采用服务端存储、HttpOnly Cookie 与 CSRF 防护；每次请求检查账号启用状态、会话空闲时间和当前授权版本，不信任登录时返回的 `permissionCodes` 缓存。账号组变更、组权限修改或组停用时，事务内提升所有受影响账号的 `auth_version`；资金与发布等高影响动作还需二次确认并重新校验会话。登录失败 5 次限制 15 分钟、空闲 30 分钟会话失效，来源频率限制按需求文档第 12.1 节执行。
 
 ## 4. 交易关键数据对象：阶段 B、C 开发前定稿
 
@@ -134,9 +136,9 @@
 
 ## 6. 阶段 A 评审与未决项
 
-1. 本草案建议商品只绑定二级分类；商品状态建议 `DRAFT/ON_SALE/OFF_SALE`，SKU 状态建议 `ON_SALE/OFF_SALE`，分类状态建议 `ACTIVE/INACTIVE`。规格组合键由服务端按规格项顺序连接已选选项 ID 生成，并对 `(product_id, 组合键)` 加唯一约束。字段长度、索引及这些枚举需要在建表前评审。
-2. 商品请求、页面组件结构、预设权限和主账号初始化方式已给出候选契约；实施前仍需评审本机媒体存储目录、上传限额、富文本净化方案及权限矩阵。正式素材尺寸和容量经目标手机实测。
-3. 会话与 CSRF 方案按第 3.3 节实施建议评审；需确定本机与未来 HTTPS 环境的 Cookie 配置，以及主账号凭据的安全交接人。
+1. 项目已确认：商品只绑定启用的二级分类；分类、商品、SKU 状态枚举；商品编号与 SKU 编码长度/字符规则及大小写唯一；规格稳定 ID 组合唯一；本机临时素材上限；阶段 A 默认权限组；唯一主账号交互初始化。首批迁移需验证约束与索引实际可执行。
+2. 商品请求和页面组件结构仍是候选字段表；实施时定稿其他展示字段长度、本机媒体目录、富文本净化白名单及上传失败清理。正式素材尺寸、体积和性能经目标手机实测。
+3. 会话与 CSRF 方案按第 3.3 节实施；本机 HTTP 与未来 HTTPS 的 Cookie 配置应分环境验证。主账号凭据保管与交接人在实际初始化前指定。
 4. 微信账号的自动提审、发布和回退路径仍在实施待验证清单 T-01；没有真实账号结论前，代码版本管理接口不写成已可自动发布。
 5. 微信支付商户号尚无，交易接口均为设计契约；不能用模拟回调替代真实验签、退款和资金结果联调。
 
