@@ -12,7 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import transaction
-from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from accounts.models import AdminAccount
@@ -136,6 +136,33 @@ class StorageConsistencyTests(TestCase):
             recover_media_storage()
         self.assertFalse(stale.exists())
         self.assertTrue(recent.exists())
+
+    def test_bounded_recovery_removes_at_most_one_temporary_per_tick(self):
+        temporary = self.root / "tmp"
+        temporary.mkdir()
+        old = (timezone.now() - timedelta(days=2)).timestamp()
+        for index in range(3):
+            candidate = temporary / f"stale-{index}.upload"
+            candidate.write_bytes(b"interrupted")
+            os.utime(candidate, (old, old))
+        with self.captureOnCommitCallbacks(execute=True):
+            result = recover_media_storage(limit=1)
+        self.assertEqual(result["temporaryFilesRemoved"], 1)
+        self.assertEqual(len(list(temporary.glob("*.upload"))), 2)
+        with self.captureOnCommitCallbacks(execute=True):
+            recover_media_storage()
+        self.assertEqual(list(temporary.glob("*.upload")), [])
+
+    def test_bounded_orphan_purge_keeps_remaining_assets_for_later_ticks(self):
+        assets = [self.upload() for _ in range(3)]
+        for asset in assets:
+            self.expire(asset)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(purge_expired_orphans(limit=1), 1)
+        self.assertEqual(Asset.objects.count(), 2)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(purge_expired_orphans(), 2)
+        self.assertEqual(Asset.objects.count(), 0)
 
     def test_upload_outer_rollback_leaves_recoverable_intent_and_no_record(self):
         try:
@@ -292,3 +319,16 @@ class StorageConsistencyTests(TestCase):
         self.assertTrue(Asset.objects.filter(pk=asset.pk).exists())
         self.assertEqual(path.read_bytes(), png())
         self.assertTrue(LocalStorage().path(marker).exists())
+
+
+class StorageSchedulerTests(TransactionTestCase):
+    def test_bounded_purge_alerts_on_retained_invalid_marker(self):
+        with tempfile.TemporaryDirectory() as folder, override_settings(MEDIA_ROOT=folder):
+            pending = Path(folder) / ".pending-delete"
+            pending.mkdir()
+            marker = pending / "bad.json"
+            marker.write_text('{"assetId":"' + str(uuid.uuid4()) + '","key":"code/private.zip"}')
+            with self.assertLogs("catalog.storage", level="ERROR"):
+                with self.assertRaises(CatalogError):
+                    purge_expired_orphans(limit=1)
+            self.assertTrue(marker.exists())

@@ -183,13 +183,17 @@ def orphan_assets():
     return unbound
 
 
-def purge_expired_orphans():
-    recover_media_storage()
+def purge_expired_orphans(limit=None):
+    recovered = recover_media_storage(limit=limit)
+    if limit is not None and recovered["invalidIntents"]:
+        raise CatalogError("素材恢复标记无效，需要人工处理。", "MEDIA_STORAGE_UNAVAILABLE", 503)
     cutoff = timezone.now() - settings.PRODUCT_MEDIA_ORPHAN_TTL
     removed = 0
     storage = LocalStorage()
     try:
-        for identifier in orphan_assets().filter(created_at__lt=cutoff).values_list("id", flat=True):
+        candidates = orphan_assets().filter(created_at__lt=cutoff).order_by("created_at", "id")
+        identifiers = candidates.values_list("id", flat=True)
+        for identifier in identifiers if limit is None else identifiers[:limit]:
             with transaction.atomic():
                 lock_storage()
                 asset = Asset.objects.select_for_update().filter(id=identifier).first()
