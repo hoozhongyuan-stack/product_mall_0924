@@ -93,6 +93,14 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: python -m pip install -r backend/requirements-dev.txt
       - run: python pc-admin/scripts/test-browser-launcher.py
+      - name: Verify deployment and recovery guards
+        run: |
+          python scripts/e5-backup-restore-test.py
+          python scripts/e5-preflight-test.py
+          python scripts/e5-uat-test.py
+          sudo python3 scripts/e5-secret-linux-test.py
+          docker pull nginx:stable-alpine3.24-slim@sha256:32463212baf0e7d91aded2e9b843a4f2b9e017804b8c9d5bae7b51dcef64389c
+          python scripts/e5-proxy-test.py
       - run: python manage.py makemigrations --check --dry-run
         working-directory: backend
       - run: python -m coverage run manage.py test --noinput

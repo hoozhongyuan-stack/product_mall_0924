@@ -26,7 +26,7 @@ install -o 10001 -g 10001 -m 0400 /secure-source/django_secret_key /private/prod
 install -o 10001 -g 10001 -m 0400 /secure-source/wechat_credential_key /private/product-mall/wechat_credential_key
 ```
 
-上述命令在 `set -e` 的独立 shell 中执行，或逐条确认退出码，不能忽略 `test` 的失败。`E5_WECHAT_CREDENTIAL_KEY_FILE` 指向第三个源文件；容器得到 `MALL_WECHAT_CREDENTIAL_KEY_FILE=/run/secrets/wechat_credential_key`，应用直接读取，入口不把其内容转成环境变量。release、Web、worker、scheduler 挂载同一持久 key，导出／会员／支付读路径不能使用不同 key。部署、恢复、定时备份都调用共享只读预检；缺失、空值、格式错误、宽权限、所有者错误或运行 UID 无法读取时失败，且停写尚未发生。新 key 的检查只证明部署材料有效，不证明已有密文可解密；与后台接入设置切片合并后还须用同 key 验证合成密文恢复。
+上述命令在 `set -e` 的独立 shell 中执行，或逐条确认退出码，不能忽略 `test` 的失败。`E5_WECHAT_CREDENTIAL_KEY_FILE` 指向第三个源文件；容器得到 `MALL_WECHAT_CREDENTIAL_KEY_FILE=/run/secrets/wechat_credential_key`，应用直接读取，入口不把其内容转成环境变量。release、Web、worker、scheduler 挂载同一持久 key，导出／会员／支付读路径不能使用不同 key。部署、恢复、定时备份都调用共享只读预检；缺失、空值、格式错误、宽权限、所有者错误或运行 UID 无法读取时失败，且停写尚未发生。文件预检不证明已有密文可解密，因此发布与恢复还在迁移后、源码同步和服务启动前执行 `check_wechat_credentials`；错误密钥、损坏密文、缺失单例均安全失败，首次未托管 ENV 允许通过。该检查只读，不请求微信，失败时保留现状供排查，不能通过换新 key 绕过。
 
 预检服务使用相同镜像、环境、密钥与 UID，但不挂载 `media/pgdata`，不启动依赖，网络模式为 `none`。首次预检失败不会创建业务卷，避免污染 `initial` 对新卷的保护条件；不自动删除任何既有卷。
 

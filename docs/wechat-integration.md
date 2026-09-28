@@ -1,6 +1,6 @@
 # 小程序接入设置与 UAT 验收
 
-状态：接入设置实现与本地回归完成，待 GitHub CI、合入及目标环境验收。视觉对齐已通过 GitHub PR #2 合入 `d5f87e7482ab52fe380e54745fb6170677f59257`，PR 与 main 三项 Engineering quality 检查均通过。具体字段以 contract-v1.md 为准。
+状态：接入设置已通过 [PR #3](https://github.com/hoozhongyuan-stack/product_mall_0924/pull/3) 合入 `89a298a63674fe7a68a42817c07ab9074d0ecc71`，[三项 PR CI](https://github.com/hoozhongyuan-stack/product_mall_0924/actions/runs/36414575962)全部通过；目标环境及真实微信验收待执行。视觉对齐已通过 GitHub PR #2 合入 `d5f87e7482ab52fe380e54745fb6170677f59257`，PR 与 main 三项 Engineering quality 检查均通过。具体字段以 contract-v1.md 为准。
 
 ## 配置责任
 
