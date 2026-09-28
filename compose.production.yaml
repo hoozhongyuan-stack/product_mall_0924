@@ -1,0 +1,193 @@
+name: ${MALL_COMPOSE_PROJECT:-product-mall}
+
+x-backend-env: &backend-env
+  DJANGO_DEBUG: "0"
+  DJANGO_ALLOWED_HOSTS: ${MALL_ALLOWED_HOSTS:?Set MALL_ALLOWED_HOSTS},127.0.0.1
+  DJANGO_CSRF_TRUSTED_ORIGINS: ${MALL_CSRF_TRUSTED_ORIGINS:?Set MALL_CSRF_TRUSTED_ORIGINS}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+  POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+  POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+  DJANGO_SECRET_KEY_FILE: /run/secrets/django_secret_key
+  MALL_MEDIA_ROOT: /var/lib/product-mall/files
+  MALL_RELEASE_REVISION: ${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+  EXCHANGE_ORDER_ENABLED: "0"
+  WECHAT_REFUND_ENABLED: "0"
+  KDNIAO_ENABLED: "0"
+
+x-backend-service: &backend-service
+  image: product-mall-backend:${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+  entrypoint: ["sh", "/app/scripts/e5-app-entrypoint.sh"]
+  environment: *backend-env
+  secrets: [postgres_password, django_secret_key]
+  volumes:
+    - media:/var/lib/product-mall/files
+  networks: [private]
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,nosuid,size=536870912
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+services:
+  db:
+    image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+    environment:
+      POSTGRES_DB: ${POSTGRES_INIT_DB:-${POSTGRES_DB:?Set POSTGRES_DB}}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+    volumes: [pgdata:/var/lib/postgresql]
+    networks: [private]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    stop_grace_period: 60s
+
+  media-init:
+    image: product-mall-backend:${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    user: "0:0"
+    entrypoint: ["sh", "-c"]
+    command: ["mkdir -p /var/lib/product-mall/files && chown -R 10001:10001 /var/lib/product-mall/files && chmod 700 /var/lib/product-mall/files"]
+    volumes: [media:/var/lib/product-mall/files]
+    network_mode: none
+    restart: "no"
+
+  release:
+    <<: *backend-service
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.backend
+      args:
+        MALL_BUILD_REVISION: ${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    command: ["sh", "/app/scripts/deploy-with-code-sync.sh"]
+    depends_on:
+      db: {condition: service_healthy}
+      media-init: {condition: service_completed_successfully}
+    restart: "no"
+
+  web:
+    <<: *backend-service
+    command: ["gunicorn", "config.wsgi:application", "--chdir", "/app/backend",
+              "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4",
+              "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]
+    depends_on:
+      release: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+    stop_grace_period: 45s
+
+  export-worker:
+    <<: *backend-service
+    command: ["python", "/app/backend/manage.py", "run_export_jobs", "--watch", "--interval", "5"]
+    depends_on:
+      release: {condition: service_completed_successfully}
+    restart: unless-stopped
+    stop_grace_period: 60s
+
+  scheduler:
+    <<: *backend-service
+    command: ["sh", "/app/scripts/e5-scheduler-loop.sh"]
+    depends_on:
+      release: {condition: service_completed_successfully}
+    restart: unless-stopped
+    stop_grace_period: 60s
+
+  admin:
+    image: product-mall-admin:${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.admin
+      args:
+        MALL_BUILD_REVISION: ${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    ports:
+      - "127.0.0.1:${MALL_HTTP_PORT:-18080}:8080"
+    networks: [private]
+    depends_on:
+      web: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:rw,nosuid,size=67108864
+      - /var/run:rw,nosuid,size=1048576
+      - /tmp:rw,nosuid,size=67108864
+    security_opt: ["no-new-privileges:true"]
+
+  backup:
+    image: product-mall-ops:${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.ops
+      args:
+        MALL_BUILD_REVISION: ${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    profiles: [ops]
+    entrypoint: ["sh", "/ops/e5-backup.sh"]
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:?Set POSTGRES_DB}
+      PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      PGPASSWORD_FILE: /run/secrets/postgres_password
+      MALL_MEDIA_ROOT: /var/lib/product-mall/files
+      E5_BACKUP_ROOT: /backups
+      E5_WRITERS_PAUSED: ${E5_WRITERS_PAUSED:-0}
+      MALL_RELEASE_REVISION: ${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    secrets: [postgres_password]
+    volumes:
+      - media:/var/lib/product-mall/files:ro
+      - ${E5_BACKUP_HOST_DIR:?Set E5_BACKUP_HOST_DIR}:/backups
+    networks: [private]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: "no"
+
+  restore:
+    image: product-mall-ops:${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    profiles: [ops]
+    entrypoint: ["sh", "/ops/e5-restore.sh"]
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      PGPASSWORD_FILE: /run/secrets/postgres_password
+      E5_RESTORE_DB: ${E5_RESTORE_DB:-}
+      E5_RESTORE_MEDIA_ROOT: /var/lib/product-mall/files
+      MALL_MEDIA_ROOT: /var/lib/product-mall/source-unmounted
+    secrets: [postgres_password]
+    volumes:
+      - media:/var/lib/product-mall/files
+      - ${E5_BACKUP_HOST_DIR:?Set E5_BACKUP_HOST_DIR}:/backups:ro
+    networks: [private]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: "no"
+
+secrets:
+  postgres_password:
+    file: ${E5_POSTGRES_PASSWORD_FILE:-./secrets/postgres_password}
+  django_secret_key:
+    file: ${E5_DJANGO_SECRET_KEY_FILE:-./secrets/django_secret_key}
+
+networks:
+  private:
+    internal: true
+
+volumes:
+  pgdata:
+  media:

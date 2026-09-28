@@ -21,6 +21,7 @@
 | `backend/code_versions/` | E3 小程序服务端源码快照、Git 提交来源证明、私有不可变包、构建任务与版本只读记录 | 部署入口先核对指定 HEAD 和干净检出，再迁移、从 Git 对象构建并存入 `code/`；失败阻止后续启动。管理台只读，不上传浏览器本地包。包保存成功只证明商城后台本地持久化，微信上传、提审和发布须由后续独立平台适配与可信回执证明。 |
 | `backend/accounts/audit_read.py`、`backend/accounts/read_window.py`、`backend/accounts/read_rate_limit.py`、`backend/payments/business_read.py` | E4.0 审计与经营只读模型 | 账号域负责审计权限、筛选、游标、出站脱敏和数据库分钟配额；共享自然日窗口由账号域提供。支付域从订单支付确认和退款成功事实聚合经营数据，不写资金状态；E4.1 导出任务在此读口径上扩展。 |
 | `backend/report_exports/` | E4.1 私有异步导出 | 创建请求只冻结 E4.0 筛选与权限并持久排队；worker 复用审计脱敏与经营聚合，租约隔离文件生成。下载按本人、实时双权限、状态、期限和摘要复核；清理命令只处理 `export/`，不复用素材删除意图。 |
+| `compose.production.yaml`、`deploy/`、`scripts/e5-*.sh` | E5 单实例应用编排、发布、备份和隔离恢复 | E3.1 闸门先于应用启动；数据库与完整私有媒体卷配对备份。调度只调用有界本地维护命令，外部平台仍由各业务域控制。操作及故障约束见 [E5 运维手册](e5-operations.md)。 |
 | `backend/fulfillment/` | C3 已付款订单发货、收货、核销凭证与操作历史 | 只在 `orders` 的已付款事实后履约，发货／核销不再次扣库存；凭证码和二维码只经本人订单响应返回，PC 用输入码查验而不读取订单详情中的明文。物流轨迹适配不得改写发货事实。 |
 | `backend/aftersales/` | 售后期限快照、订单项申请、审核/撤销、数量与商品退款金额占用、处理事件 | 先锁订单，使用订单项成交实付快照与 `payments.access.applied_receipt`；向履约提供守卫和批量摘要。退款最终确认由 `payments.refunds` 协调，通过 `inventory.refunds` 和 `fulfillment` 公共入口写副作用，再完成售后；不直接改余额、核销计数或发起第三方请求。 |
 | `backend/pages/` | 页面草稿、预览、发布、版本和页面组件配置 | 引用商品或素材时调用对应模块的校验/读取入口；页面发布事务由本模块负责。 |

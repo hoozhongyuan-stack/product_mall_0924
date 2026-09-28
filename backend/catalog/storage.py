@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import uuid
+from itertools import islice
 from pathlib import Path, PurePosixPath
 
 from django.conf import settings
@@ -155,20 +156,23 @@ class LocalStorage:
         self.path(key).unlink(missing_ok=True)
 
 
-def recover_media_storage():
+def recover_media_storage(limit=None):
     """Resume durable intents and remove only expired upload temporaries.
 
     The shared transaction lock excludes active uploads/deletions, so recovery
     never mistakes their uncommitted rows for abandoned files.
     """
+    if limit is not None and (type(limit) is not int or not 1 <= limit <= 500):
+        raise ValueError("limit must be between 1 and 500")
     storage = LocalStorage()
-    recovered = temporary_removed = 0
+    recovered = temporary_removed = invalid_intents = 0
     outer_transaction = connection.in_atomic_block
     try:
         with transaction.atomic():
             lock_storage()
             pending = storage.path(".pending-delete/placeholder").parent
-            for marker in sorted(pending.glob("*.json")):
+            markers = sorted(pending.glob("*.json")) if limit is None else islice(pending.glob("*.json"), limit)
+            for marker in markers:
                 marker_key = f".pending-delete/{marker.name}"
                 if outer_transaction:
                     # This connection may see its own uncommitted upload/delete.
@@ -179,14 +183,17 @@ def recover_media_storage():
                     storage._finish_intent(marker_key)
                     recovered += 1
                 except (CatalogError, ValueError, KeyError, TypeError):
+                    invalid_intents += 1
                     LOGGER.error("Invalid storage cleanup marker retained: %s", marker.name)
             temporary_root = storage.path("tmp/placeholder").parent
             cutoff = (timezone.now() - settings.STORAGE_TEMPORARY_TTL).timestamp()
-            for temporary in temporary_root.glob("*.upload"):
+            temporaries = temporary_root.glob("*.upload")
+            for temporary in temporaries if limit is None else islice(temporaries, limit):
                 path = storage.path(f"tmp/{temporary.name}")
                 if path.is_file() and path.stat().st_mtime < cutoff:
                     path.unlink()
                     temporary_removed += 1
     except OSError as exc:
         raise storage_unavailable(exc) from exc
-    return {"recoveredIntents": recovered, "temporaryFilesRemoved": temporary_removed}
+    return {"recoveredIntents": recovered, "temporaryFilesRemoved": temporary_removed,
+            "invalidIntents": invalid_intents}

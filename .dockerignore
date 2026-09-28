@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+secrets
+.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+.coverage
+htmlcov
+media
+mini-program/project.private.config.json
+.DS_Store
+*.log
