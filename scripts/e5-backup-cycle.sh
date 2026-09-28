@@ -70,6 +70,8 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+. "$root/scripts/e5-preflight.sh"
+e5_preflight compose
 paused=1
 compose stop admin web export-worker scheduler
 compose --profile ops run --rm --no-deps -e E5_WRITERS_PAUSED=1 backup

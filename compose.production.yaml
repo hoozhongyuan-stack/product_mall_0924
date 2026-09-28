@@ -10,6 +10,8 @@ x-backend-env: &backend-env
   POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
   POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
   DJANGO_SECRET_KEY_FILE: /run/secrets/django_secret_key
+  MALL_WECHAT_CREDENTIAL_KEY_FILE: /run/secrets/wechat_credential_key
+  WECHAT_MINI_APP_ID: ${WECHAT_MINI_APP_ID:-}
   MALL_MEDIA_ROOT: /var/lib/product-mall/files
   MALL_RELEASE_REVISION: ${MALL_RELEASE_REVISION:?Set the full release commit SHA}
   EXCHANGE_ORDER_ENABLED: "0"
@@ -20,7 +22,7 @@ x-backend-service: &backend-service
   image: product-mall-backend:${MALL_RELEASE_REVISION:?Set the full release commit SHA}
   entrypoint: ["sh", "/app/scripts/e5-app-entrypoint.sh"]
   environment: *backend-env
-  secrets: [postgres_password, django_secret_key]
+  secrets: [postgres_password, django_secret_key, wechat_credential_key]
   volumes:
     - media:/var/lib/product-mall/files
   networks: [private]
@@ -33,6 +35,19 @@ x-backend-service: &backend-service
   cap_drop: [ALL]
 
 services:
+  # Same app identity and secrets, deliberately without DB/media mounts or networks.
+  preflight:
+    image: product-mall-backend:${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    entrypoint: ["python", "/app/scripts/e5-preflight.py", "runtime"]
+    environment: *backend-env
+    secrets: [postgres_password, django_secret_key, wechat_credential_key]
+    user: "10001:10001"
+    network_mode: none
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    restart: "no"
+
   db:
     image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
     environment:
@@ -75,6 +90,7 @@ services:
 
   web:
     <<: *backend-service
+    networks: [private, egress]
     command: ["gunicorn", "config.wsgi:application", "--chdir", "/app/backend",
               "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4",
               "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]
@@ -184,11 +200,14 @@ secrets:
     file: ${E5_POSTGRES_PASSWORD_FILE:-./secrets/postgres_password}
   django_secret_key:
     file: ${E5_DJANGO_SECRET_KEY_FILE:-./secrets/django_secret_key}
+  wechat_credential_key:
+    file: ${E5_WECHAT_CREDENTIAL_KEY_FILE:?Set the persistent WeChat encryption key file}
 
 networks:
   private:
     internal: true
   ingress: {}
+  egress: {}
 
 volumes:
   pgdata:

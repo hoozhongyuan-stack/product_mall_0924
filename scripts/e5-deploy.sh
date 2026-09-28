@@ -72,6 +72,8 @@ if [ "$mode" = initial ]; then
 fi
 compose build release admin
 compose --profile ops build backup
+. "$root/scripts/e5-preflight.sh"
+e5_preflight compose
 
 if [ "$mode" = initial ]; then
     compose up --wait -d db

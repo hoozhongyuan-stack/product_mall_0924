@@ -103,6 +103,8 @@ recovery() {
 recovery config --quiet
 recovery build release admin
 recovery --profile ops build restore
+. "$root/scripts/e5-preflight.sh"
+e5_preflight recovery
 recovery up --wait -d db
 recovery up --no-deps --force-recreate --exit-code-from media-init media-init
 recovery --profile ops run --rm --no-deps restore "/backups/$bundle"
