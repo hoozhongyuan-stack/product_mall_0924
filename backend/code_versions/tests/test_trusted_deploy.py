@@ -226,9 +226,10 @@ class DeployHookTests(SimpleTestCase):
         return subprocess.run([str(self.hook), "sh", "-c", 'touch "$MALL_TEST_LAUNCHED"'],
                               env=env, capture_output=True, timeout=10)
 
-    def test_migration_or_sync_failure_prevents_launch(self):
+    def test_migration_credentials_or_sync_failure_prevents_launch(self):
         for failure, expected in [("migrate", ["migrate"]),
-                                  ("sync_deployed_miniprogram", ["migrate", "sync_deployed_miniprogram"])]:
+                                  ("check_wechat_credentials", ["migrate", "check_wechat_credentials"]),
+                                  ("sync_deployed_miniprogram", ["migrate", "check_wechat_credentials", "sync_deployed_miniprogram"])]:
             with self.subTest(failure=failure):
                 self.log.unlink(missing_ok=True)
                 result = self.run_hook(failure)
@@ -236,11 +237,11 @@ class DeployHookTests(SimpleTestCase):
                 self.assertEqual(self.log.read_text().splitlines(), expected)
                 self.assertFalse(self.launched.exists())
 
-    def test_success_runs_migrate_then_sync_then_launch(self):
+    def test_success_runs_migrate_then_credentials_then_sync_then_launch(self):
         result = self.run_hook()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.log.read_text().splitlines(),
-                         ["migrate", "sync_deployed_miniprogram"])
+                         ["migrate", "check_wechat_credentials", "sync_deployed_miniprogram"])
         self.assertTrue(self.launched.exists())
 
     def test_dirty_release_is_rejected_before_migration(self):

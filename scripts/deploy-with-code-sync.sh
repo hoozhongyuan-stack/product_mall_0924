@@ -26,6 +26,7 @@ if [ -n "$checkout_changes" ]; then
 fi
 
 "$python_bin" "$project_root/backend/manage.py" migrate --noinput
+"$python_bin" "$project_root/backend/manage.py" check_wechat_credentials
 "$python_bin" "$project_root/backend/manage.py" sync_deployed_miniprogram \
   --expected-revision "$MALL_RELEASE_REVISION"
 

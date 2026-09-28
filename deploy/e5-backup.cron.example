@@ -1,0 +1,5 @@
+# Install on the Docker host as the root deployment account, after replacing
+# every placeholder. This is a template, not an active production schedule.
+# Run every 30 minutes; the script pauses writers for a paired snapshot.
+# For UAT, set E5_DEPLOY_PROFILE=uat in the same E5_ENV_FILE used by deployment.
+*/30 * * * * E5_ENV_FILE=/private/product-mall/release.env E5_BACKUP_HOST_DIR=/private/product-mall/backups /bin/sh /srv/product-mall-current/scripts/e5-backup-cycle.sh >>/private/product-mall/backup-cycle.log 2>&1

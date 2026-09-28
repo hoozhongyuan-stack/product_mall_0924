@@ -51,6 +51,8 @@ if not DEBUG and SECRET_KEY == "local-only-change-before-deploy":
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver").split(",")
 local_origins = "http://127.0.0.1:5173,http://localhost:5173" if DEBUG else ""
 CSRF_TRUSTED_ORIGINS = [value for value in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", local_origins).split(",") if value]
+# Opt in only behind an isolated proxy that overwrites client-supplied scheme headers.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if os.environ.get("DJANGO_TRUST_PROXY_HTTPS") == "1" else None
 
 INSTALLED_APPS = [
     "django.contrib.auth",
