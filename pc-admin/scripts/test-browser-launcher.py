@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Standard-library launcher safety tests. Mock processes/DB; create only private temporary files."""
 import contextlib
+import base64
 import importlib.util
 import io
 import json
@@ -43,6 +44,7 @@ class LauncherSafetyTests(unittest.TestCase):
             stack.enter_context(patch.dict(os.environ, {
                 'POSTGRES_HOST': '127.0.0.1', 'POSTGRES_PASSWORD': 'synthetic-unit-password',
                 'MALL_E2E_PREVIEW': 'untrusted-inherited-value', 'WECHAT_MINI_APP_SECRET': 'inherited-secret',
+                'MALL_WECHAT_CREDENTIAL_KEY_FILE': '/untrusted/real-deployment-key',
             }))
             stack.enter_context(patch.object(launcher.psycopg, 'connect', return_value=self.control))
             run = stack.enter_context(patch.object(launcher.subprocess, 'run', return_value=Mock(returncode=0)))
@@ -104,6 +106,29 @@ class LauncherSafetyTests(unittest.TestCase):
             self.assertEqual(stop.call_count, 2)
         self.assertNotIn('Private preview access file:', self.output.getvalue())
         self.assert_exact_database_cleanup()
+
+    def test_credential_key_is_fresh_private_and_removed_with_owned_environment(self):
+        key_paths = []
+        key_values = []
+        def inspect_subprocess(*args, **kwargs):
+            path = Path(kwargs['env']['MALL_WECHAT_CREDENTIAL_KEY_FILE'])
+            self.assertNotEqual(str(path), '/untrusted/real-deployment-key')
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o400)
+            value = path.read_bytes()
+            self.assertEqual(len(base64.urlsafe_b64decode(value)), 32)
+            if path not in key_paths:
+                key_paths.append(path)
+                key_values.append(value)
+            return Mock(returncode=0)
+        for _ in range(2):
+            with self.isolated_mocks() as (run, _):
+                run.side_effect = inspect_subprocess
+                self.assertEqual(launcher.run(), 0)
+        self.assertEqual(len(key_paths), 2)
+        self.assertNotEqual(key_values[0], key_values[1])
+        for path, value in zip(key_paths, key_values):
+            self.assertFalse(path.exists())
+            self.assertNotIn(value.decode(), self.output.getvalue())
 
     def test_cleanup_timeout_does_not_skip_other_server_or_drop(self):
         with self.isolated_mocks(stop_effect=[subprocess.TimeoutExpired('owned-server', 8), None]) as (_, stop):

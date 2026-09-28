@@ -139,13 +139,17 @@ def confirm_view(request):
                 "member.rules.update": "member.rules.manage",
                 "coupon.publish": "coupon.publish", "coupon.issue": "coupon.issue",
                 "exchange.publish": "exchange.publish",
-                "notification.task.recover_reservation": "notification.recover"}
+                "notification.task.recover_reservation": "notification.recover",
+                "wechat.integration.update": "wechat.integration.manage",
+                "wechat.integration.test": "wechat.integration.manage"}
     if not isinstance(action, str) or action not in required or required[action] not in permissions(account):
         return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
     read_permission = {"page.rollback": "page.read", "startup.rollback": "startup.read",
                        "navigation.rollback": "navigation.read",
                        "customer_service.rollback": "customer_service.read",
-                       "notification.task.recover_reservation": "notification.read"}.get(action)
+                       "notification.task.recover_reservation": "notification.read",
+                       "wechat.integration.update": "wechat.integration.read",
+                       "wechat.integration.test": "wechat.integration.read"}.get(action)
     if read_permission and read_permission not in permissions(account):
         return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
     with transaction.atomic():

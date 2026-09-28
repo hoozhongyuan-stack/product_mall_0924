@@ -77,7 +77,16 @@ def _text(value, limit=128):
 
 class WechatGateway:
     def __init__(self, config=None, transport=None, clock=None):
-        self.config = validate_config(config or load_wechat_config())
+        if config is None:
+            from wechat_integration.credentials import CredentialsUnavailable, effective_app_id
+            config = load_wechat_config()
+            try:
+                app_id = effective_app_id()
+            except CredentialsUnavailable:
+                raise WechatGatewayError('小程序凭据配置暂不可用。', 'WECHAT_NOT_CONFIGURED', 503) from None
+            if not app_id or config.app_id != app_id:
+                raise WechatGatewayError('支付部署绑定与当前小程序 AppID 不一致。', 'WECHAT_APP_ID_MISMATCH', 503)
+        self.config = validate_config(config)
         self.transport = transport or _transport
         self.clock = clock or time.time
         self._certificates = {}

@@ -10,6 +10,7 @@ export const router = createRouter({
     { path: '/business/summary', component: () => import('./views/BusinessSummaryView.vue'), meta: { title: '经营统计', permission: 'business.report.read' } },
     { path: '/subscription-messages', component: () => import('./views/SubscriptionMessagesView.vue'), meta: { title: '订阅消息', permission: 'notification.read' } },
     { path: '/subscription-message-tasks', component: () => import('./views/SubscriptionMessageTasksView.vue'), meta: { title: '消息任务', permission: 'notification.read' } },
+    { path: '/store/wechat-integration', component: () => import('./views/WechatIntegrationView.vue'), meta: { title: '小程序接入', permission: 'wechat.integration.read' } },
     { path: '/store/code-versions', component: () => import('./views/CodeVersionsView.vue'), meta: { title: '代码版本', permission: 'code.version.read' } },
     { path: '/assets', component: () => import('./views/AssetsView.vue'), meta: { title: '素材中心', permissionsAny: ['asset.read', 'asset.upload'] } },
     { path: '/catalog', component: () => import('./views/CatalogView.vue'), meta: { title: '商品管理', permission: 'catalog.read' } },

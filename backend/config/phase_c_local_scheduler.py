@@ -38,7 +38,7 @@ def validate_target(env, expected_db):
 
 def child_environment(env):
     child = {key: value for key, value in env.items()
-             if not key.startswith(("WECHAT_PAY_", "WECHAT_MINI_APP_", "KDNIAO_"))}
+             if not key.startswith(("WECHAT_PAY_", "WECHAT_MINI_APP_", "KDNIAO_", "MALL_WECHAT_"))}
     child["DJANGO_SETTINGS_MODULE"] = "config.settings"
     child["KDNIAO_ENABLED"] = "0"
     return child

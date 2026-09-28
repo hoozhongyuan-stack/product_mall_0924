@@ -114,7 +114,7 @@ class AdminReadQuota(models.Model):
     class Meta:
         db_table = "admin_read_quota"
         constraints = [models.UniqueConstraint(fields=["actor", "scope", "window_start"], name="admin_read_quota_unique"),
-                       models.CheckConstraint(condition=Q(scope__in=["audit", "business"]), name="admin_read_quota_scope"),
+                       models.CheckConstraint(condition=Q(scope__in=["audit", "business", "wechat.integration"]), name="admin_read_quota_scope"),
                        models.CheckConstraint(condition=Q(count__lte=60), name="admin_read_quota_count")]
 
 

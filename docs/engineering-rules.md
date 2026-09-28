@@ -12,6 +12,7 @@
 | `backend/catalog/` | 分类、商品、SKU、素材及其公开展示条件 | `pages` 等模块需要商品状态时，通过明确的只读查询或业务入口获取；不在本模块操作页面发布表。 |
 | `backend/inventory/` | 仓库、余额、入出库、盘点审核及不可改写流水 | 经 `catalog/inventory_access.py` 读取 SKU 与当前单位；向商品模块仅暴露 `inventory/sku_guards.py` 的历史引用检查。其他模块不得直接改余额或写流水。 |
 | `backend/customers/` | 小程序会员身份、微信登录令牌、收货地址、有效消费与等级运营读模型 | 其他域通过 `customers.auth.resolve_member` 与 `customers.addresses.member_owns_active_address` 校验，不直接读写令牌或地址表。D4运营通过安全分页读模型查询会员，通过benefits公开规则入口配置，不暴露微信身份。 |
+| `backend/wechat_integration/` | 小程序 AppID／AppSecret 加密单例、有效凭据快照、后台保存与应用凭据校验 | 复用 `accounts` 会话、权限、密码确认、审计与限流；通过 `customers/integration_access.py` 只读会员身份锚点。登录与保存在同一单例行锁下重验身份；其他域通过命名入口读取，不运行时改写 Django settings。平台调用在事务外，不创建会员、不启用支付／消息／代码发布。 |
 | `backend/shipping/` | 首版固定运费配置、修订号和配送费计算 | `checkout` 报价与 `orders` 提交通过 `shipping.service` 读取；后台写入须 `settlement.shipping.manage`，不在客户端自行计算运费。 |
 | `backend/benefits/` | 会员券、活动与发行凭证、积分批次及权益暂占、释放、核销流水 | `checkout` 只读取可用权益和试算；`orders` 在整单事务内调用命名入口。D4通过修订规则入口配置积分与等级参数；D4.1通过活动／发放命名入口管理永久额度、本人领取与恢复凭证，账号权限与商品选择沿所属域公共接口。手工积分调整界面留后续切片。 |
 | `backend/checkout/` | 商品选购报价快照与当前价格/库存核对 | 经 `customers` 校验身份与地址，经 `inventory/availability.py` 读取可售量，经 `catalog` 只读 SKU/价格，经 `shipping` 与 `benefits` 计算金额；不改余额或权益，不承载订单事务。 |

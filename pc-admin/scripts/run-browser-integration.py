@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run browser tests or a visual preview in a newly owned localhost database."""
 import argparse
+import base64
 import importlib.util
 import json
 import os
@@ -107,6 +108,11 @@ def run(*, preview=False):
             control.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(database)))
             created = True
             with tempfile.TemporaryDirectory(prefix='mall-health-e2e-') as temporary:
+                # Each isolated DB owns its own synthetic encryption key. Never inherit deployment keys.
+                credential_key = Path(temporary) / 'wechat-credential-key'
+                descriptor = os.open(credential_key, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o400)
+                with os.fdopen(descriptor, 'wb') as key_file:
+                    key_file.write(base64.urlsafe_b64encode(secrets.token_bytes(32)))
                 env = {key: value for key, value in os.environ.items()
                        if not key.startswith(('POSTGRES_', 'DJANGO_', 'WECHAT_', 'KDNIAO_', 'EXCHANGE_', 'MALL_'))}
                 env.update(POSTGRES_HOST=host, POSTGRES_PORT=str(port), POSTGRES_USER=user,
@@ -114,6 +120,7 @@ def run(*, preview=False):
                     DJANGO_SECRET_KEY=secrets.token_urlsafe(48), DJANGO_ALLOWED_HOSTS='127.0.0.1,localhost',
                     DJANGO_CSRF_TRUSTED_ORIGINS=f'http://127.0.0.1:{web_port}',
                     MALL_MEDIA_ROOT=str(Path(temporary) / 'media'), EXCHANGE_ORDER_ENABLED='0',
+                    MALL_WECHAT_CREDENTIAL_KEY_FILE=str(credential_key),
                     WECHAT_REFUND_ENABLED='0', KDNIAO_ENABLED='0',
                     MALL_E2E_OWNER=owner, MALL_E2E_OWNER_PASSWORD=owner_password,
                     MALL_E2E_REAL='1', MALL_E2E_EXTERNAL_SERVER='1',
@@ -171,10 +178,19 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
                         return result.returncode
                 verify = """from benefits.models import CouponCampaign
 from orders.models import Order
+from customers.models import Member, MemberSession, WechatCodeUse
+from wechat_integration.credentials import effective_credentials
+from wechat_integration.models import MiniProgramIntegration
 assert CouponCampaign.objects.filter(code__startswith='E2E_').count() == 2
 assert not CouponCampaign.objects.exclude(status='DRAFT').exists()
 assert not Order.objects.exists()
-print('Verified two persisted drafts and zero orders in isolated database.')
+configuration = MiniProgramIntegration.objects.get(pk=1)
+assert configuration.managed and configuration.revision == 4
+assert 'synthetic-only-' not in configuration.encrypted_payload
+assert effective_credentials(configuration).secret.startswith('synthetic-only-')
+assert configuration.last_check_at is None
+assert not Member.objects.exists() and not MemberSession.objects.exists() and not WechatCodeUse.objects.exists()
+print('Verified persisted drafts, encrypted synthetic credentials, zero orders and zero WeChat identities.')
 """
                 subprocess.run([sys.executable, 'manage.py', 'shell', '--no-imports'], input=verify,
                                text=True, cwd=ROOT / 'backend', env=env, check=True)

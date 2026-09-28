@@ -25,6 +25,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 0
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "local-only-change-before-deploy")
 WECHAT_MINI_APP_ID = os.environ.get("WECHAT_MINI_APP_ID", "")
 WECHAT_MINI_APP_SECRET = os.environ.get("WECHAT_MINI_APP_SECRET", "")
+MALL_WECHAT_CREDENTIAL_KEY_FILE = os.environ.get("MALL_WECHAT_CREDENTIAL_KEY_FILE", "")
 ORDER_PAYMENT_METHODS_ENABLED = {"WECHAT": False, "OFFLINE": False}
 EXCHANGE_ORDER_ENABLED = os.environ.get("EXCHANGE_ORDER_ENABLED", "0") == "1"
 # Secrets are deployment-owned files, never a PC-editable policy or tracked data.
@@ -60,6 +61,7 @@ INSTALLED_APPS = [
     "pages",
     "inventory",
     "customers",
+    "wechat_integration",
     "checkout",
     "orders",
     "fulfillment",

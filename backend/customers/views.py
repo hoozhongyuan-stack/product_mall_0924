@@ -8,8 +8,9 @@ from django.views.decorators.csrf import csrf_exempt
 
 from common.http import response as success, error as failure, method as prepare, parse_json_object
 from catalog.models import MemberGrade
+from wechat_integration.credentials import CredentialsUnavailable, effective_credentials, integration_row
 
-from .auth import (InvalidWechatCode, WechatExchangeUnavailable, code_digest, configured_credentials,
+from .auth import (InvalidWechatCode, WechatExchangeUnavailable, code_digest,
                    exchange_code, login_source_allowed, require_member)
 from .models import CustomerAddress, Member, MemberSession, WechatCodeUse
 
@@ -81,7 +82,11 @@ def wechat_login_view(request):
     code = body.get("code")
     if set(body) != {"code"} or not isinstance(code, str) or not 6 <= len(code) <= 256 or not code.isascii():
         return failure(request, 400, "VALIDATION_FAILED", "微信登录凭证格式不正确。")
-    app_id, secret = configured_credentials()
+    try:
+        credentials = effective_credentials()
+    except CredentialsUnavailable:
+        return failure(request, 503, "WECHAT_UNAVAILABLE", "微信登录配置暂不可用。")
+    app_id, secret = credentials.app_id, credentials.secret
     if not app_id or not secret:
         return failure(request, 503, "WECHAT_UNAVAILABLE", "微信登录尚未配置。")
     digest = code_digest(app_id, code)
@@ -90,13 +95,16 @@ def wechat_login_view(request):
     if not login_source_allowed(request):
         return failure(request, 429, "RATE_LIMITED", "登录尝试过多，请稍后再试。")
     try:
-        openid = exchange_code(code)
+        openid = exchange_code(code, credentials=credentials)
     except InvalidWechatCode:
         return failure(request, 401, "WECHAT_CODE_INVALID", "微信登录凭证已失效，请重新登录。")
     except WechatExchangeUnavailable:
         return failure(request, 503, "WECHAT_UNAVAILABLE", "微信身份校验暂时不可用，请重试。")
     try:
         with transaction.atomic():
+            # All first-member writes and credential updates serialize on the same singleton.
+            if effective_credentials(integration_row(lock=True)) != credentials:
+                return failure(request, 503, "WECHAT_UNAVAILABLE", "微信登录配置已变化，请重新登录。")
             grade = MemberGrade.objects.filter(code="normal", enabled=True).first()
             if grade is None:
                 return failure(request, 503, "MEMBER_GRADE_UNAVAILABLE", "普通会员等级尚未配置。")
@@ -106,6 +114,8 @@ def wechat_login_view(request):
                 return failure(request, 403, "MEMBER_DISABLED", "当前会员账号不可使用。")
             WechatCodeUse.objects.create(code_digest=digest, member=member)
             token, expires_at = MemberSession.issue(member)
+    except CredentialsUnavailable:
+        return failure(request, 503, "WECHAT_UNAVAILABLE", "微信登录配置暂不可用。")
     except IntegrityError:
         return failure(request, 409, "WECHAT_CODE_USED", "微信登录凭证已使用，请重新登录。")
     return success(request, {"accessToken": token, "expiresAt": expires_at.isoformat(),

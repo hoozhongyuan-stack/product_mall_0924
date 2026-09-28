@@ -1,5 +1,7 @@
 # 高保真视觉对齐：全站推广
 
+Git 收尾：2026-09-28 已通过 [PR #2](https://github.com/hoozhongyuan-stack/product_mall_0924/pull/2) 合入 main，合并修订 `d5f87e7482ab52fe380e54745fb6170677f59257`。[PR 检查](https://github.com/hoozhongyuan-stack/product_mall_0924/actions/runs/36410932315)和[合入后 main 检查](https://github.com/hoozhongyuan-stack/product_mall_0924/actions/runs/36411821018)的 frontend、mini-program、backend-and-integration 均通过。下文本机验收快照仍保留原证据范围；真实登录、UAT 与真机在后续接入切片单独验收。
+
 ## 授权与边界
 
 2026-09-28 用户在代表页面交付后回复“确认。验收。请继续。”，据此继续推广已确认的视觉方向。代表页面及其当时的测试证据保留在 [visual-alignment-pilot.md](visual-alignment-pilot.md)。视觉变量仍唯一维护在 [engineering-rules.md](engineering-rules.md)，API 定义维护在 [contract-v1.md](contract-v1.md)。
