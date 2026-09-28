@@ -78,7 +78,7 @@
 | `views/pages/targets.ts` | 100% | 100% | 100% | 100% |
 | `views/catalog/ProductMediaEditor.vue` | 93.85% | 90.29% | 93.54% | 100% |
 
-范围限制：PC 这四个模块的逐文件门槛不代表全部 Vue 页面已有 80% 覆盖；Node 原生覆盖率只统计测试实际加载的模块，未加载页面不自动成为零分母项。微信开发者工具、真机、平台和生产验收均不由这些覆盖率代替。CI 配置已落地，本机命令已执行；远端 GitHub Actions 尚未触发，不能记为远端 CI 已通过。
+范围限制：PC 这四个模块的逐文件门槛不代表全部 Vue 页面已有 80% 覆盖；Node 原生覆盖率只统计测试实际加载的模块，未加载页面不自动成为零分母项。微信开发者工具、真机、平台和生产验收均不由这些覆盖率代替。CI 配置已落地，本机命令已执行；首次远端执行及其修复记录见文末，不以本地结果替代远端结果。
 
 配置依据：[GitHub Actions 上下文可用范围](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts)、[PostgreSQL service 指引](https://docs.github.com/en/actions/tutorials/use-containerized-services/create-postgresql-service-containers)、[Vitest coverage](https://vitest.dev/guide/coverage.html)、[Playwright webServer](https://playwright.dev/docs/test-webserver)。
 
@@ -158,6 +158,17 @@ npm run test:coverage
 | 告警 | 待接入/送达验证 | 健康、空间、备份超时、worker/调度、发布闸门故障触发与恢复通知 |
 | 真实微信主体与平台 | 待接入 | 真实账号和平台回执；相关通道按验收结果逐项放行 |
 | 真机 | 待接入 | 目标手机的登录、选购、媒体、权限/异常交互记录 |
-| GitHub Actions | 待远端执行 | 实际 run 链接与完整 jobs 结果 |
+| GitHub Actions | 已触发，首次发现媒体解码差异，修复后需复跑 | 实际 run 链接与完整 jobs 结果见文末 |
 
 scheduler/export-worker 当前没有服务级 healthcheck，Compose 也不会主动发送告警；这些运行与告警证据仍须补齐。旧 E5 文档中的恢复点年龄 76 秒/RTO 35 秒属于此前小数据量本机演练，本次没有重新执行恢复，不能作为目标环境指标。用户已确认有测试环境，地址、接入方式、真实主体和真机条件尚待补充。
+
+
+### GitHub 合入与首次 CI 回归修复（2026-09-28）
+
+工程治理提交 `2de5b96` 已快进合入 main 并推送 GitHub；E5 未合入。[首次远端 CI](https://github.com/hoozhongyuan-stack/product_mall_0924/actions/runs/36399431017) 的 frontend、mini-program 通过；后端 763 项中 762 项通过，`test_invalid_upload_binding_and_publish_are_rejected` 在损坏视频用例返回 201 而非 400，因而阻止后续覆盖率门槛及真实集成步骤。
+
+已在隔离 Ubuntu 24.04 amd64/FFmpeg 6.1.1-3ubuntu5 精确复现：同一损坏样本输出 15 帧、错误流含 decoder corruption，但进程退出码为 0；合法视频 25 帧、退出码 0、错误流为空。`-err_detect explode` 也不能令该版本可靠返回非零，因此不靠换测试样本、跳过断言或更换 CI 版本规避。
+
+最小修复在 `catalog.media.verify_decodable`：保留原有 `-v error`、超时、退出码和有效帧检查，额外拒绝非空的错误级输出。新增回归分别覆盖退出码 0 但有解码错误、正常完整解码、真实后段帧损坏；保留原 HTTP 400 回归。没有新增依赖或放宽验证。独立代码/安全复审无阻塞，修复后的远端全量结果以对应提交的 Actions 记录为准。
+
+提交前修复验证：新增 3 项测试先 RED 后 GREEN；媒体流程 11 项、启动页/GIF 流程 7 项通过，随机测试库均已销毁。macOS FFmpeg 8.0.1、Debian FFmpeg 5.1.9 均通过新增 3 项回归；Ubuntu FFmpeg 6.1.1-3ubuntu5 的实际解码确认合法 MP4/PNG 接受、原损坏 MP4 拒绝，隔离容器已清理。依赖审计再次通过，生产依赖没有改变。

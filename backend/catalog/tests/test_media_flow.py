@@ -2,6 +2,7 @@
 
 import json
 import struct
+import subprocess
 import tempfile
 import zlib
 from datetime import timedelta
@@ -9,14 +10,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.core.management import call_command
-from django.test import Client, TestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.files.uploadhandler import StopUpload
 from django.utils import timezone
 
 from accounts.models import AccountGroup, AdminAccount, GroupPermission, PermissionGroup
 from catalog.models import Asset
-from catalog.media import asset_path
+from catalog.media import asset_path, verify_decodable
+from catalog.validation import CatalogError
 from catalog.upload_limit import AssetUploadLimitHandler
 
 
@@ -46,6 +48,36 @@ def corrupt_png_pixels():
     payload = b"x" * payload_size
     crc = struct.pack(">I", zlib.crc32(b"IDAT" + payload))
     return data[:payload_offset] + payload + crc + data[payload_offset + payload_size + 4:]
+
+
+class MediaDecoderTests(SimpleTestCase):
+    @patch("catalog.media.shutil.which", return_value="ffmpeg")
+    @patch("catalog.media.subprocess.run")
+    def test_zero_exit_with_decoder_error_does_not_validate_partial_video(self, run, _which):
+        # Some FFmpeg releases can emit decoded frames and return success after
+        # reporting corruption. Error-level diagnostics must still reject it.
+        run.return_value = subprocess.CompletedProcess([], 0, b"frame=25\nprogress=end\n",
+                                                      b"[h264] decode_slice_header error\n")
+        with self.assertRaises(CatalogError) as rejected:
+            verify_decodable(Path("broken.mp4"), Asset.Kind.VIDEO)
+        self.assertEqual(rejected.exception.code, "MEDIA_INVALID")
+
+    @patch("catalog.media.shutil.which", return_value="ffmpeg")
+    @patch("catalog.media.subprocess.run")
+    def test_clean_complete_decode_is_accepted(self, run, _which):
+        run.return_value = subprocess.CompletedProcess([], 0, b"frame=25\nprogress=end\n", b"")
+        verify_decodable(Path("valid.mp4"), Asset.Kind.VIDEO)
+
+    def test_later_corrupt_frame_is_rejected_after_valid_initial_frames(self):
+        clip = playable_mp4()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "late-corruption.mp4"
+            path.write_bytes(clip)
+            verify_decodable(path, Asset.Kind.VIDEO)
+            path.write_bytes(clip[:2200] + b"\x00" * 16 + clip[2216:])
+            with self.assertRaises(CatalogError) as rejected:
+                verify_decodable(path, Asset.Kind.VIDEO)
+            self.assertEqual(rejected.exception.code, "MEDIA_INVALID")
 
 
 class ProductMediaFlowTests(TestCase):

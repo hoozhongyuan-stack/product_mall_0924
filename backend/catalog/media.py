@@ -166,7 +166,9 @@ def verify_decodable(path, kind):
     frames = [int(line[6:]) for line in result.stdout.splitlines()
               if line.startswith(b"frame=") and line[6:].isdigit()]
     minimum_frames = 2 if kind == Asset.Kind.GIF else 1
-    if result.returncode or not frames or frames[-1] < minimum_frames:
+    # FFmpeg 6.1 can return zero after a decoder thread reports corruption.
+    # With "-v error", stderr is failure evidence even if some frames decoded.
+    if result.returncode or result.stderr.strip() or not frames or frames[-1] < minimum_frames:
         raise CatalogError("素材无法解码或不含有效图像帧。", "MEDIA_INVALID")
 
 
