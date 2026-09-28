@@ -510,3 +510,17 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 授权观察使用受控 `observation_id` 唯一键，`record_grant` 对同键同内容返回原记录、异内容拒绝，避免一次回调重试增加可发送次数；E2.0仅允许合成证据登记，真实小程序授权采集与身份校验后续实现。多次独立有效的同模板接受授权可逐次分配给不同事件；追加接受不取消已分配的旧任务。明确拒绝形成新的授权纪元，阻断此前未发送的旧授权，并且不因拒绝记录的期限届满而使旧授权复活；只有拒绝后的新接受可供后续事件分配。会员的小程序主体与openid以摘要绑定授权证据和任务，发送前再次核对。
 
 有界任务调度先在短事务内领取并提交租约，再于事务外调用渠道，最后凭租约令牌写入结果。尚未进入调用阶段的过期租约重新排队；一旦开始调用尝试，超时、进程中断或结果不明标记 `UNKNOWN`，不得自动重发。可证明渠道未接收的可重试失败才按有界退避计划重试。任务只记录受理或明确失败，不表示用户实际阅读、收到或交付成功。`run_subscription_jobs` 默认只恢复过期租约；合成发送必须在本机 `DEBUG` 环境显式加 `--synthetic`，并只处理 `SYNTHETIC_TEST` 授权证据。E2.0不提供管理端启用接口、小程序授权弹窗或真实微信发送适配；本机合成渠道的完成状态明确标为 `SIMULATED`，不能计作真实平台或真机接收证据。真实模板ID、授权范围、主体一致性、正式调度和微信端接收在后续切片分别验收。
+
+### 5.25 E2.1：订阅模板草稿与授权可用性
+
+没有实际小程序账号和平台模板时，PC 只保存三类候选事件的**未核验草稿**，不提供“启用发送”开关。草稿存于 `SubscriptionTemplateDraft`，与 E2.0 可发送的 `SubscriptionTemplate` 隔离；填写完整也只得到 `DRAFT_UNVERIFIED`，不会创建可发送绑定或用户授权。默认三行由迁移预置，事件固定为 `ORDER_PAID`、`ORDER_SHIPPED`、`REFUND_SUCCEEDED`。
+
+| 接口 | 契约 |
+| --- | --- |
+| `GET /api/v1/admin/subscription-templates` | 需 `notification.read`；返回 `data:{events:[{eventType,revision,draftAppId,draftTemplateId,status,enabled:false}],sendingAvailable:false}`，三行固定顺序。 |
+| `PUT /api/v1/admin/subscription-templates/{eventType}` | 需 `notification.manage` 与 CSRF；严格 body `{expectedRevision,draftAppId,draftTemplateId}`，成功返回单行 DTO。过期修订返回 409，未知事件返回 404；写入审计。 |
+| `GET /api/v1/app/subscription-messages/availability` | 公开只读，固定返回 `data:{available:false,reasonCode:"PLATFORM_NOT_VERIFIED",events:[{eventType,available:false}]}`；不输出模板 ID。 |
+
+草稿状态：两项均空为 `UNBOUND`，只填一项为 `INCOMPLETE`，两项均有值为 `DRAFT_UNVERIFIED`。标识允许 ASCII 字母、数字、下划线、短横线，AppID 最多 64 字符，模板 ID 最多 128 字符。`expectedRevision` 为非负整数；服务端在行锁内核对修订及当前账号权限，每次成功保存修订加一。当前账号过去一小时成功保存草稿达30次后返回429 `RATE_LIMITED` 与 `Retry-After`，不修改草稿；更广的公开接口流量治理属于部署层。PC 对未知保存结果先重新读取核实，不盲目再提交。只读权限不包含编辑；主账号拥有两项权限，子账号须分别授权。
+
+真实授权采集仍未开放：没有可信的平台回调与可验证的小程序身份时，客户端自报“接受”不能写成可发送凭据。接入真实账号后须在用户触发场景下核定模板与主体、授权回调、openid 绑定、次数语义和拒绝处理，并分别完成平台与真机接收验收。此接口的“不可用”是平台授权入口的当前事实，不影响既有站内订单状态查询。

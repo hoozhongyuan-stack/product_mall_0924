@@ -14,6 +14,21 @@ EVENT_TYPES = ("ORDER_PAID", "ORDER_SHIPPED", "REFUND_SUCCEEDED")
 EVENT_CHOICES = [(value, value) for value in EVENT_TYPES]
 
 
+class SubscriptionTemplateDraft(models.Model):
+    """Operator-entered candidates; deliberately disconnected from send bindings."""
+
+    event_type = models.CharField(primary_key=True, max_length=24, choices=EVENT_CHOICES)
+    draft_app_id = models.CharField(max_length=64, blank=True, default="")
+    draft_template_id = models.CharField(max_length=128, blank=True, default="")
+    revision = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "subscription_template_draft"
+        constraints = [models.CheckConstraint(condition=Q(event_type__in=EVENT_TYPES),
+                                              name="subscription_draft_event_valid")]
+
+
 class SubscriptionTemplate(models.Model):
     """An app-specific event binding, disabled unless deliberately configured."""
 
