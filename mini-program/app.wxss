@@ -1,1 +1,7 @@
-page { background: #f4f6f1; color: #243329; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+@import "styles/tokens.wxss";
+page { background: var(--mall-canvas); color: var(--mall-text); font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; font-size: 28rpx; line-height: 1.5; }
+button { border-radius: 10rpx; }
+button::after { border: 0; }
+button[disabled] { opacity: 1; color: var(--mall-muted); background: var(--mall-border); }
+input, textarea { caret-color: var(--mall-brand); }
+input::placeholder, textarea::placeholder { color: var(--mall-muted); }

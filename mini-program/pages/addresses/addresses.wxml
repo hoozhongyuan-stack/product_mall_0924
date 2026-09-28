@@ -1,4 +1,16 @@
-<view class="address-page"><view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载地址…</view><view wx:elif="{{state === 'empty'}}" class="state">暂无收货地址，请新增。</view><view wx:elif="{{state === 'error' || state === 'auth'}}" class="state" role="alert">{{error}}<button bindtap="refresh">重试</button></view>
-  <block wx:else><view wx:for="{{addresses}}" wx:key="id" class="address-card"><view data-id="{{item.id}}" bindtap="select"><view class="person">{{item.recipientName}}　{{item.phone}} <text wx:if="{{item.isDefault}}" class="tag">默认</text></view><view>{{item.province}}{{item.city}}{{item.district}}{{item.detail}}</view></view><view class="actions"><button data-id="{{item.id}}" bindtap="edit">编辑</button><button data-id="{{item.id}}" bindtap="remove">删除</button></view></view></block>
-  <view class="footer"><button bindtap="add">＋ 新增收货地址</button></view>
+<view class="address-page">
+  <view class="address-context">{{selecting ? '选择收货地址后返回当前订单。' : '管理常用收货地址，结算时可以直接选择。'}}</view>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载地址…</view>
+  <view wx:elif="{{state === 'empty'}}" class="state"><view class="state-title">还没有收货地址</view><view>新增一个地址，方便后续选购快递商品。</view></view>
+  <view wx:elif="{{state === 'error' || state === 'auth'}}" class="state" role="alert">{{error}}<button wx:if="{{state === 'auth'}}" bindtap="login">登录后查看</button><button wx:else bindtap="refresh">重新加载</button></view>
+  <block wx:else>
+    <view wx:for="{{addresses}}" wx:key="id" class="address-card {{selecting && selectedId === item.id ? 'selected' : ''}}">
+      <view class="address-choice" data-id="{{item.id}}" bindtap="select" role="{{selecting ? 'button' : 'text'}}" aria-label="{{(selecting && selectedId === item.id ? '已选中，' : '') + item.recipientName + '，' + item.province + item.city + item.district + item.detail}}">
+        <view class="person"><text>{{item.recipientName}}</text><text class="phone">{{item.phone}}</text><view wx:if="{{selecting && selectedId === item.id}}" class="selected-mark" aria-hidden="true"></view></view>
+        <view class="address-copy">{{item.province}}{{item.city}}{{item.district}}{{item.detail}}</view>
+      </view>
+      <view class="actions"><text wx:if="{{item.isDefault}}" class="tag">默认地址</text><button wx:else class="default-action" data-id="{{item.id}}" bindtap="edit">修改默认设置</button><view class="action-links"><button data-id="{{item.id}}" bindtap="edit">编辑</button><button class="delete-action" data-id="{{item.id}}" bindtap="remove">删除</button></view></view>
+    </view>
+  </block>
+  <view wx:if="{{state !== 'auth'}}" class="footer"><button bindtap="add">新增收货地址</button></view>
 </view>

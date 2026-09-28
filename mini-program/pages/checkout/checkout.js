@@ -43,7 +43,7 @@ Page({
     couponOptions: [{ id: null, title: '不使用优惠券' }], couponIndex: 0,
     couponLabel: '暂无可用优惠券', availablePointsLabel: '登录后查看',
     pointsInput: '0', benefitError: '', paymentMethod: 'OFFLINE', paymentChoices: [], offlinePolicy: null,
-    submitting: false, submitError: '' },
+    submitting: false, submitError: '', loginPromptOpen: false, stockPromptOpen: false, stockAdjustable: false, stockLines: [] },
   onLoad() {
     this.items = wx.getStorageSync('mall.checkoutSelection.v1') || []
     this.couponId = null
@@ -74,7 +74,7 @@ Page({
     }
     if (!session.loggedIn()) { this.couponId = null; this.pointsToUse = 0 }
     this.setData({ state: 'loading', error: '', benefitError: '', canSubmit: false,
-      loggedIn: session.loggedIn() })
+      loggedIn: session.loggedIn(), loginPromptOpen: false })
     try {
       let address = null
       if (session.loggedIn()) {
@@ -132,8 +132,12 @@ Page({
     }
   },
   async submitOrder() {
-    if (this.data.submitting || (!this.pendingSubmission && !this.data.canSubmit)) return
-    if (!session.loggedIn()) { this.chooseAddress(); return }
+    if (this.data.submitting) return
+    if (!session.loggedIn()) {
+      if (this.data.state === 'ready' || this.pendingSubmission) this.setData({ loginPromptOpen: true })
+      return
+    }
+    if (!this.pendingSubmission && !this.data.canSubmit) return
     if (!this.pendingSubmission) {
       this.pendingSubmission = { key: orders.requestKey(), body: { quoteId: this.data.quote.quoteId, paymentMethod: this.data.paymentMethod },
         items: cart.quoteItems(this.items || []) }
@@ -160,12 +164,35 @@ Page({
       if (error.statusCode && error.statusCode < 500 && error.statusCode !== 401) {
         orders.clearPendingOrder(); this.pendingSubmission = null
         this.setData({ state: 'error', error: `${error.message} 请重新获取报价。`, canSubmit: false })
+        if (error.code === 'OUT_OF_STOCK') {
+          this.setData({ submitting: false })
+          await this.loadStockChange()
+        }
       } else {
         this.setData({ state: error.statusCode === 401 ? 'auth' : 'uncertain',
           error: error.statusCode === 401 ? error.message : '提交结果尚未确认。请重试确认结果，避免重复创建订单。',
           submitError: error.message, canSubmit: false })
       }
     } finally { this.setData({ submitting: false }) }
+  },
+  async loadStockChange() {
+    this.setData({ stockPromptOpen: true, stockAdjustable: false, stockLines: [] })
+    await this.refresh()
+    if (this.data.state !== 'ready') return
+    const affected = this.data.lines.filter((line) => line.status !== 'OK')
+    this.setData({ stockLines: affected,
+      stockAdjustable: affected.length > 0 && affected.every((line) => line.status === 'OUT_OF_STOCK' &&
+        Number.isSafeInteger(line.availableQuantity) && line.availableQuantity > 0 && line.quantity > line.availableQuantity) })
+  },
+  dismissStockPrompt() { this.setData({ stockPromptOpen: false }) },
+  adjustStock() {
+    if (!this.data.stockAdjustable || this.data.state !== 'ready') return
+    const available = new Map(this.data.stockLines.map((line) => [line.skuId, line.availableQuantity]))
+    this.items = this.items.map((row) => ({ ...row, quantity: available.has(row.skuId) ?
+      Math.min(row.quantity, available.get(row.skuId)) : row.quantity }))
+    wx.setStorageSync('mall.checkoutSelection.v1', this.items)
+    this.setData({ stockPromptOpen: false, stockAdjustable: false })
+    return this.refresh()
   },
   selectPayment(event) {
     const method = event.detail.value
@@ -200,10 +227,15 @@ Page({
     this.pointsToUse = 0
     return this.refresh()
   },
+  dismissLoginPrompt() { this.setData({ loginPromptOpen: false }) },
+  loginToContinue() {
+    session.rememberCheckout(this.items)
+    this.setData({ loginPromptOpen: false })
+    wx.navigateTo({ url: '/pages/login/login?returnTo=checkout' })
+  },
   chooseAddress() {
     if (!session.loggedIn()) {
-      session.rememberCheckout(this.items)
-      wx.navigateTo({ url: '/pages/login/login?returnTo=checkout' })
+      this.loginToContinue()
       return
     }
     wx.navigateTo({ url: '/pages/addresses/addresses?select=1' })

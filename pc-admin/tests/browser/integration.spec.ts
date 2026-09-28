@@ -1,6 +1,6 @@
 /** No HTTP mocks: isolated Django + PostgreSQL, actual CSRF/session and persistence. */
 import { expect, test } from '@playwright/test'
-import { screenshot } from './fixtures'
+import { openSection, screenshot } from './fixtures'
 
 test('real isolated database: login and create a persisted coupon draft', async ({ page }, testInfo) => {
   const loginName = process.env.MALL_E2E_OWNER
@@ -8,12 +8,12 @@ test('real isolated database: login and create a persisted coupon draft', async 
   expect(loginName, 'Use scripts/run-browser-integration.py to create isolated credentials').toBeTruthy()
   expect(password).toBeTruthy()
   await page.goto('/')
-  await expect(page.getByLabel('登录名', { exact: true })).toBeVisible()
-  await page.getByLabel('登录名', { exact: true }).fill(loginName!)
+  await expect(page.getByLabel('账号', { exact: true })).toBeVisible()
+  await page.getByLabel('账号', { exact: true }).fill(loginName!)
   await page.getByLabel('密码', { exact: true }).fill(password!)
-  await page.getByRole('button', { name: '登录后台', exact: true }).click()
-  await expect(page.getByRole('navigation', { name: '后台导航' })).toBeVisible()
-  await page.getByRole('link', { name: '优惠券活动', exact: true }).click()
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await openSection(page, '营销')
+  await expect(page.getByRole('navigation', { name: '营销功能' })).toBeVisible()
   await page.getByRole('link', { name: /创建活动/ }).click()
   const code = `E2E_${testInfo.project.name}_${Date.now()}`
   const title = `隔离验收草稿 ${testInfo.project.name}`

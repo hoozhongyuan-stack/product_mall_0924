@@ -2,7 +2,7 @@ const session = require('../../lib/session')
 
 Page({
   data: { agreed: false, busy: false, error: '' },
-  onLoad(options) { this.returnTo = ['checkout', 'orders', 'member', 'coupons', 'exchange'].includes(options.returnTo) ? options.returnTo : '' },
+  onLoad(options) { this.returnTo = ['checkout', 'orders', 'member', 'coupons', 'exchange', 'addresses'].includes(options.returnTo) ? options.returnTo : '' },
   toggleAgreement(event) { this.setData({ agreed: event.detail.value.includes('agree') }) },
   openPrivacy() {
     if (wx.openPrivacyContract) wx.openPrivacyContract({ fail: () => wx.showToast({ title: '隐私条款暂不可查看', icon: 'none' }) })

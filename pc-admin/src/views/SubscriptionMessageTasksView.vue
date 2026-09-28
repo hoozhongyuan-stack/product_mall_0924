@@ -169,7 +169,7 @@ onMounted(() => { void loadList('') })
 <template>
   <section class="page-content message-tasks-page">
     <header class="page-heading">
-      <div><p class="message-tasks-eyebrow">订阅消息 · 任务状态</p><h1>消息任务</h1><p>查询事件决策与发送尝试。模拟完成仅用于本机验证，不代表微信接收。</p></div>
+      <div><h1>消息任务</h1><p>查询事件决策与发送尝试。模拟完成仅用于本机验证，不代表微信接收。</p></div>
       <button class="secondary-button" type="button" :disabled="loading" @click="loadList()">重新读取</button>
     </header>
 

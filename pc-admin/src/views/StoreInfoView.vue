@@ -327,7 +327,7 @@ function rolledBack(result: RollbackResult) {
 <template>
   <section class="page-content startup-page">
     <header class="page-heading startup-heading">
-      <div><p class="eyebrow">店铺信息 / 启动内容</p><h1>冷启动画面</h1><p>上传动图与静态兜底图，保存草稿并预览后发布。发布仅影响小程序下一次冷启动。</p></div>
+      <div><h1>冷启动画面</h1><p>上传动图与静态兜底图，保存草稿并预览后发布。发布仅影响小程序下一次冷启动。</p></div>
       <div class="startup-actions"><PublicationHistory v-if="draft" :account="account" base="/startup" :object-id="'startup'" :draft-revision="draft.revision" :disabled="loading || Boolean(busy)" startup @rolled-back="rolledBack" />
         <button type="button" class="secondary-button" :disabled="loading || Boolean(busy) || !canEdit || !dirty" @click="saveDraft">{{ busy === 'save' ? '保存中…' : '保存草稿' }}</button>
         <button type="button" class="secondary-button" :disabled="loading || Boolean(busy)" @click="showPreview">{{ busy === 'preview' ? '生成中…' : '预览' }}</button>

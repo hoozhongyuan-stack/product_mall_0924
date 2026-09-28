@@ -1,0 +1,18 @@
+/* Purchase layout shared by detail, cart and checkout. Palette comes from app tokens. */
+.pilot-page {
+  color: var(--mall-text);
+  background: var(--mall-canvas);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+.pilot-page button::after { border: 0; }
+.pilot-page button { border-radius: 10rpx; }
+.pilot-page button[disabled] { color: #66717A; background: #E7E9EB; opacity: 1; }
+.pilot-page .primary-button { background: var(--mall-brand); color: #fff; }
+.pilot-page .secondary-button { background: #fff; color: var(--mall-brand); border: 1rpx solid var(--mall-brand); }
+.pilot-modal { position: fixed; inset: 0; z-index: 40; background: rgba(32,37,42,.46); display: flex; align-items: center; justify-content: center; padding: 40rpx; }
+.pilot-dialog { width: 100%; max-width: 620rpx; padding: 40rpx; background: #fff; border-radius: 16rpx; box-sizing: border-box; }
+.dialog-title { font-size: 34rpx; font-weight: 700; line-height: 1.4; }
+.dialog-copy { font-size: 26rpx; line-height: 1.7; color: var(--mall-muted); margin: 24rpx 0 32rpx; }
+.dialog-actions { display: flex; gap: 20rpx; }
+.dialog-actions button { flex: 1; margin: 0; padding: 0 16rpx; min-height: 88rpx; display: flex; align-items: center; justify-content: center; font-size: 26rpx; line-height: 1.4; }

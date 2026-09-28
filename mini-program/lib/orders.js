@@ -65,6 +65,19 @@ function presentLine(item, order) {
       (progress && lineStatusLabels[kind] && lineStatusLabels[kind][progress.status]) || '进度待核实',
   }
 }
+function orderProgress(order) {
+  const paid = order.status === 'PAID'
+  const fulfillment = order.fulfillmentStatus
+  if (order.status !== 'PENDING_PAYMENT' && (!paid ||
+      !['WAITING_SHIPMENT', 'WAITING_REDEMPTION', 'IN_PROGRESS', 'COMPLETED'].includes(fulfillment))) return []
+  const completed = fulfillment === 'COMPLETED'
+  return [
+    { label: '已下单', reached: true },
+    { label: order.orderKind === 'POINTS' ? '已兑换' : '已付款', reached: paid },
+    { label: completed ? '已履约' : fulfillment === 'IN_PROGRESS' ? '履约中' : '待履约', reached: paid },
+    { label: '完成', reached: completed },
+  ]
+}
 function present(order) {
   if (!order || typeof order.orderId !== 'string' || !Array.isArray(order.items)) throw new Error('订单内容不完整，请重新加载。')
   const isPaid = order.status === 'PAID'
@@ -81,7 +94,7 @@ function present(order) {
     { ...item, fulfillment: { ...item.fulfillment, voucherQrDataUrl: undefined } } : item) }
   const isPoints = order.orderKind === 'POINTS'
   if (isPoints && (!Number.isSafeInteger(order.exchangePoints) || order.exchangePoints < 1 || order.paymentMethod !== 'POINTS' || order.items.some(item => !Number.isSafeInteger(item.pointsUnitPrice) || item.pointsUnitPrice < 1 || item.pointsTotal !== item.pointsUnitPrice * item.quantity))) throw new Error('积分兑换订单资料不完整，请重新加载。')
-  return { isPoints, canRequestExchangeCancel: isPoints && isPaid && ['WAITING_SHIPMENT', 'WAITING_REDEMPTION'].includes(order.fulfillmentStatus), order: safeOrder, orderBenefits:presentBenefits(order.orderBenefits), statusLabel: statusLabel(order), isPaid, isClosed: closed, isExpired,
+  return { isPoints, progressSteps: orderProgress(order), canRequestExchangeCancel: isPoints && isPaid && ['WAITING_SHIPMENT', 'WAITING_REDEMPTION'].includes(order.fulfillmentStatus), order: safeOrder, orderBenefits:presentBenefits(order.orderBenefits), statusLabel: statusLabel(order), isPaid, isClosed: closed, isExpired,
     shipment: shipment && { ...shipment, shippedAtLabel: dateLabel(shipment.shippedAt),
       autoConfirmAtLabel: dateLabel(shipment.autoConfirmAt), confirmedAtLabel: dateLabel(shipment.confirmedAt) },
     canConfirmReceipt,

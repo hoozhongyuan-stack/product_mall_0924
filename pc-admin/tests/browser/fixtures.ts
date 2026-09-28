@@ -67,3 +67,15 @@ export async function screenshot(page: Page, testInfo: TestInfo, name: string) {
   await page.screenshot({ path, fullPage: true })
   await testInfo.attach(name, { path, contentType: 'image/png' })
 }
+
+export async function openSection(page: Page, name: string) {
+  await expect(page.getByRole('button', { name: '退出', exact: true })).toBeVisible()
+  const menu = page.getByRole('button', { name: '打开导航菜单' })
+  if (await menu.isVisible()) {
+    await menu.click()
+    await page.getByRole('navigation', { name: '移动后台导航' }).getByRole('link', { name, exact: true }).click()
+    await expect(page.getByRole('dialog')).toBeHidden()
+  } else {
+    await page.getByRole('navigation', { name: '后台主导航' }).getByRole('link', { name, exact: true }).click()
+  }
+}

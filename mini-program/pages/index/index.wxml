@@ -41,7 +41,7 @@
         </view>
         <block wx:else>
           <button wx:for="{{products}}" wx:key="id" class="product-row" data-id="{{item.id}}" bindtap="openProduct" aria-label="查看{{item.name}}详情">
-            <image class="product-image" src="{{item.imageUrl}}" mode="aspectFill" lazy-load />
+            <image wx:if="{{item.imageUrl && !failedImages[item.id]}}" class="product-image" src="{{item.imageUrl}}" mode="aspectFill" lazy-load data-id="{{item.id}}" binderror="onImageError" /><view wx:else class="product-image image-fallback">暂无图片</view>
             <view class="product-info">
               <view class="product-name">{{item.name}}</view>
               <view class="product-kind">{{item.specsPreview}} · {{item.fulfillment}}</view>

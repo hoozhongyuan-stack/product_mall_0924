@@ -1,0 +1,93 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { ref } from 'vue'
+import ProductManagement from '../../src/views/catalog/ProductManagement.vue'
+import { api, type Account } from '../../src/api'
+
+vi.mock('../../src/api', async original => ({ ...await original<typeof import('../../src/api')>(), api: vi.fn() }))
+const account: Account = { accountId: 'pilot', loginName: 'operator', displayName: '运营', kind: 'OWNER', enabled: true, revision: 1, groupIds: [], permissionCodes: ['catalog.read', 'catalog.write', 'sku.status.write', 'sku.price.write', 'sku.unit.write'] }
+const categories = [{ id: 'root', parentId: null, name: '酒水', status: 'ACTIVE' }, { id: 'leaf', parentId: 'root', name: '葡萄酒', status: 'ACTIVE' }]
+const sku = { skuId: 'sku1', skuCode: 'SKU-1', skuRevision: 3, productId: 'p1', productRevision: 4, productNo: 'P-1', productName: '测试商品', categoryId: 'leaf', fulfillmentKind: 'SHIP', specs: [], listPriceFen: 888, gradePrices: [], productStatus: 'DRAFT', saleStatus: 'OFF_SALE', unit: { baseUnit: '瓶', saleUnit: '瓶', ratio: 1 } }
+const product = { productId: 'p1', productNo: 'P-1', name: '测试商品', categoryId: 'leaf', fulfillmentKind: 'SHIP', redeemValidUntil: null, status: 'DRAFT', descriptionHtml: '', productRevision: 4, mainImage: null, galleryImages: [], video: null, specAxes: [], skus: [{ ...sku, specOptionIds: [] }] }
+const wrappers: ReturnType<typeof mount>[] = []
+beforeEach(() => {
+  vi.stubGlobal('confirm', vi.fn(() => false))
+  vi.mocked(api).mockReset()
+  vi.mocked(api).mockImplementation(async (path, init) => {
+    if (path === '/categories') return categories as never
+    if (path === '/member-grades') return [] as never
+    if (path.startsWith('/sku-rows')) return { rows: [sku], page: 1, pageSize: 20, total: 1 } as never
+    if (path === '/products/p1') return (init?.method ? { ...product, name: '新的商品名', productRevision: 5 } : product) as never
+    throw new Error(`unexpected request ${path}`)
+  })
+})
+afterEach(() => wrappers.splice(0).forEach(w => w.unmount()))
+async function setup() {
+  const wrapper = mount(ProductManagement, { attachTo: document.body, props: { account }, global: { provide: { 'admin-account': ref(account) }, stubs: { AssetPicker: true } } })
+  wrappers.push(wrapper)
+  await flushPromises()
+  return wrapper
+}
+const button = (wrapper: ReturnType<typeof mount>, text: string) => wrapper.findAll('button').find(b => b.text() === text)!
+
+describe('focused product workspace', () => {
+  it('releases creation busy state after success so another product can be opened', async () => {
+    const previous = vi.mocked(api).getMockImplementation()!
+    let complete!: (value: unknown) => void
+    vi.mocked(api).mockImplementation((path, init) => path === '/products'
+      ? new Promise(resolve => { complete = resolve }) : previous(path, init))
+    const wrapper = await setup()
+    await button(wrapper, '新建商品').trigger('click')
+    await wrapper.get('input[placeholder="例如 PROD-001"]').setValue('NEW-1')
+    await wrapper.get('input[placeholder="请输入商品名称"]').setValue('新建商品')
+    await wrapper.get('form.catalog-editor select').setValue('leaf')
+    await button(wrapper, '生成 SKU 组合').trigger('click')
+    await wrapper.get('input[placeholder="例如 SKU-001"]').setValue('NEW-SKU')
+    await wrapper.get('input[placeholder="例如 199.00"]').setValue('8.88')
+    await wrapper.get('form.catalog-editor').trigger('submit')
+    await flushPromises()
+    expect((button(wrapper, '返回商品列表').element as HTMLButtonElement).disabled).toBe(true)
+    complete(product)
+    await flushPromises()
+    expect((button(wrapper, '新建商品').element as HTMLButtonElement).disabled).toBe(false)
+    await button(wrapper, '编辑商品').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="商品编辑工作区"]').isVisible()).toBe(true)
+  })
+  it('opens existing edit in a dedicated workspace while preserving list state', async () => {
+    const wrapper = await setup()
+    await wrapper.get('input[placeholder="名称或编号"]').setValue('测试')
+    await button(wrapper, '编辑商品').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[aria-label="商品编辑工作区"]').isVisible()).toBe(true)
+    expect(wrapper.get('form[role=search]').isVisible()).toBe(false)
+    await button(wrapper, '返回商品列表').trigger('click')
+    expect(wrapper.get('form[role=search]').isVisible()).toBe(true)
+    expect((wrapper.get('input[placeholder="名称或编号"]').element as HTMLInputElement).value).toBe('测试')
+  })
+  it('keeps unsaved product edits when returning to the list is declined', async () => {
+    const wrapper = await setup()
+    await button(wrapper, '编辑商品').trigger('click')
+    await flushPromises()
+    await wrapper.get('input[maxlength="120"]').setValue('保留修改')
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await button(wrapper, '返回商品列表').trigger('click')
+    expect((wrapper.get('input[maxlength="120"]').element as HTMLInputElement).value).toBe('保留修改')
+    expect(wrapper.get('form[role=search]').isVisible()).toBe(false)
+  })
+  it('saves basic data with its revision without submitting specifications', async () => {
+    const wrapper = await setup()
+    await button(wrapper, '编辑商品').trigger('click')
+    await flushPromises()
+    await wrapper.get('input[maxlength="120"]').setValue('新的商品名')
+    await wrapper.get('form.catalog-editor').trigger('submit')
+    await flushPromises()
+    const writes = vi.mocked(api).mock.calls.filter(([, init]) => init?.method)
+    expect(writes).toHaveLength(1)
+    expect(writes[0]![0]).toBe('/products/p1')
+    const body = JSON.parse(String(writes[0]![1]!.body))
+    expect(body).toMatchObject({ name: '新的商品名', expectedRevision: 4 })
+    expect(body).not.toHaveProperty('specAxes')
+    expect(wrapper.get('[aria-label="商品编辑工作区"]').text()).toContain('修订 5')
+  })
+})

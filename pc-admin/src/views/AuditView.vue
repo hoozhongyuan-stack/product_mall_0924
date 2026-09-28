@@ -125,12 +125,12 @@ const resultText: Record<string, string> = { SUCCESS: '成功', DENIED: '已拒�
 
 <style scoped>
 .audit-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:20px;margin-bottom:12px}
-.audit-filters label{display:grid;gap:6px;font-size:13px;font-weight:650;color:#51695a}
-.audit-filters input,.audit-filters select{min-width:0;width:100%;min-height:42px;border:1px solid #cbd8ce;border-radius:9px;padding:8px 10px;background:#fff;color:#243329}
-.audit-filters :is(input,select):focus-visible{outline:2px solid #328055;outline-offset:2px}
+.audit-filters label{display:grid;gap:6px;font-size:13px;font-weight:650;color:var(--mall-color-muted)}
+.audit-filters input,.audit-filters select{min-width:0;width:100%;min-height:42px;border:1px solid var(--mall-color-border);border-radius:9px;padding:8px 10px;background:#fff;color:var(--mall-color-text)}
+.audit-filters :is(input,select):focus-visible{outline:2px solid var(--mall-color-brand);outline-offset:2px}
 .audit-actions{display:flex;align-items:end;gap:8px}.audit-range{margin:8px 0 18px;font-size:13px}
-.audit-pages{display:flex;justify-content:space-between;align-items:center;margin:16px 0;color:#51695a;font-size:13px}.audit-pages>div{display:flex;gap:8px}
-.audit-page pre{max-width:45ch;white-space:pre-wrap;overflow-wrap:anywhere}.audit-page summary{cursor:pointer;color:#245b3d}
+.audit-pages{display:flex;justify-content:space-between;align-items:center;margin:16px 0;color:var(--mall-color-muted);font-size:13px}.audit-pages>div{display:flex;gap:8px}
+.audit-page pre{max-width:45ch;white-space:pre-wrap;overflow-wrap:anywhere}.audit-page summary{cursor:pointer;color:var(--mall-color-brand)}
 @media(max-width:850px){.audit-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:540px){.audit-filters{grid-template-columns:1fr}.audit-pages{align-items:start;gap:10px;flex-direction:column}}
 </style>

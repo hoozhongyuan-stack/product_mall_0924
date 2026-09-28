@@ -11,7 +11,9 @@ function presentOverview(value) {
   const p = value.rules.points
   if (!['earnUnitFen', 'earnPoints', 'deductPoints', 'deductFen', 'maxPercent', 'validDays', 'refundValidDays'].every((key) => integer(p[key]))) throw new Error('会员规则不完整，请重新加载。')
   if (!value.rules.grades.every((grade) => grade && typeof grade.name === 'string' && integer(grade.minimumSpendFen))) throw new Error('会员等级规则不完整，请重新加载。')
-  return { ...value, gradeRuleCopy: value.gradePolicyRevision > 0 ? `会员已启用等级规则版本 ${value.gradePolicyRevision}` : '尚未通过完成订单启用等级规则。', spendLabel: money(value.effectiveSpendFen), gradeDateLabel: dateLabel(value.gradeEffectiveAt),
+  const orderCountsLabels = Object.fromEntries(['pendingPayment', 'waitingShipment', 'inTransit', 'waitingRedemption', 'afterSale']
+    .map((key) => [key, value.orderCounts && integer(value.orderCounts[key]) ? value.orderCounts[key] : '--']))
+  return { ...value, orderCountsLabels, gradeRuleCopy: value.gradePolicyRevision > 0 ? `会员已启用等级规则版本 ${value.gradePolicyRevision}` : '尚未通过完成订单启用等级规则。', spendLabel: money(value.effectiveSpendFen), gradeDateLabel: dateLabel(value.gradeEffectiveAt),
     points: { ...value.points, nextExpiryLabel: dateLabel(value.points.nextExpiryAt) },
     grades: value.rules.grades.map((grade) => ({ ...grade, minimumLabel: money(grade.minimumSpendFen) })),
     rulesCopy: `有效消费每 ${money(p.earnUnitFen)} 获得 ${p.earnPoints} 积分；${p.deductPoints} 积分可抵 ${money(p.deductFen)}，抵扣上限 ${p.maxPercent}%。`,

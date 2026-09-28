@@ -22,7 +22,7 @@ interface CategoryBatchPreview {
     productRevision: number; canChange: boolean; reason?: string }[]
 }
 const props = defineProps<{ account: Account }>()
-const emit = defineEmits<{ dirtyChange: [dirty: boolean] }>()
+const emit = defineEmits<{ dirtyChange: [dirty: boolean]; workspaceChange: [open: boolean] }>()
 const permissions = computed(() => props.account.permissionCodes)
 const canUpload = computed(() => permissions.value.includes('asset.upload'))
 const canWrite = computed(() => permissions.value.includes('catalog.write'))
@@ -73,7 +73,7 @@ const productMainImage = ref<Asset | null>(null)
 const productGalleryImages = ref<Asset[]>([])
 const productVideo = ref<Asset | null>(null)
 const productMediaBusy = ref(false)
-const createMediaBusy = ref(false)
+const createBusy = ref(false)
 const editingSku = ref<SkuRow | null>(null)
 const skuAction = ref<SkuAction>('status')
 const skuStatus = ref<SaleStatus>('OFF_SALE')
@@ -82,6 +82,15 @@ const gradeInputs = ref<Record<string, string>>({})
 const baseUnit = ref('')
 const saleUnit = ref('')
 const ratio = ref(1)
+const editorOpen = computed(() => Boolean(formOpen.value || editingProduct.value || editingSku.value || productLoading.value || productLoadError.value))
+const workspaceHeading = ref<HTMLElement | null>(null)
+let editorTrigger: HTMLElement | null = null
+watch(editorOpen, async open => {
+  emit('workspaceChange', open)
+  await nextTick()
+  if (open) { workspaceHeading.value?.focus(); workspaceHeading.value?.scrollIntoView?.({ block: 'start' }) }
+  else editorTrigger?.focus()
+})
 const productDirty = computed(() => {
   const original = editingProduct.value
   if (!original) return false
@@ -174,7 +183,7 @@ async function load(page = 1) {
 onMounted(() => { void load() })
 function applyFilters() { void load(1) }
 function clearFilters() { keyword.value = ''; categoryId.value = ''; statusFilter.value = ''; fulfillmentFilter.value = ''; void load(1) }
-function canLeaveEditor() { return !productMediaBusy.value && !createMediaBusy.value && (!hasUnsaved.value || window.confirm('当前商品资料尚未保存，离开后已填写的内容会丢失。确定继续吗？')) }
+function canLeaveEditor() { return !saving.value && !productMediaBusy.value && !createBusy.value && (!hasUnsaved.value || window.confirm('当前商品资料尚未保存，离开后已填写的内容会丢失。确定继续吗？')) }
 function closeEditors(force = false) {
   if (!force && !canLeaveEditor()) return false
   productLoadSequence += 1
@@ -184,7 +193,7 @@ function closeEditors(force = false) {
   productFieldErrors.value = {}
   specDirty.value = false
   productMediaBusy.value = false
-  createMediaBusy.value = false
+  createBusy.value = false
   formOpen.value = false
   createDirty.value = false
   editingProduct.value = null
@@ -194,12 +203,14 @@ function closeEditors(force = false) {
 }
 function openCreate() {
   if (!canLeaveEditor()) return
+  editorTrigger = document.activeElement as HTMLElement | null
   closeEditors(true)
   formOpen.value = true
 }
 
 async function openProduct(id: string) {
   if (!canLeaveEditor()) return
+  editorTrigger = document.activeElement as HTMLElement | null
   closeEditors(true)
   const sequence = ++productLoadSequence
   loadingProductId.value = id
@@ -277,6 +288,7 @@ function specsSaved() {
 
 function openSku(row: SkuRow, action: SkuAction) {
   if (!canLeaveEditor()) return
+  editorTrigger = document.activeElement as HTMLElement | null
   closeEditors(true)
   editingSku.value = row
   skuAction.value = action
@@ -475,13 +487,14 @@ function exportSelected() {
   window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-function created() { formOpen.value = false; createDirty.value = false; ElMessage.success('商品草稿已创建'); void load(1) }
+function created() { createBusy.value = false; formOpen.value = false; createDirty.value = false; ElMessage.success('商品草稿已创建'); void load(1) }
 </script>
 
 <template>
   <div class="catalog-section">
-    <div class="page-heading"><div><h2>商品与 SKU</h2><p>列表每行对应一个 SKU。商品名称、商品编号、规格与 SKU 编码分开显示。</p></div>
-      <button v-if="canCreate" class="primary-button" type="button" :disabled="loading || !hasActiveLeaf || productMediaBusy || createMediaBusy" @click="openCreate">新建商品</button>
+    <div v-show="!editorOpen" class="catalog-list">
+    <div class="page-heading"><div><h1>商品管理</h1><p>按 SKU 管理商品、价格与销售状态。</p></div>
+      <button v-if="canCreate" class="primary-button" type="button" :disabled="loading || !hasActiveLeaf || productMediaBusy || createBusy" @click="openCreate">新建商品</button>
     </div>
     <p v-if="canCreate && !loading && !hasActiveLeaf" class="hint">请先在“分类”中创建启用的一级及二级分类。</p>
     <p v-if="canWrite && !canCreate" class="hint">创建商品包含 SKU 状态、价格和单位写入，当前账号需要这三项权限。</p>
@@ -491,7 +504,7 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
       <label>分类<select v-model="categoryId"><option value="">全部分类</option><option v-for="item in categories.filter((row) => row.parentId)" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
       <label>商品类型<select v-model="fulfillmentFilter"><option value="">全部类型</option><option value="SHIP">快递发货</option><option value="REDEEM">到店核销</option></select></label>
       <label>SKU 状态<select v-model="statusFilter"><option value="">全部状态</option><option value="ON_SALE">上架</option><option value="OFF_SALE">下架</option></select></label>
-      <button class="secondary-button" type="submit" :disabled="loading">查询</button><button class="text-button" type="button" :disabled="loading" @click="clearFilters">清空</button>
+      <button class="primary-button" type="submit" :disabled="loading">查询</button><button class="secondary-button" type="button" :disabled="loading" @click="clearFilters">重置</button>
     </form>
     <p v-if="loading" class="loading-inline" role="status">正在加载商品…</p>
     <template v-else>
@@ -505,7 +518,7 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
         </div>
         <small>每页 20 条</small>
       </div>
-      <div class="panel table-wrap catalog-goods-table">
+      <div class="panel table-wrap catalog-goods-table" tabindex="0" aria-label="商品 SKU 列表，可横向滚动">
         <table><thead><tr><th scope="col"><input type="checkbox" aria-label="全选本页 SKU" :checked="allPageSelected" :disabled="!pageData.rows.length" @change="togglePage(($event.target as HTMLInputElement).checked)" /></th><th scope="col">商品名称 / 规格</th><th scope="col">类型</th><th scope="col">SKU 编码</th><th scope="col">日常价</th><th scope="col">等级价（列表内编辑）</th><th scope="col">库存</th><th scope="col">状态</th><th scope="col">操作</th></tr></thead>
           <tbody><tr v-for="row in pageData.rows" :key="row.skuId">
             <td><input type="checkbox" :aria-label="`选择 ${row.skuCode}`" :checked="selectedSkuIds.includes(row.skuId)" @change="setSelected(row.skuId, ($event.target as HTMLInputElement).checked)" /></td>
@@ -516,7 +529,7 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
             <td class="catalog-grade-cell"><div v-if="grades.some((grade) => grade.enabled)" class="catalog-grade-list"><label v-for="grade in grades.filter((item) => item.enabled)" :key="grade.id"><span>{{ grade.name }}</span><input :value="inlineGradeDrafts[row.skuId]?.[grade.id] || ''" inputmode="decimal" :aria-label="`${row.skuCode} ${grade.name}等级价（元）`" placeholder="—" :disabled="!canPrice || savingGradeSku === row.skuId" @input="updateInlineGrade(row.skuId, grade.id, ($event.target as HTMLInputElement).value)" /></label></div><span v-else>暂无启用的等级</span><small v-if="inlineErrors[row.skuId]" class="catalog-inline-error" role="alert">{{ inlineErrors[row.skuId] }}</small></td>
             <td class="catalog-stock-pending">到库存管理查看<small>按 SKU 与仓库查询</small></td>
             <td><span :class="['badge', row.saleStatus === 'ON_SALE' ? 'badge-good' : 'badge-muted']">{{ row.saleStatus === 'ON_SALE' ? 'SKU 上架' : 'SKU 下架' }}</span><small class="catalog-product-meta">商品{{ row.productStatus === 'DRAFT' ? '草稿' : row.productStatus === 'ON_SALE' ? '在售' : '下架' }}</small></td>
-            <td class="catalog-actions"><button v-if="canWrite" class="text-button" type="button" :disabled="productLoading || productMediaBusy || createMediaBusy" @click="openProduct(row.productId)">编辑商品</button>
+            <td class="catalog-actions"><button v-if="canWrite" class="text-button" type="button" :disabled="productLoading || productMediaBusy || createBusy" @click="openProduct(row.productId)">编辑商品</button>
               <button v-if="canStatus" class="text-button" type="button" @click="openSku(row, 'status')">SKU 状态</button>
               <button v-if="canPrice" class="text-button" type="button" @click="openSku(row, 'price')">日常价</button>
               <button v-if="canPrice" class="text-button" type="button" :disabled="!inlineGradeChanged(row) || savingGradeSku === row.skuId" @click="saveInlineGrade(row)">{{ savingGradeSku === row.skuId ? '保存中…' : '保存等级价' }}</button>
@@ -549,15 +562,20 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
           <button class="secondary-button" type="button" :disabled="!hasNext" @click="load(pageData.page + 1)">下一页</button></div></div>
     </template>
     <button v-if="error && !loading" class="text-button retry" type="button" @click="load(pageData.page)">重新加载</button>
+    <p class="catalog-footnote">库存按 SKU 与仓库在“库存管理”查询；导出仅包含当前页勾选的 SKU。</p>
+    </div>
 
-    <ProductCreateForm v-if="formOpen" :categories="categories" @created="created" @cancel="closeEditors()" @dirty-change="createDirty = $event" @busy-change="createMediaBusy = $event" />
+    <section v-if="editorOpen" class="catalog-editor-workspace" aria-label="商品编辑工作区">
+    <header class="catalog-workspace-heading"><div><button class="text-button catalog-back" type="button" :disabled="saving || productMediaBusy || createBusy" @click="closeEditors()">返回商品列表</button><h1 ref="workspaceHeading" tabindex="-1">{{ formOpen ? '新建商品' : editingSku ? '编辑 SKU' : '编辑商品' }}</h1><p>{{ editingProduct ? `${editingProduct.productNo} · ${editingProduct.status === 'DRAFT' ? '草稿' : editingProduct.status === 'ON_SALE' ? '在售' : '已下架'}` : editingSku ? editingSku.skuCode : '基础信息、媒体和规格分组管理' }}</p></div><span class="catalog-workspace-note">{{ saving || productMediaBusy || createBusy ? '操作进行中，请稍候' : hasUnsaved ? '有未保存的修改' : '退出前请确认各组资料已保存' }}</span></header>
+    <p v-if="error" class="error notice" role="alert">{{ error }}</p>
+    <ProductCreateForm v-if="formOpen" :categories="categories" @created="created" @cancel="closeEditors()" @dirty-change="createDirty = $event" @busy-change="createBusy = $event" />
     <section v-if="productLoading || productLoadError" class="panel action-panel catalog-editor" aria-label="商品详情加载状态">
       <p v-if="productLoading" role="status">正在加载商品资料与 SKU…</p>
       <template v-else><p class="error notice" role="alert">{{ productLoadError }}</p>
         <button class="secondary-button" type="button" @click="openProduct(loadingProductId)">重试加载商品</button></template>
     </section>
     <form v-if="editingProduct" class="panel action-panel catalog-editor" novalidate @submit.prevent="saveProduct">
-      <div class="panel-heading"><div><h3>编辑商品资料</h3><p>{{ editingProduct.productNo }} · 修订 {{ editingProduct.productRevision }}</p></div><button class="text-button" type="button" :disabled="productMediaBusy || createMediaBusy || saving" @click="closeEditors()">取消</button></div>
+      <div class="panel-heading"><div><h2>基础信息与媒体</h2><p>修订 {{ editingProduct.productRevision }} · 本区单独保存，规格与 SKU 在下方核对。</p></div></div>
       <p v-if="productEditorError" class="error notice" role="alert">{{ productEditorError }}</p>
       <div class="form-grid"><label>商品名称<input ref="productNameInput" v-model="productName" maxlength="120" required :aria-invalid="!!productFieldErrors.name" @input="productFieldErrors.name = undefined" /><small v-if="productFieldErrors.name" class="catalog-field-error">{{ productFieldErrors.name }}</small></label>
         <label>二级分类<select ref="productCategorySelect" v-model="productCategoryId" required :aria-invalid="!!productFieldErrors.category" @change="productFieldErrors.category = undefined"><option value="" disabled>请选择</option><option v-for="item in categories.filter((row) => row.parentId && row.status === 'ACTIVE' && categories.some((parent) => parent.id === row.parentId && parent.status === 'ACTIVE'))" :key="item.id" :value="item.id">{{ item.name }}</option></select><small v-if="productFieldErrors.category" class="catalog-field-error">{{ productFieldErrors.category }}</small></label>
@@ -578,7 +596,7 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
         @dirty-change="specDirty = $event" @saved="specsSaved" />
     </section>
     <form v-if="editingSku" class="panel action-panel catalog-editor" @submit.prevent="saveSku">
-      <div class="panel-heading"><div><h3>编辑 SKU {{ editingSku.skuCode }}</h3><p>{{ editingSku.productName }} · 修订 {{ editingSku.skuRevision }}</p></div><button class="text-button" type="button" :disabled="productMediaBusy || createMediaBusy || saving" @click="closeEditors()">取消</button></div>
+      <div class="panel-heading"><div><h3>编辑 SKU {{ editingSku.skuCode }}</h3><p>{{ editingSku.productName }} · 修订 {{ editingSku.skuRevision }}</p></div><button class="text-button" type="button" :disabled="productMediaBusy || createBusy || saving" @click="closeEditors()">取消</button></div>
       <label v-if="skuAction === 'status'">SKU 状态<select v-model="skuStatus"><option value="OFF_SALE">下架</option><option value="ON_SALE">上架</option></select></label>
       <label v-else-if="skuAction === 'price'">日常价（元）<input v-model="dailyPriceYuan" inputmode="decimal" required /></label>
       <template v-else-if="skuAction === 'prices'"><p>日常价 ¥{{ fenToYuan(editingSku.listPriceFen) }}。留空的已启用等级不设专属价；已停用等级的原价格会保留。</p>
@@ -588,6 +606,6 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
         <label>换算比<input v-model.number="ratio" type="number" min="1" step="1" required /></label></div>
       <button class="primary-button" type="submit" :disabled="saving">{{ saving ? '保存中…' : '保存 SKU' }}</button>
     </form>
-    <p class="catalog-footnote">库存按 SKU 与仓库在“库存管理”查询；导出仅包含当前页勾选的 SKU。</p>
+    </section>
   </div>
 </template>

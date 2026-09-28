@@ -1,22 +1,25 @@
-<view class="shopping-page">
-  <view class="page-title">购物车</view><button class="orders-entry" bindtap="openOrders">我的订单</button>
+<view class="pilot-page shopping-page">
+  <view class="cart-heading"><view class="page-title">购物车</view><button class="manage-button" bindtap="toggleManaging">{{managing ? '完成' : '管理'}}</button></view>
   <view wx:if="{{state === 'loading'}}" class="state" role="status">正在核对价格与库存…</view>
-  <view wx:elif="{{state === 'empty'}}" class="state"><view>购物车还是空的</view><button bindtap="shop">去逛逛</button></view>
+  <view wx:elif="{{state === 'empty'}}" class="state"><view class="empty-title">购物车还是空的</view><view class="empty-copy">选好规格，把喜欢的商品加入购物车。</view><button bindtap="shop">去逛逛</button></view>
   <view wx:elif="{{state === 'error' || state === 'auth'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>
   <block wx:else>
     <view wx:if="{{error}}" class="hint warning" role="alert">{{error}}<button bindtap="refresh">重新核对</button></view>
     <view wx:for="{{rows}}" wx:key="skuId" class="cart-card">
-      <checkbox-group data-id="{{item.skuId}}" bindchange="toggle"><label><checkbox value="selected" checked="{{item.selected !== false}}" color="#24583d" /></label></checkbox-group>
-      <image wx:if="{{item.imageUrl && !failedImages[item.skuId]}}" class="thumb" src="{{item.imageUrl}}" mode="aspectFill" data-id="{{item.skuId}}" binderror="onImageError" />
-      <view wx:else class="thumb fallback">暂无图片</view>
-      <view class="cart-info"><view class="name">{{item.name}}</view><view class="muted">{{item.spec}} · {{item.unit}}</view><view class="price">{{item.price}}<text wx:if="{{item.priceCached}}" class="muted">（上次显示价）</text></view>
-        <view class="cart-actions"><button data-id="{{item.skuId}}" data-step="-1" bindtap="changeQuantity" disabled="{{item.quantity <= 1}}">−</button><text>{{item.quantity}}</text><button data-id="{{item.skuId}}" data-step="1" bindtap="changeQuantity">＋</button><button class="remove" data-id="{{item.skuId}}" bindtap="removeItem">移除</button></view>
-        <view wx:if="{{item.live && item.live.status !== 'OK'}}" class="warning" role="alert">当前规格不可结算（{{item.live.status}}），可售 {{item.live.availableQuantity}} 件。</view>
-        <view wx:if="{{item.live && item.live.priceChanged}}" class="warning" role="alert">价格已变为 {{item.price}} <button data-id="{{item.skuId}}" bindtap="confirmPrice">确认新价格</button></view>
+      <view class="cart-item">
+        <checkbox-group data-id="{{item.skuId}}" bindchange="toggle" class="item-check"><label aria-label="选择{{item.name}}"><checkbox value="selected" checked="{{item.selected !== false}}" color="#A3202B" /></label></checkbox-group>
+        <image wx:if="{{item.imageUrl && !failedImages[item.skuId]}}" class="thumb" src="{{item.imageUrl}}" mode="aspectFill" data-id="{{item.skuId}}" binderror="onImageError" />
+        <view wx:else class="thumb fallback">暂无图片</view>
+        <view class="cart-info"><view class="name">{{item.name || (item.live ? item.live.name : '商品信息待核对')}}</view><view class="muted">{{item.spec || '默认规格'}}{{item.fulfillmentLabel ? ' · ' + item.fulfillmentLabel : ''}}</view>
+          <view class="cart-price-line"><view class="price">{{item.price}}<view wx:if="{{item.priceCached}}" class="muted">上次显示价</view></view><view class="cart-stepper"><button data-id="{{item.skuId}}" data-step="-1" bindtap="changeQuantity" disabled="{{item.quantity <= 1}}" aria-label="减少{{item.name}}数量">−</button><text>{{item.quantity}}</text><button data-id="{{item.skuId}}" data-step="1" bindtap="changeQuantity" disabled="{{item.quantity >= 9999}}" aria-label="增加{{item.name}}数量">＋</button></view></view>
+        </view>
       </view>
+      <view wx:if="{{item.live && item.live.priceChanged}}" class="change-notice" role="alert"><view wx:if="{{item.previousPrice}}" class="old-price">原显示价 {{item.previousPrice}} / {{item.unit || '件'}}</view><view>当前适用价 {{item.price}} / {{item.unit || '件'}}，请确认后继续结算。</view></view>
+      <view wx:if="{{item.live && item.live.status !== 'OK'}}" class="change-notice warning" role="alert">{{item.live.status === 'OUT_OF_STOCK' ? '购买数量超过当前可售库存，请调整数量或重新选规格。' : '当前规格暂不可售，请移除或重新选规格。'}}<view wx:if="{{item.live.availableQuantity >= 0}}">原购买 {{item.quantity}} {{item.unit || '件'}} · 当前可售 {{item.live.availableQuantity}} {{item.unit || '件'}}</view></view>
+      <view wx:if="{{managing || (item.live && (item.live.priceChanged || item.live.status !== 'OK'))}}" class="change-actions"><button class="remove-button" data-id="{{item.skuId}}" bindtap="removeItem">移除</button><button wx:if="{{item.live.priceChanged}}" class="primary-button" data-id="{{item.skuId}}" bindtap="confirmPrice">确认新价格</button><button wx:if="{{item.canReselect && item.live.status !== 'OK'}}" class="secondary-button" data-id="{{item.skuId}}" bindtap="reselectSku">重新选规格</button></view>
     </view>
-    <view class="hint">结算前会重新核对价格、规格和库存。</view>
-    <view class="footer"><button class="all" bindtap="toggleAll">全选 / 取消</button><view>合计 <text class="price">{{total}}</text></view><button class="primary" bindtap="checkout" disabled="{{!quote || !quote.ready || quote.confirmRequired}}">去结算</button></view>
+    <view class="hint">结算前将重新核对价格和库存。商品信息发生变化时，请先确认受影响的商品。</view>
+    <view class="footer"><checkbox-group bindchange="toggleAll"><label class="all"><checkbox value="all" checked="{{allSelected}}" color="#A3202B" />全选</label></checkbox-group><view class="footer-summary"><view>合计 <text class="price">{{total}}</text></view><text class="muted">已选 {{selectedCount}} 件 · 运费以结算为准</text></view><button class="primary-button" bindtap="checkout" disabled="{{!quote || !quote.ready || quote.confirmRequired}}">{{quote && quote.ready && !quote.confirmRequired ? '去结算' : '暂不可结算'}}</button></view>
   </block>
+  <storefront-shell show-navigation="{{true}}" />
 </view>
-<storefront-shell show-navigation="{{true}}" />

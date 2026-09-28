@@ -132,7 +132,7 @@ onBeforeRouteLeave(() => !hasPending() || window.confirm('消息模板草稿有�
 <template>
   <section class="page-content subscription-page">
     <header class="page-heading">
-      <div><p class="subscription-eyebrow">消息配置</p><h1>订阅消息</h1><p>为三类业务事件预备模板草稿，后续逐项核对真实小程序主体与模板。</p></div>
+      <div><h1>订阅消息</h1><p>维护支付、发货与退款通知的模板配置。模板经平台核验后才能发送。</p></div>
       <button type="button" class="secondary-button" :disabled="loading || !!busy" @click="load()">重新读取</button>
     </header>
     <div class="subscription-gate" role="status"><strong>发送暂未开通</strong><span>目前没有经平台核验的小程序账号和模板。保存下方标识只形成草稿，不会触发授权弹窗或发送。</span></div>

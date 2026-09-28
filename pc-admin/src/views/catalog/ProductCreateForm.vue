@@ -31,6 +31,7 @@ const dirty = computed(() => Boolean(productNo.value || name.value || categoryId
   || fulfillmentKind.value !== 'SHIP' || redeemValidUntil.value || axes.value.length || skus.value.length || mainImage.value
   || galleryImages.value.length || video.value || mediaBusy.value))
 watch(dirty, (value) => emit('dirtyChange', value), { immediate: true })
+watch([mediaBusy, saving], () => emit('busyChange', mediaBusy.value || saving.value))
 
 function addAxis() {
   if (axes.value.length < 2) axes.value = [...axes.value, { name: '', values: '' }]
@@ -133,7 +134,7 @@ async function save() {
     </div>
     <ProductMediaEditor v-model:main-image="mainImage" v-model:gallery-images="galleryImages" v-model:video="video"
       :target-key="JSON.stringify([account?.accountId, 'new'])" :can-upload="canUpload" :disabled="saving || !canEdit"
-      @busy-change="mediaBusy = $event; emit('busyChange', $event)" />
+      @busy-change="mediaBusy = $event" />
     <div class="catalog-subheading"><h4>规格项</h4><button class="secondary-button" type="button" :disabled="axes.length >= 2" @click="addAxis">添加规格项</button></div>
     <p class="help-text">最多 2 项，每项最多 20 个值。无规格商品直接生成 1 个 SKU。</p>
     <div v-for="(axis, index) in axes" :key="index" class="spec-axis-row">
@@ -157,7 +158,7 @@ async function save() {
       </div>
     </div>
     <section class="catalog-description-section"><h4>商品详情</h4><label>商品描述（允许基础 HTML，服务端会过滤）<textarea v-model="description" rows="4" placeholder="可留空，后续编辑商品资料" /></label></section>
-    <p class="help-text">阶段 A 不开放购买，也不显示虚构库存。</p>
+    <p class="help-text">保存后为下架草稿。库存通过库存单据管理；上架前请核对主图、价格与可售库存。</p>
     <button class="primary-button" type="submit" :disabled="saving || mediaBusy || !canEdit || !skus.length">{{ saving ? '保存中…' : '保存商品草稿' }}</button>
   </form>
 </template>

@@ -145,7 +145,7 @@ test('detail page shows only received SKU choices and handles delisting', async 
   assert.equal(page.data.selectedPrice, '¥198')
   assert.equal(page.data.selectedSkuId, 's3')
   page.chooseSku({ currentTarget: { dataset: { id: 's2' } } })
-  assert.equal(page.data.selectedPrice, '¥398')
+  assert.equal(page.data.selectedPrice, '¥198') // Unavailable SKU cannot be selected.
   delisted = true
   await page.loadDetail()
   assert.equal(page.data.state, 'unavailable')
