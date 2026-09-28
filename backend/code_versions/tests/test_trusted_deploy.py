@@ -102,6 +102,13 @@ class TrustedSourceTests(GitSourceMixin, SimpleTestCase):
             build_git_package(self.repo, self.revision, 100_000)
         self.assertEqual(raised.exception.code, "SOURCE_DIRTY")
 
+    def test_external_git_environment_cannot_redirect_repository(self):
+        with patch.dict(os.environ, {"GIT_DIR": "/missing/git-dir",
+                                  "GIT_WORK_TREE": "/missing/work-tree"}):
+            package = build_git_package(self.repo, self.revision, 100_000)
+        with zipfile.ZipFile(io.BytesIO(package.data)) as archive:
+            self.assertEqual(archive.read("app.js"), b"App({})")
+
 
 class TrustedVersionTests(GitSourceMixin, TestCase):
     def setUp(self):
