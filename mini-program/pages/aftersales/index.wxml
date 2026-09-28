@@ -1,0 +1,30 @@
+<view class="orders-page">
+  <view class="page-title">申请与查看售后</view>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在核对可申请范围…</view>
+  <view wx:elif="{{state !== 'ready'}}" class="state" role="alert"><view>{{error}}</view><button wx:if="{{state === 'auth'}}" bindtap="login">登录后查看</button><button wx:else bindtap="refresh">重新加载</button><button class="secondary" bindtap="openOrders">我的订单</button></view>
+  <block wx:else>
+    <view wx:if="{{uncertain}}" class="section"><view class="section-title">申请结果待核对</view><view class="muted">上次申请结果尚未确认，已保留原申请。请重试核对同一申请，避免重复提交。</view><view class="instructions">{{reason}}</view><button bindtap="submit" loading="{{submitting}}" disabled="{{submitting}}">{{submitting ? '正在核对…' : '重试核对同一申请'}}</button></view>
+    <view wx:else class="section">
+      <view class="section-title">提交新申请</view><view class="muted">每次选择一个订单项。{{isPoints ? '数量与退回兑换积分由平台核对，申请提交后仍需审核。' : '数量与商品退款金额由平台核对，申请提交后仍需审核。'}}</view>
+      <view wx:if="{{!lines.length}}" class="body-copy">当前没有可查看的订单项。请返回订单核对付款状态，或联系平台。</view>
+      <block wx:else>
+        <view class="field-label">商品</view><picker mode="selector" range="{{lineLabels}}" value="{{lineIndex}}" bindchange="onLine" disabled="{{submitting}}" aria-label="选择售后商品"><view class="picker-value">{{selectedLine.title || '选择商品'}}<text class="picker-hint">更改</text></view></picker>
+        <view wx:if="{{!selectedOption}}" class="notice" role="status">{{selectedLine.blockedMessage || '此订单项当前不可申请售后。请查看已有申请或联系平台。'}}</view>
+        <block wx:else>
+          <view class="field-label">售后类型与范围</view><picker mode="selector" range="{{optionLabels}}" value="{{optionIndex}}" bindchange="onOption" disabled="{{submitting}}" aria-label="选择售后类型"><view class="picker-value">{{optionLabels[optionIndex]}}<text class="picker-hint">更改</text></view></picker>
+          <label for="sale-quantity" class="field-label">申请数量（最多 {{selectedOption.maxQuantity}}）</label><input id="sale-quantity" class="quantity-input" type="number" value="{{quantity}}" bindinput="onQuantity" disabled="{{submitting}}" aria-label="申请数量" maxlength="9" />
+          <label for="sale-reason" class="field-label">原因与说明（5—500 字）</label><textarea id="sale-reason" value="{{reason}}" bindinput="onReason" disabled="{{submitting}}" maxlength="500" aria-label="售后原因与说明" placeholder="请说明申请原因、商品情况及需要平台处理的问题。请勿填写密码或完整银行卡号。" />
+          <button class="secondary" bindtap="previewSelection" loading="{{previewState === 'loading'}}" disabled="{{submitting || previewState === 'loading'}}">{{isPoints ? '核对退回积分' : '核对退款金额'}}</button>
+          <view wx:if="{{previewState === 'ready'}}" class="amount-summary" role="status"><text>{{preview.isPoints ? '本次申请退回积分' : '本次商品退款金额'}}</text><text class="price">{{preview.amountLabel}}</text></view>
+          <view wx:if="{{preview.cashCopy}}" class="muted">{{preview.cashCopy}}</view><view wx:if="{{previewError}}" class="action-error" role="alert">{{previewError}}</view><view class="muted">{{isPoints ? '兑换积分按订单项成交快照和本次申请数量核对；更改数量后需重新核对，最终返还以平台审核与确认结果为准。' : '商品退款不含运费；适用的运费退款由平台独立核对。更改商品、类型或数量后需重新核对金额；最终申请范围以提交时服务端校验为准。'}}</view>
+          <button bindtap="submit" loading="{{submitting}}" disabled="{{submitting || previewState !== 'ready'}}">{{submitting ? '正在提交…' : '提交售后申请'}}</button>
+        </block>
+      </block>
+    </view>
+    <view wx:if="{{actionError}}" class="action-error" role="alert">{{actionError}}</view><view wx:if="{{actionMessage}}" class="notice" role="status">{{actionMessage}}</view>
+    <view class="section"><view class="section-title">本订单的售后记录</view><view wx:if="{{!rows.length}}" class="muted">暂无售后申请。</view><view wx:for="{{rows}}" wx:key="caseId" class="case-row"><view class="row"><text class="strong">{{item.title}}</text><text class="status-label">{{item.statusLabel}}</text></view><view>{{item.kindLabel}} · 数量 {{item.quantity}}</view><view class="row"><text class="muted">{{item.createdLabel}}</text><text class="price">{{item.amountLabel}}</text></view><button class="secondary" data-id="{{item.caseId}}" bindtap="openCase">查看处理进度</button></view>
+      <view wx:if="{{moreError}}" class="action-error" role="alert">{{moreError}}</view><button wx:if="{{rows.length < total}}" class="secondary" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">{{loadingMore ? '加载中…' : '加载更多售后记录'}}</button>
+    </view>
+    <view class="actions"><button class="secondary" bindtap="refresh" disabled="{{submitting}}">刷新售后状态</button><button class="secondary" bindtap="openOrder">查看订单</button></view>
+  </block>
+</view>

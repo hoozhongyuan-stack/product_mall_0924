@@ -1,0 +1,14 @@
+<view class="member-page">
+  <view class="page-title">会员中心</view>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载会员权益…</view>
+  <view wx:elif="{{state === 'auth'}}" class="state"><view>{{error}}</view><button bindtap="login">登录后查看</button></view>
+  <view wx:elif="{{state === 'error'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>
+  <block wx:elif="{{member}}">
+    <view class="section"><view class="grade-name">{{member.grade.name}}</view><view class="muted" wx:if="{{!member.enabled}}">会员账户已停用，请联系店铺处理。</view><view class="row"><text>累计有效消费</text><text class="amount">{{member.spendLabel}}</text></view><view wx:if="{{member.gradeEffectiveAt}}" class="muted">等级生效 {{member.gradeDateLabel}}</view><button class="secondary" bindtap="openConsumption">查看消费与等级变化</button></view>
+    <view class="section"><view class="section-title">积分账户</view><view class="row"><text>当前可用</text><text class="amount">{{member.points.availablePoints}} 积分</text></view><view class="row"><text>账面余额</text><text>{{member.points.settledPoints}} 积分</text></view><view class="row"><text>订单冻结</text><text>{{member.points.frozenPoints}} 积分</text></view><view class="muted">冻结积分暂不可用，订单取消或关闭后释放。</view><view wx:if="{{member.points.debtPoints}}" class="notice">待补积分 {{member.points.debtPoints}}。退款扣回已使用的奖励积分可能形成负余额，后续到账积分先补足余额。</view><view wx:if="{{member.points.expiredPendingPoints}}" class="notice">已到期待扣账 {{member.points.expiredPendingPoints}} 积分，不计入当前可用。</view><view wx:if="{{member.points.expiringPoints}}" class="muted">最近到期 {{member.points.expiringPoints}} 积分，{{member.points.nextExpiryLabel}}</view><button bindtap="openPoints">查看积分明细</button></view>
+    <view class="section"><view class="section-title">等级与积分规则</view><view wx:for="{{member.grades}}" wx:key="id" class="row"><text>{{item.name}}</text><text>有效消费满 {{item.minimumLabel}}</text></view><view class="rule-copy">{{member.rulesCopy}}</view><view class="muted">{{member.expiryCopy}}</view><view class="muted rule-copy">{{member.snapshotCopy}}</view><view class="muted">当前规则版本 {{member.rules.revision}}</view><view class="muted">{{member.gradeRuleCopy}}</view></view>
+    <view class="section"><view class="section-title">优惠券</view><view class="muted">领取店铺优惠券，结算时核对适用范围和门槛。</view><button bindtap="openCoupons">我的优惠券</button><button class="secondary" bindtap="openCampaigns">前往领券</button></view>
+    <view class="section"><view class="section-title">积分商城</view><view class="muted">兑换快递商品或到店服务，独立积分售价，不使用现金或优惠券。</view><button bindtap="openExchange">进入积分商城</button></view>
+    <button class="secondary" bindtap="openOrders">查看我的订单</button>
+  </block>
+</view>

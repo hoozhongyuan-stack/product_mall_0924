@@ -1,0 +1,59 @@
+<view class="catalog-page">
+  <view class="catalog-header">
+    <view class="catalog-title-row"><view class="catalog-title">商品分类</view><button class="cart-shortcut" bindtap="openCart">购物车</button></view>
+    <view class="search-row">
+      <input class="search-input" type="text" maxlength="100" placeholder="搜索商品名称" value="{{searchInput}}" focus="{{searchFocused}}" bindinput="onSearchInput" bindconfirm="submitSearch" confirm-type="search" aria-label="搜索商品名称" />
+      <button wx:if="{{searchInput}}" class="search-clear" bindtap="clearSearch" aria-label="清空搜索">清空</button>
+      <button class="search-submit" bindtap="submitSearch">搜索</button>
+    </view>
+  </view>
+
+  <view wx:if="{{categoryState === 'loading'}}" class="page-state" role="status">正在加载分类…</view>
+  <view wx:elif="{{categoryState === 'error'}}" class="page-state" role="alert">
+    <view class="state-title">分类加载失败</view><view class="state-copy">{{categoryError}}</view>
+    <button class="state-action" bindtap="loadCategories">重新加载</button>
+  </view>
+  <view wx:elif="{{categoryState === 'empty'}}" class="page-state">
+    <view class="state-title">暂时没有可浏览的分类</view><view class="state-copy">请稍后再来看看。</view>
+  </view>
+  <block wx:else>
+    <scroll-view wx:if="{{!keyword}}" class="root-strip" scroll-x enhanced show-scrollbar="false" aria-label="一级分类">
+      <view class="root-items">
+        <button wx:for="{{roots}}" wx:key="id" class="root-item {{activeRootId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="selectRoot">{{item.name}}</button>
+      </view>
+    </scroll-view>
+    <view wx:if="{{keyword}}" class="result-heading">“{{keyword}}”的搜索结果 <text>{{total}} 件</text></view>
+    <view class="catalog-body">
+      <scroll-view wx:if="{{!keyword}}" class="leaf-rail" scroll-y enhanced show-scrollbar="false" aria-label="二级分类">
+        <button wx:for="{{leaves}}" wx:key="id" class="leaf-item {{activeLeafId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="selectLeaf">{{item.name}}</button>
+        <view wx:if="{{!leaves.length}}" class="leaf-empty">暂无二级分类</view>
+      </scroll-view>
+      <view class="product-pane {{keyword ? 'full-width' : ''}}">
+        <view wx:if="{{listState === 'loading'}}" class="list-state" role="status">正在加载商品…</view>
+        <view wx:elif="{{listState === 'error'}}" class="list-state" role="alert">
+          <view class="state-title">商品加载失败</view><view class="state-copy">{{listError}}</view>
+          <button class="state-action" bindtap="loadProducts">重试</button>
+        </view>
+        <view wx:elif="{{listState === 'empty'}}" class="list-state">
+          <view class="state-title">{{keyword ? '没有找到相关商品' : '这个分类暂无商品'}}</view>
+          <view class="state-copy">{{keyword ? '试试更短的名称，或清空搜索继续按分类浏览。' : '有商品上架后会显示在这里。'}}</view>
+          <button wx:if="{{keyword}}" class="state-action" bindtap="clearSearch">浏览商品分类</button>
+        </view>
+        <block wx:else>
+          <button wx:for="{{products}}" wx:key="id" class="product-row" data-id="{{item.id}}" bindtap="openProduct" aria-label="查看{{item.name}}详情">
+            <image class="product-image" src="{{item.imageUrl}}" mode="aspectFill" lazy-load />
+            <view class="product-info">
+              <view class="product-name">{{item.name}}</view>
+              <view class="product-kind">{{item.specsPreview}} · {{item.fulfillment}}</view>
+              <view class="product-foot"><text class="product-price">{{item.price}}</text><text class="product-open">查看详情 ›</text></view>
+              <view class="product-unavailable">{{item.availability}}</view>
+            </view>
+          </button>
+          <view wx:if="{{loadingMore}}" class="pagination-note">正在加载更多…</view>
+          <view wx:elif="{{listError}}" class="pagination-note error" role="alert" bindtap="retryMore">加载失败，点此重试：{{listError}}</view>
+          <view wx:elif="{{products.length && !hasMore}}" class="pagination-note">已显示全部商品</view>
+        </block>
+      </view>
+    </view>
+  </block>
+</view>

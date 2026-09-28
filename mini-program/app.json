@@ -1,0 +1,33 @@
+{
+  "pages": [
+    "pages/launch/launch",
+    "pages/home/home",
+    "pages/index/index",
+    "pages/product/detail",
+    "pages/micro/detail",
+    "pages/cart/cart",
+    "pages/checkout/checkout",
+    "pages/login/login",
+    "pages/addresses/addresses",
+    "pages/addresses/edit",
+    "pages/orders/list",
+    "pages/orders/detail",
+    "pages/aftersales/index",
+    "pages/aftersales/detail",
+    "pages/member/index",
+    "pages/member/points",
+    "pages/member/consumption",
+    "pages/coupons/index",
+    "pages/coupons/campaigns",
+    "pages/exchange/index",
+    "pages/exchange/detail"
+  ],
+  "window": {
+    "navigationBarTitleText": "首页",
+    "navigationBarBackgroundColor": "#173d2c",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f7f7f2",
+    "enablePullDownRefresh": true,
+    "onReachBottomDistance": 120
+  }
+}

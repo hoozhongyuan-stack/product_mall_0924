@@ -1,0 +1,11 @@
+.launch-page { min-height: 100vh; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; background: radial-gradient(circle at 50% 43%, #fff8ec 0, #fff3e2 60%, #f9e4cb 100%); color: #7b2b35; }
+.launch-skip { position: absolute; z-index: 2; top: calc(env(safe-area-inset-top) + 32rpx); right: 34rpx; margin: 0; padding: 0 26rpx; height: 64rpx; line-height: 62rpx; border: 1rpx solid #dec7a5; border-radius: 40rpx; background: rgba(255,255,255,.78); color: #7f4e42; font-size: 25rpx; font-weight: 600; }
+.launch-skip::after { border: 0; }
+.launch-center { width: 100%; box-sizing: border-box; padding: 80rpx 52rpx 110rpx; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.launch-art { width: 440rpx; height: 440rpx; max-width: 72vw; max-height: 72vw; }
+.launch-title { margin-top: 34rpx; font-size: 44rpx; font-weight: 700; letter-spacing: .08em; }
+.launch-subtitle { margin-top: 16rpx; color: #876d60; font-size: 27rpx; line-height: 1.5; }
+.launch-countdown { margin-top: 88rpx; display: flex; align-items: center; gap: 12rpx; color: #8e7365; font-size: 25rpx; }
+.launch-number { width: 46rpx; height: 46rpx; line-height: 46rpx; border-radius: 50%; background: #9f2632; color: #fff; font-weight: 700; text-align: center; }
+.launch-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 8rpx; background: #edc8aa; }
+.launch-progress-fill { height: 100%; background: #9f2632; }

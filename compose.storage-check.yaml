@@ -1,0 +1,25 @@
+# E0 isolated named-volume proof only. Full application orchestration is E5.
+name: product-mall-e0-storage-check
+services:
+  probe:
+    image: node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+    network_mode: none
+    read_only: true
+    volumes:
+      - media:/data
+    entrypoint: ["node", "-e"]
+    command:
+      - |
+        const fs = require('node:fs');
+        const crypto = require('node:crypto');
+        const data = Buffer.from('E0 isolated persistent media proof 2026-09-27');
+        const file = '/data/media/proof.bin';
+        if (process.env.PROBE_MODE === 'write') {
+          fs.mkdirSync('/data/media', { recursive: true, mode: 0o700 });
+          fs.writeFileSync(file, data, { flag: 'wx', mode: 0o600 });
+        }
+        const actual = fs.readFileSync(file);
+        if (!actual.equals(data)) throw new Error('Persistent media differs');
+        process.stdout.write(crypto.createHash('sha256').update(actual).digest('hex') + '\n');
+volumes:
+  media:

@@ -1,0 +1,4 @@
+@import "../home/home.wxss";
+.micro-back, .catalog-entry { flex: none; margin: 0; padding: 0 4rpx; background: transparent; font-size: 25rpx; }
+.micro-back::after { border: 0; }
+.micro-title { flex: 1; min-width: 0; padding: 0 18rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 31rpx; font-weight: 700; }

@@ -1,0 +1,14 @@
+<view class="launch-page">
+  <button class="launch-skip" bindtap="skip" aria-label="跳过启动页">跳过</button>
+  <view class="launch-center">
+    <image wx:if="{{mediaUrl}}" class="launch-art" src="{{mediaUrl}}" mode="aspectFit" binderror="onGifError" aria-label="品牌启动图" />
+    <image wx:else class="launch-art" src="../../assets/startup-brand.png" mode="aspectFit" aria-label="默认品牌图" />
+    <view class="launch-title">品牌名称</view>
+    <view class="launch-subtitle">好物相伴，开启今天的相聚</view>
+    <view class="launch-countdown" aria-live="polite">
+      <text class="launch-number">{{remainingSeconds}}</text>
+      <text>秒后进入小程序</text>
+    </view>
+  </view>
+  <view class="launch-progress"><view class="launch-progress-fill" style="width: {{progressPercent}}%;"></view></view>
+</view>

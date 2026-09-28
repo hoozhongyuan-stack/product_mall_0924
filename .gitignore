@@ -5,6 +5,10 @@ secrets/
 .venv/
 __pycache__/
 .pytest_cache/
+.coverage
+htmlcov/
 node_modules/
 dist/
 media/
+mini-program/project.private.config.json
+.DS_Store

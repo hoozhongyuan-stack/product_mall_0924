@@ -1,0 +1,26 @@
+<view class="member-page">
+  <view class="page-title">领取优惠券</view>
+  <view class="intro">优惠券领取数量有限。每笔订单最多使用一张，适用范围与门槛以结算核对为准。</view>
+  <button class="secondary top-link" bindtap="openMine">查看我的优惠券</button>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载可领取活动…</view>
+  <view wx:elif="{{state === 'auth'}}" class="state"><view>{{error}}</view><button bindtap="login">登录后领取</button></view>
+  <view wx:elif="{{state === 'error'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>
+  <block wx:else>
+    <view wx:if="{{pending}}" class="notice" role="status"><view>有一笔领取结果等待核对。核对完成前，请勿重新领取其他活动。</view><button bindtap="retryClaim" disabled="{{busy}}" loading="{{busy}}">{{busy ? '正在核对…' : '核对领取结果'}}</button></view>
+    <view wx:if="{{message}}" class="success-copy" role="status">{{message}}</view>
+    <view wx:if="{{claimError}}" class="error" role="alert">{{claimError}}</view>
+    <view wx:if="{{state === 'empty'}}" class="state">暂无可领取活动。可以查看已有优惠券，或稍后再来。</view>
+    <view wx:for="{{rows}}" wx:key="id" class="section coupon">
+      <view class="coupon-head"><text class="coupon-value">{{item.amountLabel}}</text><text class="muted">{{item.kindLabel}}</text></view>
+      <view class="section-title">{{item.title}}</view><view>{{item.thresholdLabel}}</view>
+      <view class="muted">{{item.scopeLabel}} · {{item.redemptionLabel}}</view>
+      <view class="muted valid-copy">{{item.validLabel}}</view>
+      <view wx:if="{{item.productNames.length}}" class="products"><view class="muted">适用商品</view><button wx:for="{{item.productNames}}" wx:for-item="product" wx:key="id" class="product-link" data-row="{{item.id}}" data-id="{{product.id}}" bindtap="openProduct">{{product.name}}</button></view>
+      <view class="muted">剩余 {{item.remainingQuantity}} 张 · 每人可领取 {{item.selfClaimLimit}} 张 · 已领 {{item.selfClaimedCount}} 张</view>
+      <button data-id="{{item.id}}" bindtap="claim" disabled="{{busy || pending || !item.canClaim}}">{{item.claimLabel}}</button>
+    </view>
+    <view wx:if="{{moreError}}" class="error" role="alert">{{moreError}}</view>
+    <button wx:if="{{rows.length < total}}" class="secondary" bindtap="loadMore" disabled="{{loadingMore || busy}}" loading="{{loadingMore}}">{{loadingMore ? '正在加载…' : moreError ? '重试加载更多' : '加载更多'}}</button>
+    <view wx:if="{{total && rows.length >= total}}" class="muted end">已展示全部活动</view>
+  </block>
+</view>

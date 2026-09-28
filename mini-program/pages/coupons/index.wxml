@@ -1,0 +1,20 @@
+<view class="member-page">
+  <view class="page-title">我的优惠券</view>
+  <view class="coupon-tabs" role="tablist"><button role="tab" aria-selected="{{status === 'AVAILABLE'}}" class="tab {{status === 'AVAILABLE' ? 'selected' : ''}}" data-status="AVAILABLE" bindtap="changeStatus">可使用</button><button role="tab" aria-selected="{{status === 'RESERVED'}}" class="tab {{status === 'RESERVED' ? 'selected' : ''}}" data-status="RESERVED" bindtap="changeStatus">暂占中</button><button role="tab" aria-selected="{{status === 'USED'}}" class="tab {{status === 'USED' ? 'selected' : ''}}" data-status="USED" bindtap="changeStatus">已使用</button><button role="tab" aria-selected="{{status === 'EXPIRED'}}" class="tab {{status === 'EXPIRED' ? 'selected' : ''}}" data-status="EXPIRED" bindtap="changeStatus">已过期</button></view>
+  <button class="secondary top-link" bindtap="openCampaigns">前往领券</button>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载我的优惠券…</view>
+  <view wx:elif="{{state === 'auth'}}" class="state"><view>{{error}}</view><button bindtap="login">登录后查看</button></view>
+  <view wx:elif="{{state === 'error'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>
+  <view wx:elif="{{state === 'empty'}}" class="state">当前分类暂无优惠券。可切换分类或前往领券。</view>
+  <block wx:else>
+    <view wx:for="{{rows}}" wx:key="id" class="section coupon">
+      <view class="coupon-head"><text class="coupon-value">{{item.amountLabel}}</text><text class="status-label">{{item.statusLabel}}</text></view>
+      <view class="section-title">{{item.title}}</view><view>{{item.thresholdLabel}}</view><view class="muted">{{item.scopeLabel}} · {{item.redemptionLabel}}</view><view class="muted valid-copy">{{item.validLabel}}</view>
+      <view wx:if="{{item.productNames.length}}" class="products"><view class="muted">适用商品</view><button wx:for="{{item.productNames}}" wx:for-item="product" wx:key="id" class="product-link" data-row="{{item.id}}" data-id="{{product.id}}" bindtap="openProduct">{{product.name}}</button></view>
+      <view class="muted valid-copy">{{item.statusCopy}}</view>
+      <button wx:if="{{item.orderId}}" class="secondary" data-id="{{item.id}}" bindtap="openOrder">查看关联订单</button>
+    </view>
+    <view class="intro">每笔订单最多使用一张优惠券，可与积分抵扣同时使用。选择商品后，在结算页面查看可用优惠券。</view><button class="secondary" bindtap="openCatalog">去选购商品</button>
+    <view wx:if="{{moreError}}" class="error" role="alert">{{moreError}}</view><button wx:if="{{rows.length < total}}" class="secondary" bindtap="loadMore" disabled="{{loadingMore}}" loading="{{loadingMore}}">{{loadingMore ? '正在加载…' : moreError ? '重试加载更多' : '加载更多'}}</button><view wx:if="{{total && rows.length >= total}}" class="muted end">已展示当前分类全部优惠券</view>
+  </block>
+</view>

@@ -1,0 +1,33 @@
+<import src="../../components/published-content.wxml" />
+<view class="home-page" style="background-color: {{theme.pageBackgroundColor}};">
+  <view class="home-header" style="background-color: {{theme.headerBackgroundColor}}; color: {{theme.brandTextColor}};">
+    <button class="micro-back" style="color: {{theme.brandTextColor}};" bindtap="goBack" aria-label="返回上一页">返回</button>
+    <view class="micro-title">{{name || '专题页面'}}</view>
+    <button class="catalog-entry" style="color: {{theme.brandTextColor}};" bindtap="browseCatalog">商品分类</button>
+  </view>
+
+  <view wx:if="{{state === 'loading'}}" class="home-state" role="status">正在加载页面…</view>
+  <view wx:elif="{{state === 'empty'}}" class="home-state">
+    <view class="state-title">当前页面暂无内容</view>
+    <view class="state-copy">您可以返回上一页，或继续浏览商品。</view>
+    <button class="state-action" bindtap="goBack">返回上一页</button>
+    <button class="text-action" bindtap="browseCatalog">浏览商品分类</button>
+  </view>
+  <view wx:elif="{{state === 'unpublished'}}" class="home-state">
+    <view class="state-title">页面暂不可用</view>
+    <view class="state-copy">该页面可能尚未发布或已下架，您可以稍后重试。</view>
+    <button class="state-action" bindtap="loadPage">重新加载</button>
+    <button class="text-action" bindtap="goBack">返回上一页</button>
+    <button class="text-action" bindtap="browseCatalog">浏览商品分类</button>
+  </view>
+  <view wx:elif="{{state === 'error'}}" class="home-state" role="alert">
+    <view class="state-title">页面加载失败</view>
+    <view class="state-copy">{{error}}</view>
+    <button wx:if="{{pageId}}" class="state-action" bindtap="loadPage">重新加载</button>
+    <button class="text-action" bindtap="goBack">返回上一页</button>
+    <button class="text-action" bindtap="browseCatalog">浏览商品分类</button>
+  </view>
+  <block wx:else>
+    <template is="published-content" data="{{components: components, keyword: keyword, failedAssets: failedAssets}}" />
+  </block>
+</view>

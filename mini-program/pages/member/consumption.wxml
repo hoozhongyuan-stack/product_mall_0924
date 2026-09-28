@@ -1,0 +1,7 @@
+<view class="member-page"><view class="page-title">消费与等级变化</view><view class="intro">有效消费在履约及售后结果确定后结算。退款、核销撤销和重新核销可能调整累计消费与等级。</view>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载消费明细…</view>
+  <view wx:elif="{{state === 'auth'}}" class="state"><view>{{error}}</view><button bindtap="login">登录后查看</button></view>
+  <view wx:elif="{{state === 'error'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>
+  <view wx:elif="{{state === 'empty'}}" class="state">暂无有效消费记录。已付款但未完成履约的订单尚未计入。</view>
+  <block wx:else><view wx:for="{{rows}}" wx:key="id" class="ledger-entry"><view class="row"><text class="entry-title">{{item.reasonLabel}}</text><text class="amount">{{item.amountLabel}}</text></view><view class="muted">{{item.dateLabel}}</view><view class="row"><text>调整后有效消费</text><text>{{item.balanceLabel}}</text></view><view>{{item.gradeLabel}}</view><button wx:if="{{item.orderId}}" class="secondary" data-id="{{item.orderId}}" bindtap="openOrder">查看关联订单及处理记录</button></view><view wx:if="{{moreError}}" class="error" role="alert">{{moreError}}</view><button wx:if="{{rows.length < total}}" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">{{moreError ? '重试加载更多' : '加载更多'}}</button><view wx:else class="end muted">已显示全部消费明细</view></block>
+</view>

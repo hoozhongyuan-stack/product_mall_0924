@@ -1,0 +1,21 @@
+import { createApp } from 'vue'
+import { ElButton, ElDialog, ElDrawer, ElTag, ElInput, ElLoading, ElOption, ElPagination, ElSelect } from 'element-plus'
+import 'element-plus/theme-chalk/base.css'
+import 'element-plus/theme-chalk/el-button.css'
+import 'element-plus/theme-chalk/el-input.css'
+import 'element-plus/theme-chalk/el-overlay.css'
+import 'element-plus/theme-chalk/el-dialog.css'
+import 'element-plus/theme-chalk/el-drawer.css'
+import 'element-plus/theme-chalk/el-tag.css'
+import 'element-plus/theme-chalk/el-message.css'
+import 'element-plus/theme-chalk/el-message-box.css'
+import 'element-plus/theme-chalk/el-select.css'
+import 'element-plus/theme-chalk/el-option.css'
+import 'element-plus/theme-chalk/el-pagination.css'
+import 'element-plus/theme-chalk/el-loading.css'
+import App from './App.vue'
+import { router } from './router'
+import './style.css'
+
+createApp(App).use(router).use(ElButton).use(ElInput).use(ElDialog)
+  .use(ElDrawer).use(ElTag).use(ElSelect).use(ElOption).use(ElPagination).use(ElLoading).mount('#app')

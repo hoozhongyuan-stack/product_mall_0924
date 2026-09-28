@@ -1,0 +1,10 @@
+<view class="edit-page"><view wx:if="{{state === 'loading'}}" class="state">正在加载地址…</view><view wx:elif="{{state === 'error'}}" class="state" role="alert">{{error}}<button bindtap="load">重试</button></view><block wx:else>
+  <view class="field"><text>收货人姓名 *</text><input value="{{form.recipientName}}" data-key="recipientName" bindinput="change" maxlength="40" placeholder="请输入收货人姓名" /></view>
+  <view class="field"><text>手机号码 *</text><input value="{{form.phone}}" data-key="phone" bindinput="change" maxlength="20" type="number" placeholder="中国大陆手机号码" /></view>
+  <view class="field"><text>省份 *</text><input value="{{form.province}}" data-key="province" bindinput="change" maxlength="40" placeholder="省份" /></view>
+  <view class="field"><text>城市 *</text><input value="{{form.city}}" data-key="city" bindinput="change" maxlength="40" placeholder="城市" /></view>
+  <view class="field"><text>区县 *</text><input value="{{form.district}}" data-key="district" bindinput="change" maxlength="40" placeholder="区县" /></view>
+  <view class="field"><text>详细地址 *</text><input value="{{form.detail}}" data-key="detail" bindinput="change" maxlength="200" placeholder="街道、门牌号等" /></view>
+  <view class="field switch"><text>设为默认地址</text><switch checked="{{form.isDefault}}" color="#24583d" bindchange="toggleDefault" /></view>
+  <view wx:if="{{error}}" class="error" role="alert">{{error}}</view><view class="footer"><button bindtap="save" loading="{{busy}}" disabled="{{busy}}">保存地址</button></view>
+  </block></view>

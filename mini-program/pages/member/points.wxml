@@ -1,0 +1,7 @@
+<view class="member-page"><view class="page-title">积分明细</view><view class="intro">奖励、抵扣、退款与到期记录分项展示。订单冻结及释放记录不会重复计入积分余额。</view>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载积分明细…</view>
+  <view wx:elif="{{state === 'auth'}}" class="state"><view>{{error}}</view><button bindtap="login">登录后查看</button></view>
+  <view wx:elif="{{state === 'error'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>
+  <view wx:elif="{{state === 'empty'}}" class="state">暂无积分明细。完成符合规则的订单后，奖励记录会显示在这里。</view>
+  <block wx:else><view wx:for="{{rows}}" wx:key="id" class="ledger-entry"><view class="row"><text class="entry-title">{{item.kindLabel}}</text><text class="amount">{{item.amountLabel}}</text></view><view class="muted">{{item.effectLabel}}</view><view wx:if="{{item.reasonLabel !== item.kindLabel}}" class="muted">原因：{{item.reasonLabel}}</view><view class="muted">{{item.dateLabel}}</view><view wx:if="{{item.balanceLabel !== ''}}" class="row"><text>变动后账面余额</text><text>{{item.balanceLabel}}</text></view><view wx:if="{{item.expiresAt}}" class="muted">对应积分到期 {{item.expiryLabel}}</view><button wx:if="{{item.orderId}}" class="secondary" data-id="{{item.orderId}}" bindtap="openOrder">查看关联订单</button></view><view wx:if="{{moreError}}" class="error" role="alert">{{moreError}}</view><button wx:if="{{rows.length < total}}" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">{{moreError ? '重试加载更多' : '加载更多'}}</button><view wx:else class="end muted">已显示全部积分明细</view></block>
+</view>

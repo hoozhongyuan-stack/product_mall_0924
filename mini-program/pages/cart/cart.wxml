@@ -1,0 +1,21 @@
+<view class="shopping-page">
+  <view class="page-title">购物车</view><button class="orders-entry" bindtap="openOrders">我的订单</button>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在核对价格与库存…</view>
+  <view wx:elif="{{state === 'empty'}}" class="state"><view>购物车还是空的</view><button bindtap="shop">去逛逛</button></view>
+  <view wx:elif="{{state === 'error' || state === 'auth'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>
+  <block wx:else>
+    <view wx:if="{{error}}" class="hint warning" role="alert">{{error}}<button bindtap="refresh">重新核对</button></view>
+    <view wx:for="{{rows}}" wx:key="skuId" class="cart-card">
+      <checkbox-group data-id="{{item.skuId}}" bindchange="toggle"><label><checkbox value="selected" checked="{{item.selected !== false}}" color="#24583d" /></label></checkbox-group>
+      <image wx:if="{{item.imageUrl && !failedImages[item.skuId]}}" class="thumb" src="{{item.imageUrl}}" mode="aspectFill" data-id="{{item.skuId}}" binderror="onImageError" />
+      <view wx:else class="thumb fallback">暂无图片</view>
+      <view class="cart-info"><view class="name">{{item.name}}</view><view class="muted">{{item.spec}} · {{item.unit}}</view><view class="price">{{item.price}}<text wx:if="{{item.priceCached}}" class="muted">（上次显示价）</text></view>
+        <view class="cart-actions"><button data-id="{{item.skuId}}" data-step="-1" bindtap="changeQuantity" disabled="{{item.quantity <= 1}}">−</button><text>{{item.quantity}}</text><button data-id="{{item.skuId}}" data-step="1" bindtap="changeQuantity">＋</button><button class="remove" data-id="{{item.skuId}}" bindtap="removeItem">移除</button></view>
+        <view wx:if="{{item.live && item.live.status !== 'OK'}}" class="warning" role="alert">当前规格不可结算（{{item.live.status}}），可售 {{item.live.availableQuantity}} 件。</view>
+        <view wx:if="{{item.live && item.live.priceChanged}}" class="warning" role="alert">价格已变为 {{item.price}} <button data-id="{{item.skuId}}" bindtap="confirmPrice">确认新价格</button></view>
+      </view>
+    </view>
+    <view class="hint">结算前会重新核对价格、规格和库存。</view>
+    <view class="footer"><button class="all" bindtap="toggleAll">全选 / 取消</button><view>合计 <text class="price">{{total}}</text></view><button class="primary" bindtap="checkout" disabled="{{!quote || !quote.ready || quote.confirmRequired}}">去结算</button></view>
+  </block>
+</view>

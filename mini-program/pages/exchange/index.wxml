@@ -1,0 +1,12 @@
+<view class="member-page exchange-page">
+  <view class="page-title">积分商城</view>
+  <view class="intro">独立积分售价，兑换快递商品或到店服务。选择商品后核对数量与履约信息。</view>
+  <view class="entry-actions"><button class="secondary" bindtap="openPoints">查看可用积分</button><button class="secondary" bindtap="openOrders">我的兑换订单</button></view>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载兑换商品…</view>
+  <view wx:elif="{{state === 'error'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>
+  <view wx:elif="{{state === 'empty'}}" class="state">暂无可兑换商品，请稍后再来。</view>
+  <block wx:else>
+    <view class="exchange-grid"><button wx:for="{{rows}}" wx:key="id" class="offer-card" data-id="{{item.id}}" bindtap="openOffer" aria-label="{{item.productName + '，' + item.pointsLabel + '，查看兑换详情'}}"><image wx:if="{{item.image && !failedImages[item.id]}}" class="offer-image" src="{{item.image}}" mode="aspectFill" data-id="{{item.id}}" binderror="onImageError"/><view wx:else class="image-fallback">图片暂不可显示</view><view class="offer-copy"><view class="offer-name">{{item.productName}}</view><view class="muted">{{item.fulfillmentLabel}} · {{item.saleUnit}}</view><view class="points-price">{{item.pointsLabel}}</view><view class="muted">可兑换 {{item.availableQuantity}} {{item.saleUnit}}</view></view></button></view>
+    <view wx:if="{{moreError}}" class="error" role="alert">{{moreError}}</view><button wx:if="{{rows.length < total}}" class="secondary" bindtap="loadMore" disabled="{{loadingMore}}" loading="{{loadingMore}}">{{loadingMore ? '正在加载…' : moreError ? '重试加载更多' : '加载更多商品'}}</button><view wx:if="{{rows.length >= total}}" class="muted end">已展示全部兑换商品</view>
+  </block>
+</view>

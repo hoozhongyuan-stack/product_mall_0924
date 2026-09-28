@@ -1,0 +1,10 @@
+asgiref==3.12.1
+cffi==2.1.1
+cryptography==50.0.1
+Django==5.2.17
+psycopg==3.3.6
+psycopg-binary==3.3.6
+pycparser==3.0
+segno==1.6.6
+sqlparse==0.6.0
+typing_extensions==4.16.0

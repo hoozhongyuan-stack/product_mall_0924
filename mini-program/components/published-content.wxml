@@ -1,0 +1,37 @@
+<template name="published-content">
+  <block wx:for="{{components}}" wx:key="id">
+    <view wx:if="{{item.type === 'SEARCH'}}" class="home-search">
+      <input class="search-input" placeholder="{{item.placeholder}}" value="{{keyword}}" maxlength="100" bindinput="onSearchInput" bindconfirm="submitSearch" confirm-type="search" aria-label="搜索商品" />
+      <button class="search-button" bindtap="submitSearch">搜索</button>
+    </view>
+
+    <view wx:elif="{{item.type === 'CAROUSEL'}}" class="component-wrap">
+      <swiper wx:if="{{item.slides.length}}" class="hero-swiper" indicator-dots autoplay interval="5000" circular>
+        <swiper-item wx:for="{{item.slides}}" wx:for-item="slide" wx:key="imageUrl">
+          <view class="slide" bindtap="openLink" data-link="{{slide.link}}" role="button" aria-label="查看精选内容">
+            <image wx:if="{{!failedAssets[slide.imageUrl]}}" class="slide-image" src="{{slide.imageUrl}}" mode="aspectFill" data-url="{{slide.imageUrl}}" binderror="onImageError" />
+            <view wx:else class="media-fallback">图片暂不可显示</view>
+          </view>
+        </swiper-item>
+      </swiper>
+    </view>
+
+    <view wx:elif="{{item.type === 'IMAGE_HOTZONE'}}" class="component-wrap">
+      <view class="hotzone">
+        <image wx:if="{{!failedAssets[item.imageUrl]}}" class="hotzone-image" src="{{item.imageUrl}}" mode="widthFix" data-url="{{item.imageUrl}}" binderror="onImageError" />
+        <view wx:else class="media-fallback">图片暂不可显示</view>
+        <view wx:for="{{item.areas}}" wx:for-item="area" wx:key="index" class="hot-area" style="{{area.style}}" data-link="{{area.link}}" bindtap="openLink" role="button" aria-label="打开图片中的内容"></view>
+      </view>
+    </view>
+
+    <view wx:elif="{{item.type === 'NOTICE'}}" class="notice-wrap">
+      <view class="notice-label">公告</view>
+      <view class="notice-text">{{item.text}}</view>
+      <button wx:if="{{item.link}}" class="notice-open" data-link="{{item.link}}" bindtap="openLink" aria-label="查看公告关联内容">›</button>
+    </view>
+
+    <view wx:elif="{{item.type === 'DIVIDER'}}" class="home-divider divider-{{item.dividerStyle}}"></view>
+    <view wx:elif="{{item.type === 'FILING'}}" class="filing">{{item.recordNo}}</view>
+  </block>
+  <view class="bottom-space"></view>
+</template>

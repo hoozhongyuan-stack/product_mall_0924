@@ -1,0 +1,4 @@
+<view class="address-page"><view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载地址…</view><view wx:elif="{{state === 'empty'}}" class="state">暂无收货地址，请新增。</view><view wx:elif="{{state === 'error' || state === 'auth'}}" class="state" role="alert">{{error}}<button bindtap="refresh">重试</button></view>
+  <block wx:else><view wx:for="{{addresses}}" wx:key="id" class="address-card"><view data-id="{{item.id}}" bindtap="select"><view class="person">{{item.recipientName}}　{{item.phone}} <text wx:if="{{item.isDefault}}" class="tag">默认</text></view><view>{{item.province}}{{item.city}}{{item.district}}{{item.detail}}</view></view><view class="actions"><button data-id="{{item.id}}" bindtap="edit">编辑</button><button data-id="{{item.id}}" bindtap="remove">删除</button></view></view></block>
+  <view class="footer"><button bindtap="add">＋ 新增收货地址</button></view>
+</view>
