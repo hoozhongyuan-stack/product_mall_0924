@@ -45,6 +45,15 @@ import json,os,sys
 a=sys.argv[1:]
 with open(os.environ['E5_TEST_LOG'],'a') as f:f.write(' '.join(a)+'\\n')
 if a[:2]==['volume','inspect']:sys.exit(1)
+if a and a[0]=='ps':
+    if os.environ.get('E5_TEST_PROJECT_QUERY_FAIL'):sys.exit(23)
+    if os.environ.get('E5_TEST_EXISTING_PROJECT'):print('synthetic-stopped-container')
+    sys.exit(0)
+if a[:2]==['image','inspect']:
+    result=os.environ.get('E5_TEST_IMAGE_REVISION',os.environ['MALL_RELEASE_REVISION'])
+    if any('.Architecture' in value for value in a):result+='|'+os.environ.get('E5_TEST_IMAGE_PLATFORM','linux/amd64')
+    print(result)
+    sys.exit(0)
 if a and a[0]=='inspect':print(os.environ['MALL_RELEASE_REVISION'])
 elif 'config' in a and 'json' in a:print(json.dumps({{'name':'synthetic-source','services':{{'admin':{{'ports':[{{'published':'18080'}}]}}}}}}))
 elif 'ps' in a:print('synthetic-web')

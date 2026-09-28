@@ -30,13 +30,7 @@ case "$backup_real/" in
     "$root/"*) echo 'Backup directory resolves inside the checkout.' >&2; exit 1 ;;
 esac
 
-compose() {
-    if [ -n "${E5_ENV_FILE:-}" ]; then
-        docker compose --env-file "$E5_ENV_FILE" -f "$root/compose.production.yaml" "$@"
-    else
-        docker compose -f "$root/compose.production.yaml" "$@"
-    fi
-}
+. "$root/scripts/e5-compose.sh"
 compose config --quiet
 running_web=$(compose ps -q web)
 test -n "$running_web" || { echo 'Web service is not running.' >&2; exit 1; }

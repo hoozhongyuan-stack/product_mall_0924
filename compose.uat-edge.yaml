@@ -1,0 +1,20 @@
+# Applied to live UAT only. Recovery deliberately does not load this file.
+services:
+  web:
+    environment:
+      DJANGO_TRUST_PROXY_HTTPS: "1"
+  admin:
+    networks:
+      edge:
+        aliases: ["${MALL_EDGE_ALIAS:?Set a unique alias for this mall instance}"]
+    volumes:
+      - type: bind
+        source: ./deploy/nginx-proxy-https.conf
+        target: /etc/nginx/mall-proxy-scheme.conf
+        read_only: true
+        bind: {create_host_path: false}
+
+networks:
+  edge:
+    external: true
+    name: ${MALL_EDGE_NETWORK:?Set the dedicated Caddy-to-mall network}

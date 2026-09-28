@@ -1,0 +1,6 @@
+# Isolated verification only: no live ingress network, alias or platform egress.
+services:
+  web:
+    networks: !override [private]
+  admin:
+    networks: !override [private, ingress]
