@@ -23,8 +23,13 @@ from payments import wechat_refund_views
 from benefits import coupon_views
 from points_exchange import views as exchange_views
 from notifications import views as notification_views
+from notifications import task_views as notification_task_views
 
 urlpatterns = [
+    path("api/v1/admin/subscription-message-tasks", notification_task_views.tasks_view),
+    path("api/v1/admin/subscription-message-tasks/<uuid:task_id>", notification_task_views.task_detail_view),
+    path("api/v1/admin/subscription-message-tasks/<uuid:task_id>/recover-reservation",
+         notification_task_views.recover_reservation_view),
     path("api/v1/admin/subscription-templates", notification_views.template_drafts_view),
     path("api/v1/admin/subscription-templates/<str:event_type>", notification_views.template_draft_view),
     path("api/v1/app/subscription-messages/availability", notification_views.public_availability_view),

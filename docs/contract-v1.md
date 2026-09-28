@@ -524,3 +524,17 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 草稿状态：两项均空为 `UNBOUND`，只填一项为 `INCOMPLETE`，两项均有值为 `DRAFT_UNVERIFIED`。标识允许 ASCII 字母、数字、下划线、短横线，AppID 最多 64 字符，模板 ID 最多 128 字符。`expectedRevision` 为非负整数；服务端在行锁内核对修订及当前账号权限，每次成功保存修订加一。当前账号过去一小时成功保存草稿达30次后返回429 `RATE_LIMITED` 与 `Retry-After`，不修改草稿；更广的公开接口流量治理属于部署层。PC 对未知保存结果先重新读取核实，不盲目再提交。只读权限不包含编辑；主账号拥有两项权限，子账号须分别授权。
 
 真实授权采集仍未开放：没有可信的平台回调与可验证的小程序身份时，客户端自报“接受”不能写成可发送凭据。接入真实账号后须在用户触发场景下核定模板与主体、授权回调、openid 绑定、次数语义和拒绝处理，并分别完成平台与真机接收验收。此接口的“不可用”是平台授权入口的当前事实，不影响既有站内订单状态查询。
+
+### 5.26 E2.2：消息任务查询与安全恢复
+
+管理台通过独立的 `notification.read` 查询任务状态和发送尝试；恢复另需 `notification.recover`，不随模板草稿编辑权限自动授予。主账号拥有两项权限，子账号分别授权。响应不包含会员个人信息、微信 openid、身份摘要、模板 ID、授权凭据、租约令牌或异常原文。`SIMULATED` 仅表示本机合成通道运行完毕，不是微信接收；`UNKNOWN` 表示渠道调用可能已发生，必须先核验外部记录，不能在管理台盲目重发。
+
+| 接口 | 契约 |
+| --- | --- |
+| `GET /api/v1/admin/subscription-message-tasks` | 需 `notification.read`；筛选 `eventType/status/createdFrom/createdTo`，默认近90天、跨度最大90天、每页默认20最多100；按创建时间与任务ID倒序，使用不透明 `cursor` 翻页。返回 `data:{items,nextCursor}`。 |
+| `GET /api/v1/admin/subscription-message-tasks/{taskId}` | 需 `notification.read`；返回单任务与按次序排列的发送尝试。无权或不存在分别返回403／404。 |
+| `POST /api/v1/admin/subscription-message-tasks/{taskId}/recover-reservation` | 需 `notification.read` 与 `notification.recover`、CSRF、密码二次确认；严格 body `{expectedUpdatedAt,expectedAttemptCount}`。确认动作 `notification.task.recover_reservation`，对象为任务 UUID，修订绑定尝试次数。仅行锁内重新确认状态仍为 `RESERVED`、租约已过期、**本次租约**没有发送尝试且提交快照未过期时，把任务恢复为 `READY`。以往已完成的可重试尝试不妨碍本次安全恢复。其余返回409要求重读；操作本身不发送消息。 |
+
+任务摘要字段为 `taskId/eventType/status/reasonCode/attemptCount/occurredAt/createdAt/updatedAt/nextAttemptAt/leaseUntil/recoverable`；详情另有 `attempts:[{ordinal,outcome,failureCode,startedAt,finishedAt}]`。`recoverable` 是服务端按当前事实计算的提示，不代替 POST 中的行锁重验。筛选只接受固定事件和任务状态；日期可为 `YYYY-MM-DD` 或带时区 ISO 时间。只读和写入均使用当前会话鉴权、私有响应不缓存；写入在领域锁后复查当前权限并记录审计。
+
+过期 `CLAIMED` 沿既有恢复作业转为 `UNKNOWN`，不得回到 `READY`。即使异常数据出现 `RESERVED` 的**当前租约**带发送尝试，也须保守地转为 `UNKNOWN`。重复或并发点击由任务锁与快照条件拒绝；网络结果未知时客户端先重新读取，不自动重复提交。正式微信模板、授权、发送、真实接收和部署调度仍另行验收。

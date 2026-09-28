@@ -293,6 +293,14 @@ def recover_expired_claims(*, now=None, limit=100):
                     outcome="UNKNOWN", failure_code="LEASE_EXPIRED", finished_at=now)
                 task.status = "UNKNOWN"
                 task.reason_code = "LEASE_EXPIRED"
+            elif MessageAttempt.objects.filter(task=task, lease_token=task.lease_token).exists():
+                # An attempt for this lease means I/O may have started. Earlier
+                # completed retry attempts do not make a fresh reservation unsafe.
+                MessageAttempt.objects.filter(task=task, lease_token=task.lease_token,
+                                              outcome="IN_FLIGHT").update(
+                    outcome="UNKNOWN", failure_code="LEASE_EXPIRED", finished_at=now)
+                task.status = "UNKNOWN"
+                task.reason_code = "LEASE_EXPIRED"
             else:
                 task.status = "READY"
                 task.reason_code = ""

@@ -86,7 +86,8 @@ class MessageTask(models.Model):
                                    name="subscription_task_lease_shape"),
         ]
         indexes = [models.Index(fields=["status", "next_attempt_at", "created_at"],
-                                name="subscription_task_due_idx")]
+                                name="subscription_task_due_idx"),
+                   models.Index(fields=["-created_at", "-id"], name="subscription_task_admin_idx")]
 
 
 class SubscriptionGrant(models.Model):

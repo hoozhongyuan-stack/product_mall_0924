@@ -145,12 +145,14 @@ def confirm_view(request):
                 "refund.benefits.settle": "refund.prepare",
                 "member.rules.update": "member.rules.manage",
                 "coupon.publish": "coupon.publish", "coupon.issue": "coupon.issue",
-                "exchange.publish": "exchange.publish"}
+                "exchange.publish": "exchange.publish",
+                "notification.task.recover_reservation": "notification.recover"}
     if not isinstance(action, str) or action not in required or required[action] not in permissions(account):
         return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
     read_permission = {"page.rollback": "page.read", "startup.rollback": "startup.read",
                        "navigation.rollback": "navigation.read",
-                       "customer_service.rollback": "customer_service.read"}.get(action)
+                       "customer_service.rollback": "customer_service.read",
+                       "notification.task.recover_reservation": "notification.read"}.get(action)
     if read_permission and read_permission not in permissions(account):
         return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
     with transaction.atomic():
