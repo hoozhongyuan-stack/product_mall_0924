@@ -129,12 +129,14 @@ def ship_order(order_id, actor, carrier_code, tracking_no, expected_revision, re
         if snapshot is None:
             raise FulfillmentError("订单缺少自动收货时限快照。", "FULFILLMENT_SNAPSHOT_MISSING", 409)
         now = timezone.now()
-        Shipment.objects.create(order=order, carrier=carrier, carrier_code=carrier.code,
+        shipment = Shipment.objects.create(order=order, carrier=carrier, carrier_code=carrier.code,
                                 carrier_name=carrier.name, tracking_no=tracking,
                                 warehouse_id=next(iter(warehouses)), shipped_by=actor,
                                 shipped_at=now, auto_confirm_days_snapshot=snapshot.auto_confirm_days,
                                 auto_confirm_at=now + timedelta(days=snapshot.auto_confirm_days),
                                 request_key=request_key)
+        from notifications.service import ORDER_SHIPPED, record_event
+        record_event(ORDER_SHIPPED, shipment.id, order.member_id, occurred_at=shipment.shipped_at)
         order.revision += 1
         order.save(update_fields=["revision"])
         return _order_data(order)

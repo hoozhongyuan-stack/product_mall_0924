@@ -283,6 +283,8 @@ def _apply(evidence_id):
         row.save(update_fields=["applied_at"])
         RefundAnomaly.objects.filter(evidence=row, reason="SETTLEMENT_FAILED", open=True).update(open=False, resolved_at=now)
         RefundHistory.objects.create(intent=intent, evidence=row, action="SUCCEEDED")
+        from notifications.service import REFUND_SUCCEEDED, record_event
+        record_event(REFUND_SUCCEEDED, intent.id, order.member_id, occurred_at=intent.succeeded_at)
         from orders.benefit_lifecycle import reconcile_benefits_locked
         reconcile_benefits_locked(order,source_ref="case:"+str(case.id))
         order.revision += 1

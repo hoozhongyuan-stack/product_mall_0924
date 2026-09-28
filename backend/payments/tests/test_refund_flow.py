@@ -20,6 +20,7 @@ from payments.refunds import (RefundError, VerifiedRefund, prepare_refund, begin
                              finish_refund_operation, record_verified_refund, settle_recorded_refund,
                              recover_recorded_refunds)
 from payments.models import RefundIntent, RefundEvidence, RefundAnomaly, RefundOperation, RefundHistory
+from notifications.models import MessageTask
 
 
 @override_settings(WECHAT_MINI_APP_ID="wx-payment-test",
@@ -78,6 +79,8 @@ class RefundFlowTests(TransactionTestCase):
         self.assertEqual(record_verified_refund(evidence)["outcome"], "SUCCEEDED")
         self.assertEqual(record_verified_refund(evidence)["outcome"], "SUCCEEDED")
         self.assertEqual(RefundEvidence.objects.count(), 1)
+        self.assertEqual(MessageTask.objects.filter(event_type="REFUND_SUCCEEDED",
+            source_id=intent.id, member=self.member).count(), 1)
         self.assertEqual(RedeemVoucher.objects.get(order_line=line).voided_quantity, 1)
         self.assertEqual(AfterSaleCase.objects.get(pk=case.id).status, "COMPLETED")
         order.refresh_from_db()
@@ -90,11 +93,13 @@ class RefundFlowTests(TransactionTestCase):
         self.assertEqual(result["outcome"], "SETTLEMENT_FAILED")
         receipt = RefundEvidence.objects.get()
         self.assertIsNone(receipt.applied_at)
+        self.assertFalse(MessageTask.objects.filter(event_type="REFUND_SUCCEEDED").exists())
         self.assertEqual(RedeemVoucher.objects.get(order_line=line).voided_quantity, 0)
         with self.assertRaises(RefundError):
             begin_refund_operation(intent.id, "DISPATCH")
         self.assertEqual(RefundOperation.objects.count(), 0)
         self.assertEqual(settle_recorded_refund(receipt.id)["outcome"], "SUCCEEDED")
+        self.assertEqual(MessageTask.objects.filter(event_type="REFUND_SUCCEEDED").count(), 1)
         self.assertEqual(settle_recorded_refund(receipt.id)["outcome"], "SUCCEEDED")
         self.assertEqual(RedeemVoucher.objects.get(order_line=line).voided_quantity, 1)
 

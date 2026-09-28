@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     "shipping",
     "benefits",
     "points_exchange",
+    "notifications",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

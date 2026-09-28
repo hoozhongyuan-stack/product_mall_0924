@@ -179,6 +179,8 @@ def _apply(receipt_id):
             settle_paid_order_locked(order)
             receipt.applied_at = timezone.now()
             receipt.save(update_fields=["applied_at"])
+            from notifications.service import ORDER_PAID, record_event
+            record_event(ORDER_PAID, receipt.id, order.member_id, occurred_at=receipt.applied_at)
             _resolve_anomaly(receipt)
             return _result(receipt, order, "PAID")
         _open_anomaly(receipt, reason)

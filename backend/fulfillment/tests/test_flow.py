@@ -10,6 +10,7 @@ from django.test import Client, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from inventory.models import InventoryLedger
+from notifications.models import MessageTask
 from orders.models import OrderLine
 from payments.service import record_verified_payment
 from payments.tests import test_payment_flow as payment_flow
@@ -105,11 +106,13 @@ class FulfillmentFlowTests(TransactionTestCase):
         Carrier.objects.create(code="TEST", name="测试承运商", enabled=True)
         before = InventoryLedger.objects.filter(order_line=line, movement_type="SALE").count()
         shipped = ship_order(order.id, self.owner, "TEST", "TRACK123", order.revision, uuid.uuid4())
+        self.assertEqual(MessageTask.objects.filter(event_type="ORDER_SHIPPED", member=self.member).count(), 1)
         self.assertEqual(shipped["fulfillmentStatus"], "IN_PROGRESS")
         self.assertEqual(shipped["shipment"]["warehouseId"], str(line.warehouse_id))
         self.assertEqual(InventoryLedger.objects.filter(order_line=line, movement_type="SALE").count(), before)
         with self.assertRaises(ValueError):
             ship_order(order.id, self.owner, "TEST", "TRACK999", order.revision, uuid.uuid4())
+        self.assertEqual(MessageTask.objects.filter(event_type="ORDER_SHIPPED").count(), 1)
         received = confirm_receipt(self.member, order.id)
         self.assertEqual(received["fulfillmentStatus"], "COMPLETED")
         self.assertEqual(fulfillment_data(order, include_code=True)["fulfillmentStatus"], "COMPLETED")

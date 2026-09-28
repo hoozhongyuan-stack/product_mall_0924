@@ -16,6 +16,7 @@ from catalog.models import Asset, Category, MemberGrade, Product, Sku, SkuUnitVe
 from checkout.service import create_quote
 from customers.models import Member
 from inventory.models import InventoryBalance, InventoryLedger, InventoryReservation, Warehouse
+from notifications.models import MessageTask
 from orders.models import Order
 from orders.service import cancel_order, submit_order
 from payments.models import PaymentAnomaly, PaymentAnomalyEvent, PaymentEvent, PaymentReceipt
@@ -89,6 +90,8 @@ class PaymentFlowTests(TransactionTestCase):
         self.assertEqual(record_verified_payment(evidence)["outcome"], "PAID")
         self.assertEqual(record_verified_payment(evidence)["outcome"], "PAID")
         self.assertEqual(PaymentReceipt.objects.count(), 1)
+        self.assertEqual(MessageTask.objects.filter(event_type="ORDER_PAID",
+            source_id=PaymentReceipt.objects.get().id, member=self.member).count(), 1)
         self.assertEqual(PaymentEvent.objects.count(), 1)
         self.assertEqual(Order.objects.get(pk=order.id).status, Order.Status.PAID)
         self.assertEqual(InventoryReservation.objects.get(order_line__order=order).status, "CONSUMED")
@@ -119,8 +122,10 @@ class PaymentFlowTests(TransactionTestCase):
                 record_verified_payment(evidence)
         self.assertEqual(PaymentReceipt.objects.count(), 1)
         self.assertEqual(PaymentAnomaly.objects.get().reason, "SETTLEMENT_FAILED")
+        self.assertFalse(MessageTask.objects.filter(event_type="ORDER_PAID").exists())
         self.assertEqual(Order.objects.get(pk=order.id).status, Order.Status.PENDING_PAYMENT)
         self.assertEqual(settle_recorded_payment(PaymentReceipt.objects.get().id)["outcome"], "PAID")
+        self.assertEqual(MessageTask.objects.filter(event_type="ORDER_PAID").count(), 1)
         self.assertEqual(PaymentAnomaly.objects.get().status, "RESOLVED")
 
     def test_expired_unclosed_order_is_closed_before_verified_money_is_applied(self):
