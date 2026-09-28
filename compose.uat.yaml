@@ -1,0 +1,78 @@
+# Opt-in overlay for a small HTTPS-only UAT behind a dedicated Caddy edge network.
+# Requires Compose >= 2.24.4 for !override; never use this as a standalone stack.
+x-bounded-logging: &bounded-logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "2"}
+x-small-app: &small-app
+  cpus: 0.15
+  mem_limit: 160m
+  memswap_limit: 160m
+  pids_limit: 96
+  logging: *bounded-logging
+  tmpfs: !override ["/tmp:rw,nosuid,size=67108864"]
+
+services:
+  preflight:
+    cpus: 0.25
+    mem_limit: 64m
+    memswap_limit: 64m
+    pids_limit: 32
+    logging: *bounded-logging
+  media-init:
+    cpus: 0.25
+    mem_limit: 64m
+    memswap_limit: 64m
+    pids_limit: 32
+    logging: *bounded-logging
+  db:
+    cpus: 0.35
+    mem_limit: 384m
+    memswap_limit: 384m
+    pids_limit: 96
+    logging: *bounded-logging
+    command: ["postgres", "-c", "shared_buffers=96MB", "-c", "work_mem=4MB",
+              "-c", "maintenance_work_mem=32MB", "-c", "max_connections=40",
+              "-c", "max_wal_size=256MB", "-c", "min_wal_size=80MB"]
+  release:
+    <<: *small-app
+    cpus: 0.75
+    mem_limit: 384m
+    memswap_limit: 384m
+  web:
+    <<: *small-app
+    cpus: 0.65
+    mem_limit: 384m
+    memswap_limit: 384m
+    command: ["gunicorn", "config.wsgi:application", "--chdir", "/app/backend",
+              "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "2",
+              "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]
+  export-worker:
+    <<: *small-app
+  scheduler:
+    <<: *small-app
+    mem_limit: 128m
+    memswap_limit: 128m
+    environment:
+      E5_MAINTENANCE_INTERVAL_SECONDS: "120"
+  admin:
+    cpus: 0.10
+    mem_limit: 96m
+    memswap_limit: 96m
+    pids_limit: 32
+    logging: *bounded-logging
+    tmpfs: !override
+      - /var/cache/nginx:rw,nosuid,size=67108864
+      - /var/run:rw,nosuid,size=1048576
+      - /tmp:rw,nosuid,size=16777216
+  backup:
+    cpus: 0.5
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 64
+    logging: *bounded-logging
+  restore:
+    cpus: 0.5
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 64
+    logging: *bounded-logging

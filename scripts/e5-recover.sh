@@ -72,13 +72,7 @@ if [ "$bundle_revision" != "$MALL_RELEASE_REVISION" ]; then
     }
 fi
 
-compose() {
-    if [ -n "${E5_ENV_FILE:-}" ]; then
-        docker compose --env-file "$E5_ENV_FILE" -f "$root/compose.production.yaml" "$@"
-    else
-        docker compose -f "$root/compose.production.yaml" "$@"
-    fi
-}
+. "$root/scripts/e5-compose.sh"
 source_project=$(compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')
 source_port=$(compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["admin"]["ports"][0]["published"])')
 [ "$E5_RECOVERY_PROJECT" != "$source_project" ] || {
@@ -87,6 +81,7 @@ source_port=$(compose config --format json | python3 -c 'import json,sys; print(
 if [ "$E5_RECOVERY_HTTP_PORT" -eq "$source_port" ]; then
     echo 'Recovery HTTP port must differ from the source port.' >&2; exit 1;
 fi
+e5_assert_new_project "$E5_RECOVERY_PROJECT"
 for volume in "${E5_RECOVERY_PROJECT}_pgdata" "${E5_RECOVERY_PROJECT}_media"; do
     if docker volume inspect "$volume" >/dev/null 2>&1; then
         echo "Recovery volume already exists: $volume" >&2
@@ -95,14 +90,13 @@ for volume in "${E5_RECOVERY_PROJECT}_pgdata" "${E5_RECOVERY_PROJECT}_media"; do
 done
 
 recovery() {
-    MALL_HTTP_PORT="$E5_RECOVERY_HTTP_PORT" POSTGRES_INIT_DB=postgres \
+    E5_ISOLATED_RECOVERY=1 MALL_HTTP_PORT="$E5_RECOVERY_HTTP_PORT" POSTGRES_INIT_DB=postgres \
         POSTGRES_DB="$E5_RECOVERY_DB" E5_RESTORE_DB="$E5_RECOVERY_DB" \
         compose -p "$E5_RECOVERY_PROJECT" "$@"
 }
 
 recovery config --quiet
-recovery build release admin
-recovery --profile ops build restore
+e5_prepare_images recovery restore
 . "$root/scripts/e5-preflight.sh"
 e5_preflight recovery
 recovery up --wait -d db
@@ -111,5 +105,6 @@ recovery --profile ops run --rm --no-deps restore "/backups/$bundle"
 # tar restoration may preserve host ownership; make the isolated media mount app-owned.
 recovery up --no-deps --force-recreate --exit-code-from media-init media-init
 recovery up --no-deps --force-recreate --exit-code-from release release
-recovery up --wait -d web export-worker scheduler admin
+recovery up --wait -d web admin
 echo "Recovered $bundle in isolated project $E5_RECOVERY_PROJECT."
+echo 'Scheduler and export worker remain stopped during recovery verification.'

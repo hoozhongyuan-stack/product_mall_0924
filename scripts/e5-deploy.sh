@@ -52,17 +52,12 @@ mkdir -m 700 "$operation_lock" 2>/dev/null || {
 }
 trap 'rmdir "$operation_lock"' EXIT
 
-compose() {
-    if [ -n "${E5_ENV_FILE:-}" ]; then
-        docker compose --env-file "$E5_ENV_FILE" -f "$root/compose.production.yaml" "$@"
-    else
-        docker compose -f "$root/compose.production.yaml" "$@"
-    fi
-}
+. "$root/scripts/e5-compose.sh"
 
 compose config --quiet
 if [ "$mode" = initial ]; then
     project=$(compose config --format json | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')
+    e5_assert_new_project "$project"
     for volume in "${project}_pgdata" "${project}_media"; do
         if docker volume inspect "$volume" >/dev/null 2>&1; then
             echo "Initial deployment requires a new volume: $volume" >&2
@@ -70,8 +65,7 @@ if [ "$mode" = initial ]; then
         fi
     done
 fi
-compose build release admin
-compose --profile ops build backup
+e5_prepare_images compose backup
 . "$root/scripts/e5-preflight.sh"
 e5_preflight compose
 
