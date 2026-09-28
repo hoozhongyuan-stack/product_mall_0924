@@ -79,3 +79,11 @@ export async function openSection(page: Page, name: string) {
     await page.getByRole('navigation', { name: '后台主导航' }).getByRole('link', { name, exact: true }).click()
   }
 }
+
+/** Reuse the mounted router; a bare Vite import can create a second instance after HMR. */
+export async function pushRoute(page: Page, path: string) {
+  await page.evaluate(async target => {
+    const root = document.querySelector('#app') as HTMLElement & { __vue_app__: { config: { globalProperties: { $router: { push(path: string): Promise<unknown> } } } } }
+    await root.__vue_app__.config.globalProperties.$router.push(target)
+  }, path)
+}

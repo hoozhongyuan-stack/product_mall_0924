@@ -10,6 +10,7 @@ const permissionOptions = [
   ['asset.read', '查看素材'], ['asset.upload', '上传素材'], ['asset.delete', '删除素材'],
   ['page.read', '查看页面'], ['page.edit', '编辑页面'], ['page.publish', '发布页面'],
   ['startup.read', '查看启动素材'], ['startup.edit', '编辑启动素材'], ['startup.publish', '发布启动素材'],
+  ['wechat.integration.read', '查看小程序接入'], ['wechat.integration.manage', '管理与校验小程序接入（需查看接入）'],
   ['account.read', '查看账号'], ['account.manage', '管理账号'],
   ['account.reset_credentials', '重置账号凭据'], ['account.unlock', '解锁账号'],
   ['permission.read', '查看权限组'], ['permission.manage', '管理权限组'], ['audit.read', '查看操作日志'], ['business.report.read', '查看经营统计'],

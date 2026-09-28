@@ -209,7 +209,7 @@ B1 仅完成真实入库与库存读取；人工出库、盘点、订单占用�
 
 | 接口 | 输入及结果 | 保护边界 |
 |---|---|---|
-| `POST /api/v1/app/auth/wechat`、`POST /auth/logout`、`GET /me` | `wx.login` 一次性 code 在服务端向微信换取 openid；登录返回站内 `accessToken/expiresAt/member`，登出撤销当前令牌。 | AppID 与密钥仅从环境读取；未配置返回 503，无开发身份绕过。微信 session_key 不保存、不回传；令牌摘要入库，会员停用、失效或更换 AppID 后拒绝。 |
+| `POST /api/v1/app/auth/wechat`、`POST /auth/logout`、`GET /me` | `wx.login` 一次性 code 在服务端向微信换取 openid；登录返回站内 `accessToken/expiresAt/member`，登出撤销当前令牌。 | AppID 与密钥经统一有效配置快照读取，未托管时兼容环境，托管规则见5.31；未配置返回 503，无开发身份绕过。微信 session_key 不保存、不回传；令牌摘要入库，会员停用、失效或更换 AppID 后拒绝。 |
 | `GET/POST /api/v1/app/addresses`、`PUT/DELETE /api/v1/app/addresses/{id}` | 地址含收件人、电话、省市区、详细地址与默认标记；修改/删除须 `expectedRevision`。 | Bearer 会员仅能管理本人有效地址；最多 20 条；单会员最多一个有效默认地址由数据库部分唯一约束保证。 |
 | `POST /api/v1/app/checkout/quotes` | 请求和返回字段见第 5 节总表。无效/下架/库存不足逐行标示，变化价格需明确确认；游客按日常价报价，会员按有效等级价报价。 | 无效令牌返回 401；跨会员地址拒绝；同一来源 15 分钟最多 60 次。重复报价产生独立快照且不占库。快照到期由 `purge_checkout_quotes` 定期清理；未来订单不得信任旧快照。 |
 
@@ -607,3 +607,47 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 | `manage.py run_export_jobs [--limit N] [--watch]`、`purge_expired_exports` | worker 用行锁与租约抢占任务，在独立进程生成 CSV，文件 `0600`、同卷原子安装并同步后才将任务标为 `READY`；失败保留安全失败码，过期租约最多重试3次。`--watch` 持续处理并执行24小时清理；独立清理命令可供调度／恢复使用。正式部署监督与定时调度在 E5 接线。 |
 
 经营 CSV 复用 E4.0 的单语句聚合函数，按已完成的支付和退款事实生成每日行，金额保持整数分；审计 CSV 复用 E4.0 的出站脱敏投影，并将所有可能构成电子表格公式的文本转为安全文本。审计最多20000行，单文件受私有 `export/` 的100 MiB上限约束；总保留文件与在制预留默认不超过1 GiB。每轮先清理过期文件，再领取任务；生成前按全部活跃 worker 的单文件上限预留磁盘，并保留至少256 MiB空闲。每账号每小时最多10次新任务、同时最多3个待处理／生成任务；容量不足返回安全失败码。文件到期即拒绝下载，清理保留任务元数据和审计；文件删除失败可重试，强制中断残留的导出专用临时文件按租约辨认并清理，孤儿文件不能变成可下载成功任务。管理台从**已查询生效**的筛选条件创建任务，未知提交结果保留原请求号核对或同键重试。
+
+
+### 5.31 小程序接入凭据配置与校验
+
+`wechat_integration` 单例默认 `id=1,managed=false,revision=0`，由迁移创建；生产运行时缺行报错，不自动重建或退回环境。AppID 与 AppSecret 一起经已有 cryptography Fernet 加密入库，部署配置 `MALL_WECHAT_CREDENTIAL_KEY_FILE` 指向独立持久密钥文件；所有实例读取相同密钥，不复用 Django SECRET_KEY，不在启动时重新生成。未托管时兼容 `WECHAT_MINI_APP_ID/SECRET` 原值；首次成功保存后以数据库为准，缺密钥、损坏或无法解密均关闭相关能力，不回退旧环境凭据。部署及独立验收见[小程序接入设置与 UAT 验收](wechat-integration.md)。
+
+| 接口 | 请求、返回及权限 |
+| --- | --- |
+| `GET /api/v1/admin/integrations/wechat-mini-program` | 需 `wechat.integration.read`，返回下述安全配置 DTO；每账号自然分钟30次。 |
+| `PUT` 同路径 | 同时需 `wechat.integration.read/manage`。严格 JSON `{expectedRevision,appId,secretAction:KEEP\|REPLACE,appSecret?}`，最多8 KiB。`KEEP` 必须省略 appSecret 且目标 AppID 不变、已有 Secret；`REPLACE` 必须提供新的 Secret。保存成功修订加一，清除此前校验结果。每账号一小时最多30次成功保存。 |
+| `POST /api/v1/admin/integrations/wechat-mini-program/test` | 同时需上述双权限；严格 `{expectedRevision}`，只校验当前有效已存凭据，不接受待保存 Secret。每账号5分钟最多5次获准测试。测试不增加配置修订；平台拒绝或暂不可用返回 HTTP 200 与安全 lastCheck 状态，传输响应本身不代表凭据通过。 |
+
+保存与测试均须先通过 `POST /api/v1/admin/auth/confirm` 验证当前密码，动作分别为 `wechat.integration.update`、`wechat.integration.test`，`objectId` 固定 `wechat-mini-program`，`revision` 使用当前配置修订；实际调用带 `X-Action-Confirmation`。凭证绑定操作者、会话、动作、对象和修订，5分钟有效且核销使用行锁。主账号默认拥有新增权限，现有预设组不自动增加权限。服务端在配置行锁与账号行锁内复核当前会话和双权限。
+
+成功 GET／PUT／测试的 `data` 统一为：
+
+```text
+{
+  revision: 非负整数,
+  source: ENV | MANAGED,
+  appId: 字符串（未配置为空串）,
+  secretConfigured: 布尔值,
+  keyAvailable: 布尔值,
+  identityBinding: { status: EMPTY | BOUND | MULTIPLE, appId: 字符串 | null },
+  paymentAppIdStatus: NOT_CONFIGURED | MATCHED | MISMATCHED,
+  notificationsStatus: NOT_VERIFIED,
+  lastCheck: null | {
+    revision: 非负整数, status: SUCCESS | FAILED | UNAVAILABLE,
+    code: OK | INVALID_CREDENTIALS | IP_NOT_ALLOWED | ADMIN_CONFIRMATION_REQUIRED |
+          ADMIN_REJECTED | PLATFORM_RATE_LIMITED | PLATFORM_UNAVAILABLE | PLATFORM_ERROR,
+    checkedAt: ISO8601时间
+  }
+}
+```
+
+`keyAvailable=false` 时环境配置仍可用于已有登录／凭据校验，但不可保存托管配置。AppID 是授权后台的身份核对字段；不返回 Secret 原文、尾号、密文、平台 token 或内部 HMAC。lastCheck 对应配置修订和实际凭据快照；内部 HMAC 使环境凭据或部署 SECRET_KEY 改变后旧校验失效，HMAC 不出站、不入审计。SUCCESS 仅表示应用凭据校验通过；FAILED 为平台拒绝／IP限制／需管理员确认或已拒绝；UNAVAILABLE 为网络、限流或其它无法确定的结果。支付 AppID 状态仅比较部署绑定，不代表商户配置或支付验收成功；消息仍未验证、不可发送。
+
+后台保存的 AppID 采用本系统格式 `^wx[0-9a-fA-F]{16}$`；这是界面输入约束，不宣称来自 stable_token 文档。Secret 是1—256字符不透明字符串，不得全空白或含C0/C1控制符，不自动trim，不猜测固定32位。环境兼容读取不套用新格式；若旧环境 Secret 不满足保存界限，迁移托管时必须 REPLACE。所有未知字段、错误类型、非法UTF-8、非对象JSON或过大请求均400 `VALIDATION_FAILED`。
+
+会员按 `(wechat_app_id,wechat_openid)` 唯一。EMPTY 允许首次设置或改变 AppID；BOUND 返回唯一会员 AppID，只能保存该值，允许把环境误配修复回既有身份；MULTIPLE 是历史多身份分叉，返回 appId=null，只允许保持当前有效 AppID 轮换 Secret，不迁移会员。微信登录在外网调用前冻结凭据，换取身份后锁配置单例并复核完整快照，再创建会员／会话；保存也锁同一行后读取身份锚点，因此首次登录与变更 AppID 原子互斥。现有会员鉴权、领券、积分兑换均使用有效配置；默认真实支付网关核对有效 AppID 与部署商户绑定，不一致拒绝。支付、退款、消息及代码发布闸门不随保存或校验开放。
+
+校验固定 HTTPS POST 微信 stable_token，显式 `force_refresh=false`，TLS验证、禁重定向和环境代理、5秒超时、8 KiB响应上限；不自动重试、不回退其它token接口。平台普通模式仍可能在临近过期时更新token，不承诺永不轮转。token不落库、不回传，校验不创建会员／登录会话／登录code使用记录。平台调用在事务外，回写前再次核对修订、快照及当前权限；并发改配置后丢弃旧结果。微信错误40013/40125/40001归为INVALID_CREDENTIALS，40164为IP_NOT_ALLOWED，89503为ADMIN_CONFIRMATION_REQUIRED，89506/89507为ADMIN_REJECTED，45009/45011为PLATFORM_RATE_LIMITED；其它平台原文不出站。
+
+业务错误：401会话过期；403权限或密码确认失败；405保留Allow；409 `REVISION_CONFLICT`（可附currentRevision）、`APP_ID_LOCKED`、`CREDENTIALS_NOT_CONFIGURED`；503 `CREDENTIALS_UNAVAILABLE`；429 `RATE_LIMITED` 附Retry-After。响应私有禁止缓存，保留请求ID；框架CSRF错误遵循通则。审计只含配置来源、修订及安全状态，不含AppSecret、密文、token、内部指纹或平台原文。网络结果未知时客户端重新GET核对，不能仅凭revision/AppID断言Secret替换成功，不能自动重发或持久化秘密请求体；需要再次操作时重新取得密码确认凭证。

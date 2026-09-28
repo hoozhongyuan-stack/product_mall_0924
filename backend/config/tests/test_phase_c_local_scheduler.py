@@ -31,6 +31,7 @@ class LocalSchedulerTests(SimpleTestCase):
             "POSTGRES_PASSWORD": "synthetic-secret",
             "WECHAT_PAY_MERCHANT_ID": "must-not-leak",
             "WECHAT_PAY_PLATFORM_KEYS": "not-json",
+            "MALL_WECHAT_CREDENTIAL_KEY_FILE": "private-path-must-not-leak",
             "KDNIAO_ENABLED": "1",
             "KDNIAO_APP_KEY": "must-not-leak",
         }
@@ -53,6 +54,7 @@ class LocalSchedulerTests(SimpleTestCase):
         self.assertEqual(child_env["POSTGRES_DB"], self.env["POSTGRES_DB"])
         self.assertNotIn("WECHAT_PAY_MERCHANT_ID", child_env)
         self.assertNotIn("WECHAT_PAY_PLATFORM_KEYS", child_env)
+        self.assertNotIn("MALL_WECHAT_CREDENTIAL_KEY_FILE", child_env)
         self.assertNotIn("KDNIAO_APP_KEY", child_env)
         self.assertEqual(child_env["KDNIAO_ENABLED"], "0")
         self.assertFalse(self.alert_path.exists())

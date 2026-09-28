@@ -28,8 +28,11 @@ from notifications import views as notification_views
 from notifications import task_views as notification_task_views
 from code_versions import views as code_version_views
 from report_exports import views as export_views
+from wechat_integration import views as integration_views
 
 urlpatterns = [
+    path("api/v1/admin/integrations/wechat-mini-program", integration_views.settings_view),
+    path("api/v1/admin/integrations/wechat-mini-program/test", integration_views.test_view),
     path("api/v1/admin/exports", export_views.exports_view),
     path("api/v1/admin/exports/<uuid:task_id>", export_views.export_detail_view),
     path("api/v1/admin/exports/<uuid:task_id>/download", export_views.export_download_view),

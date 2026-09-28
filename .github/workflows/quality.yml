@@ -102,6 +102,9 @@ jobs:
           python -m coverage report --include='common/http.py' --fail-under=90
           python -m coverage report --include='aftersales/task_reads.py' --fail-under=80
           python -m coverage report --include='fulfillment/task_reads.py' --fail-under=80
+          for module in wechat_integration/*.py; do
+            python -m coverage report --include="$module" --fail-under=80
+          done
           python -m coverage xml
         working-directory: backend
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4

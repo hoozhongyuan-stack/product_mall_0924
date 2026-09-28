@@ -1,7 +1,6 @@
 import hashlib
 import hmac
 import json
-import os
 import re
 from datetime import timedelta
 from urllib.error import HTTPError, URLError
@@ -10,6 +9,7 @@ from urllib.request import urlopen
 
 from django.conf import settings
 from django.utils import timezone
+from wechat_integration.credentials import effective_credentials, CredentialsUnavailable
 
 from .models import MemberSession, WechatLoginAttempt
 
@@ -23,14 +23,14 @@ class InvalidWechatCode(Exception):
 
 
 def configured_credentials():
-    app_id = getattr(settings, "WECHAT_MINI_APP_ID", os.environ.get("WECHAT_MINI_APP_ID", ""))
-    secret = getattr(settings, "WECHAT_MINI_APP_SECRET", os.environ.get("WECHAT_MINI_APP_SECRET", ""))
-    return app_id, secret
+    snapshot = effective_credentials()
+    return snapshot.app_id, snapshot.secret
 
 
-def exchange_code(code):
+def exchange_code(code, *, credentials=None):
     """Exchange wx.login's one-use code server-side; session_key never leaves this call."""
-    app_id, secret = configured_credentials()
+    credentials = effective_credentials() if credentials is None else credentials
+    app_id, secret = credentials.app_id, credentials.secret
     if not app_id or not secret:
         raise WechatExchangeUnavailable("微信登录尚未配置。")
     query = urlencode({"appid": app_id, "secret": secret, "js_code": code, "grant_type": "authorization_code"})
@@ -72,6 +72,14 @@ def login_source_allowed(request):
     return True
 
 
+def matches_active_app(member):
+    try:
+        app_id = effective_credentials().app_id
+        return bool(app_id and member.wechat_app_id == app_id)
+    except CredentialsUnavailable:
+        return False
+
+
 def resolve_member(request):
     header = request.META.get("HTTP_AUTHORIZATION", "")
     match = re.fullmatch(r"Bearer ([A-Za-z0-9_-]{40,100})", header)
@@ -84,8 +92,7 @@ def resolve_member(request):
     ).first()
     if not session or session.auth_version != session.member.auth_version:
         return None
-    current_app_id, _ = configured_credentials()
-    if not current_app_id or session.member.wechat_app_id != current_app_id:
+    if not matches_active_app(session.member):
         return None
     return session.member
 

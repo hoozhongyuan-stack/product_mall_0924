@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 from catalog.exchange_access import exchange_catalog_rows
 from customers.consumption import lock_consumption_member
+from customers.auth import matches_active_app
 from customers.exchange_access import exchange_address_snapshot
 from inventory.availability import default_available_base_units
 from inventory.models import Warehouse
@@ -29,7 +30,7 @@ def identity(value,label):
 
 def _member(member):
     current=lock_consumption_member(member.id)
-    if not current.enabled or current.auth_version!=member.auth_version or current.wechat_app_id!=settings.WECHAT_MINI_APP_ID:
+    if not current.enabled or current.auth_version!=member.auth_version or not matches_active_app(current):
         raise OrderError('登录已失效，请重新登录。','SESSION_EXPIRED',401)
     return current
 

@@ -30,6 +30,7 @@ PERMISSION_CODES = frozenset({
     "exchange.read", "exchange.manage", "exchange.publish",
     "notification.read", "notification.manage", "notification.recover",
     "code.version.read", "business.report.read", "business.report.export", "audit.export",
+    "wechat.integration.read", "wechat.integration.manage",
 })
 
 

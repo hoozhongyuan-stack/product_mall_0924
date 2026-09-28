@@ -10,6 +10,12 @@ from importlib import import_module
 from django.db import transaction
 
 
+def restore_wechat_integration_seed(sender=None, using='default', **kwargs):
+    """Test-runner-only post_migrate receiver; production never repairs a missing row."""
+    from wechat_integration.models import MiniProgramIntegration
+    MiniProgramIntegration.objects.using(using).get_or_create(pk=1)
+
+
 def restore_migration_seed_rows(alias):
     from accounts.models import GroupPermission, PermissionGroup
     from catalog.models import MemberGrade
@@ -43,3 +49,4 @@ def restore_migration_seed_rows(alias):
         ShippingPolicy.objects.using(alias).get_or_create(pk=1)
         OfflinePaymentPolicy.objects.using(alias).get_or_create(pk=1)
         FulfillmentPolicy.objects.using(alias).get_or_create(pk=1)
+        restore_wechat_integration_seed(using=alias)

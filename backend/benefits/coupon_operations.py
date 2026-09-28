@@ -7,12 +7,12 @@ import hashlib
 import json
 import re
 from uuid import UUID, uuid4
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from catalog.coupon_targets import coupon_product_names, coupon_products_exist
 from customers.consumption import lock_consumption_member
+from customers.auth import matches_active_app
 from .models import CouponCampaign, CouponAllocation, CouponIssuance, MemberCoupon
 from .service import BenefitError, MAX_AMOUNT_FEN, _uuid
 
@@ -139,7 +139,7 @@ def set_distribution(campaign_id,expected_revision,enabled):
 
 def _member_lock(member):
     locked=lock_consumption_member(member.id)
-    if not locked.enabled or locked.wechat_app_id != settings.WECHAT_MINI_APP_ID:
+    if not locked.enabled or not matches_active_app(locked):
         raise BenefitError('会员当前不可领取或发券。','MEMBER_UNAVAILABLE',409)
     return locked
 

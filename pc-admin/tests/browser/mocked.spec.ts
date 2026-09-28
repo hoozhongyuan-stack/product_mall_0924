@@ -1,7 +1,7 @@
 /** Real Vue pages and Chromium interactions; HTTP data/failures are explicitly mocked. */
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
-import { account, asset, ids, imageBytes, installMockApi, ok, openSection, screenshot, sku } from './fixtures'
+import { account, asset, ids, imageBytes, installMockApi, ok, openSection, pushRoute, screenshot, sku } from './fixtures'
 
 test('mock HTTP: login and logout clear the password without remembering the account', async ({ page }) => {
   let loggedIn = false
@@ -102,11 +102,7 @@ test('mock HTTP: coupon browser-back route update protects dirty details', async
   await page.goto(`/coupons/${ids.a}`)
   await expect(page.getByLabel('活动名称', { exact: true })).toHaveValue('活动甲')
   // Seed adjacent detail history using the real application router. The action under test is browser Back.
-  await page.evaluate(async id => {
-    // Use the mounted app's router; importing a bare Vite URL can create a second router after HMR.
-    const root = document.querySelector('#app') as HTMLElement & { __vue_app__: { config: { globalProperties: { $router: { push(path: string): Promise<unknown> } } } } }
-    await root.__vue_app__.config.globalProperties.$router.push(`/coupons/${id}`)
-  }, ids.b)
+  await pushRoute(page, `/coupons/${ids.b}`)
   await expect(page.getByLabel('活动名称', { exact: true })).toHaveValue('活动乙')
   await page.getByLabel('活动名称', { exact: true }).fill('未保存的活动乙')
   page.once('dialog', dialog => dialog.dismiss())
@@ -319,5 +315,107 @@ test('mock HTTP: configuration and operations pages show honest capability state
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), path).toBe(true)
     await screenshot(page, testInfo, `site-${path.replaceAll('/', '-')}`)
   }
+  verify()
+})
+
+const wechatConfig = { revision: 0, source: 'ENV', appId: '', secretConfigured: false, keyAvailable: true,
+  identityBinding: { status: 'EMPTY', appId: null }, paymentAppIdStatus: 'NOT_CONFIGURED', notificationsStatus: 'NOT_VERIFIED', lastCheck: null }
+const wechatBase = '/api/v1/admin/integrations/wechat-mini-program'
+
+test('mock HTTP: WeChat credentials are confirmed, stored without echo, and checked only after save', async ({ page }, testInfo) => {
+  let saved: Record<string, unknown> = { ...wechatConfig }
+  const writes: { path: string; body: Record<string, unknown> }[] = []
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path.endsWith('/me')) { await ok(route, { ...account, permissionCodes: ['wechat.integration.read', 'wechat.integration.manage', 'catalog.read'] }); return true }
+    if (path === '/api/v1/admin/auth/confirm') { await ok(route, { confirmationToken: 'synthetic-confirmation' }); return true }
+    if (path === wechatBase && route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON(); writes.push({ path, body })
+      expect(route.request().headers()['x-action-confirmation']).toBe('synthetic-confirmation')
+      saved = { ...saved, source: 'MANAGED', revision: Number(saved.revision) + 1, appId: body.appId, secretConfigured: true, lastCheck: null }
+      await ok(route, saved); return true
+    }
+    if (path === wechatBase + '/test') {
+      writes.push({ path, body: route.request().postDataJSON() })
+      saved = { ...saved, lastCheck: { revision: saved.revision, status: 'SUCCESS', code: 'OK', checkedAt: '2026-09-28T01:00:00Z' } }
+      await ok(route, saved); return true
+    }
+    if (path === wechatBase) { await ok(route, saved); return true }
+    return false
+  })
+  await page.goto('/store/wechat-integration')
+  await expect(page.getByRole('heading', { name: '小程序接入', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '校验已保存配置', exact: true })).toBeDisabled()
+  await page.getByLabel('小程序 AppID', { exact: true }).fill('wxABCDEF0123456789')
+  await page.getByLabel('新的 AppSecret', { exact: true }).fill(' synthetic-opaque-secret ')
+  page.once('dialog', dialog => dialog.dismiss())
+  await pushRoute(page, '/catalog')
+  await expect(page).toHaveURL(/wechat-integration$/)
+  await expect(page.getByLabel('新的 AppSecret', { exact: true })).toHaveValue(' synthetic-opaque-secret ')
+  await page.getByRole('button', { name: '保存配置', exact: true }).click()
+  await page.getByLabel('当前账号密码', { exact: true }).fill('synthetic-password')
+  await page.getByRole('button', { name: '确认保存', exact: true }).click()
+  await expect(page.getByText('配置已保存。', { exact: false })).toBeVisible()
+  expect(writes[0].body).toEqual({ expectedRevision: 0, appId: 'wxABCDEF0123456789', secretAction: 'REPLACE', appSecret: ' synthetic-opaque-secret ' })
+  await expect(page.getByLabel('新的 AppSecret', { exact: true })).toHaveCount(0)
+  expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('synthetic-opaque-secret')
+  await page.getByRole('button', { name: '校验已保存配置', exact: true }).click()
+  await page.getByLabel('当前账号密码', { exact: true }).fill('synthetic-password')
+  await page.getByRole('button', { name: '确认校验', exact: true }).click()
+  await expect(page.getByText('凭据校验通过', { exact: true })).toBeVisible()
+  expect(writes[1]).toEqual({ path: wechatBase + '/test', body: { expectedRevision: 1 } })
+  await expect(page.getByText('应用凭据调用成功。真实登录与真机验收仍需单独完成。')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await screenshot(page, testInfo, 'wechat-saved-and-checked')
+  verify()
+})
+
+test('mock HTTP: WeChat conflict preserves input and blocks another write until a fresh read', async ({ page }, testInfo) => {
+  let revision = 2, writes = 0
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path.endsWith('/me')) { await ok(route, { ...account, permissionCodes: ['wechat.integration.read', 'wechat.integration.manage'] }); return true }
+    if (path === '/api/v1/admin/auth/confirm') { await ok(route, { confirmationToken: 'synthetic-confirmation' }); return true }
+    if (path === wechatBase && route.request().method() === 'PUT') {
+      writes++; revision = 3
+      await route.fulfill({ status: 409, json: { success: false, error: { code: 'REVISION_CONFLICT', message: '服务端内部信息不应回显' } } }); return true
+    }
+    if (path === wechatBase) { await ok(route, { ...wechatConfig, revision, source: 'MANAGED', appId: 'wx0123456789abcdef', secretConfigured: true }); return true }
+    return false
+  })
+  await page.goto('/store/wechat-integration')
+  await page.getByText('替换密钥', { exact: true }).click()
+  await expect(page.getByRole('radio', { name: '替换密钥', exact: true })).toBeChecked()
+  await page.getByLabel('新的 AppSecret', { exact: true }).fill('synthetic-replacement')
+  await page.getByRole('button', { name: '保存配置', exact: true }).click()
+  await page.getByLabel('当前账号密码', { exact: true }).fill('synthetic-password')
+  await page.getByRole('button', { name: '确认保存', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('配置已被修改')
+  await expect(page.getByText('服务端内部信息不应回显')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '保存配置', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '校验已保存配置', exact: true })).toBeDisabled()
+  await expect(page.getByLabel('新的 AppSecret', { exact: true })).toHaveValue('synthetic-replacement')
+  await page.getByRole('button', { name: '重新读取', exact: true }).click()
+  await expect(page.getByText('请核对后重新确认', { exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: '保存配置', exact: true })).toBeEnabled()
+  expect(writes).toBe(1)
+  await screenshot(page, testInfo, 'wechat-conflict-reconciled')
+  verify()
+})
+
+test('mock HTTP: WeChat read-only and forbidden pages cannot trigger credentials actions', async ({ page }) => {
+  let read = true, reads = 0
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path.endsWith('/me')) { await ok(route, { ...account, permissionCodes: read ? ['wechat.integration.read'] : ['wechat.integration.manage'] }); return true }
+    if (path === wechatBase) { reads++; await ok(route, { ...wechatConfig, appId: 'legacy-environment-id', keyAvailable: false }); return true }
+    return false
+  })
+  await page.goto('/store/wechat-integration')
+  await expect(page.getByLabel('小程序 AppID', { exact: true })).toHaveValue('legacy-environment-id')
+  await expect(page.getByLabel('小程序 AppID', { exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '保存配置', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '校验已保存配置', exact: true })).toHaveCount(0)
+  read = false
+  await page.reload()
+  await expect(page.getByRole('alert')).toContainText('没有此页面的读取权限')
+  expect(reads).toBe(1)
   verify()
 })
