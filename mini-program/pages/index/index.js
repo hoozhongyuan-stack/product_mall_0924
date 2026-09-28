@@ -8,7 +8,7 @@ Page({
     categoryState: 'loading', categoryError: '',
     products: [], listState: 'idle', listError: '',
     searchInput: '', keyword: '', searchFocused: false,
-    page: 0, hasMore: false, loadingMore: false, total: 0,
+    page: 0, hasMore: false, loadingMore: false, total: 0, failedImages: {},
   },
 
   onLoad(options = {}) {
@@ -66,7 +66,7 @@ Page({
     if (this.data.loadingMore && !reset) return
     const token = ++this.listToken
     const page = reset ? 1 : this.data.page + 1
-    this.setData(reset ? { listState: 'loading', listError: '', products: [], page: 0, hasMore: false } :
+    this.setData(reset ? { listState: 'loading', listError: '', products: [], page: 0, hasMore: false, failedImages: {} } :
       { loadingMore: true, listError: '' })
     try {
       const query = { page, pageSize: 20, keyword: this.data.keyword }
@@ -111,6 +111,9 @@ Page({
     if (this.data.activeRootId) return this.loadProducts(true)
   },
 
+  onImageError(event) {
+    this.setData({ failedImages: { ...this.data.failedImages, [event.currentTarget.dataset.id]: true } })
+  },
   openProduct(event) {
     const id = event.currentTarget.dataset.id
     if (!this.data.products.some((item) => item.id === id)) return

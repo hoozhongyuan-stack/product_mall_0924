@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""Run browser integration in a newly owned localhost database; never use an existing business DB."""
+"""Run browser tests or a visual preview in a newly owned localhost database."""
+import argparse
 import importlib.util
+import json
 import os
 from pathlib import Path
 import re
@@ -66,7 +68,18 @@ def interrupted(signum, frame):
     raise KeyboardInterrupt
 
 
-def run():
+def keep_preview_alive(processes):
+    """Keep owned services available until Ctrl-C/SIGTERM, or fail if one exits."""
+    while True:
+        if any(process.poll() is not None for process in processes):
+            raise RuntimeError('An isolated preview server exited unexpectedly.')
+        time.sleep(1)
+
+
+def run(*, preview=False):
+    preview_seed = ADMIN / 'scripts/seed-visual-preview.py'
+    if preview and not preview_seed.is_file():
+        raise SystemExit('Preview seed is missing: pc-admin/scripts/seed-visual-preview.py')
     host = os.environ.get('POSTGRES_HOST', '127.0.0.1')
     if host not in ('127.0.0.1', 'localhost'):
         raise SystemExit('Integration tests only accept a localhost PostgreSQL host.')
@@ -120,6 +133,11 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
 """
                 subprocess.run([sys.executable, 'manage.py', 'shell', '--no-imports'], input=seed,
                                text=True, cwd=ROOT / 'backend', env=env, check=True)
+                if preview:
+                    env['MALL_E2E_PREVIEW'] = '1'
+                    subprocess.run([sys.executable, 'manage.py', 'shell', '--no-imports'],
+                                   input=preview_seed.read_text(), text=True,
+                                   cwd=ROOT / 'backend', env=env, check=True)
                 with (Path(temporary) / 'servers.log').open('w+') as log:
                     for command, cwd in (
                         ([sys.executable, 'manage.py', 'runserver', f'127.0.0.1:{api_port}', '--noreload'], ROOT / 'backend'),
@@ -129,6 +147,24 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
                                                           stderr=subprocess.STDOUT, start_new_session=True))
                     wait_ready(f'http://127.0.0.1:{api_port}/api/v1/app/categories', processes[0])
                     wait_ready(env['MALL_E2E_BASE_URL'], processes[1])
+                    if preview:
+                        access_file = Path(temporary) / 'preview-access.json'
+                        details = {
+                            'adminUrl': env['MALL_E2E_BASE_URL'],
+                            'apiUrl': env['MALL_API_PROXY_TARGET'],
+                            'database': {'host': host, 'port': port, 'user': user, 'name': database},
+                            'account': {'loginName': owner, 'password': owner_password},
+                            'mediaRoot': env['MALL_MEDIA_ROOT'],
+                        }
+                        descriptor = os.open(access_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                        with os.fdopen(descriptor, 'w') as credentials:
+                            json.dump(details, credentials, ensure_ascii=False, indent=2)
+                        print(f"Preview admin: {details['adminUrl']}", flush=True)
+                        print(f"Preview API: {details['apiUrl']}", flush=True)
+                        print(f'Private preview access file: {access_file}', flush=True)
+                        print('Preview stays open until Ctrl-C/SIGTERM; only this run’s resources are removed.', flush=True)
+                        keep_preview_alive(processes)
+                        return 0
                     print('Isolated Django/PostgreSQL and Vue ready; external platform credentials absent.', flush=True)
                     result = subprocess.run([str(ADMIN / 'node_modules/.bin/playwright'), 'test'], cwd=ADMIN, env=env)
                     if result.returncode:
@@ -158,8 +194,12 @@ print('Verified two persisted drafts and zero orders in isolated database.')
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--preview', action='store_true',
+                        help='Seed an isolated visual preview and keep it open until Ctrl-C/SIGTERM.')
+    arguments = parser.parse_args()
     signal.signal(signal.SIGTERM, interrupted)
     try:
-        raise SystemExit(run())
+        raise SystemExit(run(preview=arguments.preview))
     except KeyboardInterrupt:
         raise SystemExit(130)

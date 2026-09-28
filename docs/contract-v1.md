@@ -255,13 +255,24 @@ C1 接入线下服务端与客户端闭环，**公开下单仍按支付方式关
 | --- | --- | --- |
 | `GET /api/v1/app/payments/offline-policy` | 公开，只读 | `instructions`、`merchantAccountId`、`revision`、`configured`、`wechatTimeoutMinutes`、`offlineTimeoutMinutes`、只读 `availablePaymentMethods`。未配置时为空，不提供虚构账户。 |
 | `GET/PUT /api/v1/admin/payments/offline-policy` | `payment.settings.manage`；PUT 需 CSRF，`expectedRevision` 与上述四个可编辑字段 | 说明最多 4000 字、账户标识最多 80 字；二者同时填写或同时清空；时限为 1—10080 分钟，默认微信 30、线下 1440。修订不符返回 409，成功审计。修改只影响新订单。 |
-| `GET /api/v1/app/orders` | 会员 Bearer，本人订单 | `items/page/pageSize/total`；每页 1—100，默认 20。支持状态、方式、`reported=true/false`、订单号 `search`。列表不含后台流水、确认人或其他会员数据。 |
+| `GET /api/v1/app/orders` | 会员 Bearer，本人订单 | `items/page/pageSize/total`；每页 1—100，默认 20。支持状态、方式、`reported=true/false`、订单号 `search`、`orderKind=CASH/POINTS` 及下述 `fulfillment` 待办过滤。列表不含后台流水、确认人或其他会员数据。 |
 | `GET /api/v1/app/orders/{id}` | 本人订单 | 原订单详情增加 `revision`、不可改写的 `paymentInstructions` 快照（说明、账户标识、配置修订、时限分钟）、`paymentReviewStatus` 与 `paymentReports`。核实状态为 `UNREPORTED/PENDING_REVIEW/PAID/CLOSED`，成交仍以订单 `status` 为准。 |
 | `POST /api/v1/app/orders/{id}/payment-report` | 本人；UUID `Idempotency-Key`；`{note}` | 线下待付款、未过期订单可报告，说明 1—500 字，每单最多 20 条；报告不可改写，不生成资金凭证，不改变待付款状态、库存或权益。原键原内容重试复用，改内容拒绝；报告后显示待核实。 |
 | `GET /api/v1/admin/orders`、`GET /api/v1/admin/orders/{id}` | `order.read` | 列表分页同上；详情增加实际到账 `receipts` 和操作员核对 `confirmations`，各最多最近 50 条，并返回总数。确认资料含原操作员 `actorId`、授权时间、结果与关联收据。 |
 | `POST /api/v1/admin/orders/{id}/offline-reconciliations` | `order.read` + `payment.offline.confirm`；CSRF；UUID `Idempotency-Key` | 输入 `expectedRevision/merchantAccountId/externalTradeNo/amountFen/paidAt/note/verified:true`。实际账户须与下单快照一致；金额为正整数分，时间带时区且不晚于当前；备注最多 500 字，金额不符必须说明原因。保存不可变核对记录，**尚不代表资金登记或付款确认**。返回记录及 `confirmationObjectId`、`confirmationRevision:1`。同操作员原键原内容重试复用。 |
 | `POST /api/v1/admin/auth/confirm` | 当前密码；`payment.offline.confirm`；对象为上述不可变核对记录 ID，修订 1 | 原有一次性、五分钟、账号与会话绑定的二次确认。令牌授权的是记录中的固定账户、流水、金额与时间。 |
 | `POST /api/v1/admin/payments/offline-reconciliations/{id}/confirm` | 同两项权限、原核对操作员、CSRF；空对象；首次需 `X-Action-Confirmation` | 授权与审计独立持久化，随后调用可信资金入口。结果 `PAID/ANOMALY/PENDING`、`receiptId/orderStatus/order`；金额不符、关闭后或额外到账进入异常，不恢复原单。结算失败返回 503 且保留资金和授权资料。已授权记录可由原操作员在仍有权限时重试，PC 从历史记录恢复同一对象。 |
+
+2026-09-28 视觉推广的兼容扩展：小程序与后台上述订单列表新增可选 `fulfillment=WAITING_SHIPMENT|IN_TRANSIT|WAITING_REDEMPTION|AFTER_SALE`；未知枚举或重复该参数返回 400。省略或空值保持原查询；与原状态、支付方式、核款、搜索、`orderKind` 条件取交集，在数据库中先过滤再计数、分页。页码仍为 1—10000，旧 `data.items/page/pageSize/total` 与统一 `meta:{page,pageSize,total}` 不变。本人范围和 `order.read` 权限不变。
+
+| 履约待办 | 条件 |
+| --- | --- |
+| `WAITING_SHIPMENT` | 已付款、没有发货记录、至少一条未全退实物项，且所有实物项都无进行中售后。核销项售后不阻止实物发货。 |
+| `IN_TRANSIT` | 已付款、有未确认收货的发货记录、至少一条未全退实物项；可与售后待办重叠。 |
+| `WAITING_REDEMPTION` | 已付款、至少一条核销项有未过期凭证，且购买数量减已核销、已作废及进行中售后冻结的未核销数量大于零。有效期按上海自然日含最后一天；缺凭证、缺有效期、已过期、全部冻结或已全退不进入该待办。 |
+| `AFTER_SALE` | 至少一条售后为 `PENDING_REVIEW/WAITING_RETURN/WAITING_REFUND`。 |
+
+这些条件表示可以重叠的待办，不替代单值 `fulfillmentStatus`。混合订单可以同时待发货和待核销，也可以运输中且有售后。退款数量沿用退货验收数量（存在时）或申请数量的既有口径；核销冻结沿用售后 `unredeemed_quantity`。待付款继续使用 `status=PENDING_PAYMENT`，包含已到时但补偿任务尚未关单的记录，GET 不改变订单状态。
 
 订单付款说明和待付款时限在提交时保存快照，数据库禁止改写。原成功提交的防重复键可在方式闸门关闭后重放，未成功的新请求仍被拒绝。零元订单沿用统一结算，不虚构到账收据。授权前账户不符、格式错误、缺失差异原因会拒绝核对资料；它们不被当成已验证到账自动记录。C1 以前没有账户快照的历史订单可读取，但本接口不能据此确认线下收款，需后续独立的授权历史资料处理。
 
@@ -406,10 +417,12 @@ PC路径为 `/aftersales`、`/aftersales/{caseId}`，由订单列表/详情和�
 | `GET /api/v1/admin/members/{memberId}/consumption` | `member.read`；消费、评级变化与公开原因分页。 |
 | `GET /api/v1/admin/member-rules` | `member.rules.read` 或 `member.rules.manage`；当前规则。 |
 | `PUT /api/v1/admin/member-rules` | `member.rules.manage` + CSRF + 密码确认；修订、幂等与审计。 |
-| `GET /api/v1/app/member/overview` | 本人Bearer；权益摘要、当前规则及已启用等级规则修订。 |
+| `GET /api/v1/app/member/overview` | 本人Bearer；权益摘要、当前规则及已启用等级规则修订，追加本人 `orderCounts`（口径见下文）。 |
 | `GET /api/v1/app/member/points`、`/consumption` | 本人Bearer；本人明细分页，禁止传其他会员标识。 |
 
 列表统一 `items` + `pagination:{page,pageSize,total}`，默认20、最大100、页码1—100000。会员列表另有安全 `grades:[{id,code,name,rank}]` 过滤项。`search` 最大64字且只搜索会员UUID，`enabled=true|false`，禁止重复和未知查询参数。会员不返回微信openid/appid、登录令牌或内部发放引用；私密响应 `Cache-Control:private,no-store`，本人接口 `Vary:Authorization`。
+
+`orderCounts` 为 `{pendingPayment,waitingShipment,inTransit,waitingRedemption,afterSale}`，各项均为非负整数，查询本人全部现金及积分订单。后四项与订单列表 `fulfillment` 的条件相同，待付款按持久状态计数；一次聚合读取，不逐单请求，不返回额外个人资料。计数不互斥，不能相加当订单总量。旧版响应缺失此字段时，新客户端显示“--”并仍可进入相应筛选，不将缺失伪装成零。
 
 会员摘要包括 `effectiveSpendFen`、`gradeEffectiveAt`、`gradePolicyRevision`，积分 `settledPoints/frozenPoints/availablePoints/debtPoints/expiredPendingPoints/expiringPoints/nextExpiryAt`。自然到期但尚未扣账的积分不计可用；欠额不与冻结混为一项。积分旧事件与权益生命周期流水合并查询，EARN／RETURN对应的GRANT仅显示一次。冻结／释放标记 `effect=FREEZE|RELEASE`，其余 `BALANCE`；旧记录无余额快照时明确返回null。`sourceRef` 为公开原因枚举：`ORDER_COMPLETED/REFUND_COMPLETED/FULFILLMENT_REVERSED/POINTS_EXPIRED` 或安全的既有类型／`ORDER_SETTLEMENT`，不返回内部原因原串。
 

@@ -11,7 +11,7 @@ const to = ref('')
 const data = ref<Summary | null>(null)
 const loading = ref(true)
 const error = ref('')
-const props = defineProps<{ account: Account }>()
+const props = defineProps<{ account: Account; embedded?: boolean }>()
 const canExport = computed(() => props.account.permissionCodes.includes('business.report.export'))
 const exportFilters = computed<ExportFilters | null>(() => data.value && !loading.value && !error.value ? { from: data.value.from, to: data.value.to } : null)
 let generation = 0
@@ -39,8 +39,8 @@ onMounted(() => { void load() })
 </script>
 
 <template>
-  <section class="page-content business-page">
-    <header class="page-heading"><div><h1>经营统计</h1><p>按支付确认与退款成功时间归属。默认近 90 个自然日，金额单位为元。</p></div>
+  <section class="business-page" :class="embedded ? 'business-embedded' : 'page-content'">
+    <header class="page-heading"><div><component :is="embedded ? 'h2' : 'h1'">经营统计</component><p>按支付确认与退款成功时间归属。默认近 90 个自然日，金额单位为元。</p></div>
       <button class="secondary-button" type="button" :disabled="loading" @click="load">重新读取</button></header>
     <form class="panel business-filters" aria-label="筛选经营统计" @submit.prevent="load">
       <label>开始日期<input v-model="from" type="date" /></label><label>结束日期<input v-model="to" type="date" /></label>
@@ -51,10 +51,14 @@ onMounted(() => { void load() })
     <p v-if="loading" class="loading-inline" role="status">正在汇总经营数据…</p>
     <template v-else-if="data">
       <p class="business-range">{{ data.from }} 至 {{ data.to }} · {{ data.timeZone }}</p>
-      <div class="panel table-wrap" tabindex="0" aria-label="经营汇总，可横向滚动">
-        <table><thead><tr><th scope="col">口径</th><th scope="col">支付笔数</th><th scope="col">支付金额</th><th scope="col">退款笔数</th><th scope="col">退款金额</th><th scope="col">净成交</th><th scope="col">积分兑换</th></tr></thead>
-          <tbody><tr><th scope="row">区间合计</th><td>{{ data.totals.paidOrderCount }}</td><td>{{ yuan(data.totals.paidAmountFen) }}</td><td>{{ data.totals.refundCount }}</td><td>{{ yuan(data.totals.refundAmountFen) }}</td><td class="strong-cell">{{ yuan(data.totals.netAmountFen) }}</td><td>{{ data.totals.pointsExchangeCount }}</td></tr></tbody></table>
-      </div>
+      <dl class="panel business-totals" aria-label="区间经营合计">
+        <div><dt>支付金额</dt><dd>{{ yuan(data.totals.paidAmountFen) }}<small>元</small></dd></div>
+        <div><dt>退款金额</dt><dd>{{ yuan(data.totals.refundAmountFen) }}<small>元</small></dd></div>
+        <div><dt>净成交金额</dt><dd class="business-net">{{ yuan(data.totals.netAmountFen) }}<small>元</small></dd></div>
+        <div><dt>支付笔数</dt><dd>{{ data.totals.paidOrderCount }}<small>笔</small></dd></div>
+        <div><dt>退款笔数</dt><dd>{{ data.totals.refundCount }}<small>笔</small></dd></div>
+        <div><dt>积分兑换</dt><dd>{{ data.totals.pointsExchangeCount }}<small>笔</small></dd></div>
+      </dl>
       <p v-if="!data.totals.paidOrderCount && !data.totals.refundCount && !data.totals.pointsExchangeCount" class="empty-state">当前区间暂无支付、退款或积分兑换记录。可调整日期后再查询。</p>
       <h2 v-else class="business-subhead">每日明细</h2>
       <div v-if="data.totals.paidOrderCount || data.totals.refundCount || data.totals.pointsExchangeCount" class="panel table-wrap" tabindex="0" aria-label="每日经营明细，可横向滚动">
@@ -67,8 +71,8 @@ onMounted(() => { void load() })
 </template>
 
 <style scoped>
-.business-filters{display:flex;align-items:end;flex-wrap:wrap;gap:12px;padding:20px}.business-filters label{display:grid;gap:6px;min-width:170px;flex:1;font-size:13px;font-weight:650;color:#51695a}
-.business-filters input{width:100%;min-height:42px;border:1px solid #cbd8ce;border-radius:9px;padding:8px 10px;background:#fff;color:#243329}
-.business-filters input:focus-visible{outline:2px solid #328055;outline-offset:2px}.business-hint{max-width:78ch;font-size:13px}.business-range{font-size:13px;margin:18px 0}.business-subhead{font-size:20px;margin:28px 0 14px}.business-page td{font-variant-numeric:tabular-nums}
+.business-filters{display:flex;align-items:end;flex-wrap:wrap;gap:12px;padding:20px}.business-filters label{display:grid;gap:6px;min-width:170px;flex:1;font-size:13px;font-weight:650;color:var(--mall-color-muted)}
+.business-filters input{width:100%;min-height:42px;border:1px solid var(--mall-color-border);border-radius:9px;padding:8px 10px;background:#fff;color:var(--mall-color-text)}
+.business-filters input:focus-visible{outline:2px solid var(--mall-color-brand);outline-offset:2px}.business-hint{max-width:78ch;font-size:13px}.business-range{font-size:13px;margin:18px 0}.business-subhead{font-size:20px;margin:28px 0 14px}.business-page td{font-variant-numeric:tabular-nums}
 @media(max-width:600px){.business-filters{display:grid;grid-template-columns:1fr 1fr}.business-filters label{grid-column:1/-1;min-width:0}}
 </style>

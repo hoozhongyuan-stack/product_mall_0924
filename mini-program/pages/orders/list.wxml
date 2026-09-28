@@ -1,8 +1,17 @@
-<view class="orders-page"><view class="page-title">我的订单</view>
-  <view class="filters"><button data-status="" bindtap="filter" class="{{status === '' ? 'active' : ''}}">全部</button><button data-status="PENDING_PAYMENT" bindtap="filter" class="{{status === 'PENDING_PAYMENT' ? 'active' : ''}}">待付款</button><button data-status="PAID" bindtap="filter" class="{{status === 'PAID' ? 'active' : ''}}">已付款</button><button data-status="CLOSED" bindtap="filter" class="{{status === 'CLOSED' ? 'active' : ''}}">已关闭</button></view>
+<view class="orders-page"><view class="page-title">{{isPointsList ? '积分兑换订单' : '我的订单'}}</view>
+  <scroll-view class="filter-scroll" scroll-x enhanced show-scrollbar="false" aria-label="订单筛选"><view class="filters">
+    <button data-status="" bindtap="filter" class="{{status === '' && fulfillment === '' ? 'active' : ''}}">全部</button>
+    <button wx:if="{{!isPointsList}}" data-status="PENDING_PAYMENT" bindtap="filter" class="{{status === 'PENDING_PAYMENT' ? 'active' : ''}}">待付款</button>
+    <button data-fulfillment="WAITING_SHIPMENT" bindtap="filter" class="{{fulfillment === 'WAITING_SHIPMENT' ? 'active' : ''}}">待发货</button>
+    <button data-fulfillment="IN_TRANSIT" bindtap="filter" class="{{fulfillment === 'IN_TRANSIT' ? 'active' : ''}}">待收货</button>
+    <button data-fulfillment="WAITING_REDEMPTION" bindtap="filter" class="{{fulfillment === 'WAITING_REDEMPTION' ? 'active' : ''}}">待核销</button>
+    <button data-fulfillment="AFTER_SALE" bindtap="filter" class="{{fulfillment === 'AFTER_SALE' ? 'active' : ''}}">售后中</button>
+    <button data-status="PAID" bindtap="filter" class="{{status === 'PAID' ? 'active' : ''}}">已付款</button>
+    <button data-status="CLOSED" bindtap="filter" class="{{status === 'CLOSED' ? 'active' : ''}}">已关闭</button>
+  </view></scroll-view>
   <view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载订单…</view>
   <view wx:elif="{{state === 'auth'}}" class="state"><view>{{error}}</view><button bindtap="login">登录后查看</button></view>
   <view wx:elif="{{state === 'error'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>
-  <view wx:elif="{{state === 'empty'}}" class="state"><view>{{status ? '没有符合条件的订单' : '暂时没有订单'}}</view><button bindtap="shop">浏览商品</button></view>
-  <block wx:else><view wx:for="{{rows}}" wx:key="orderId" class="section order-summary"><view class="status-label">{{item.statusLabel}}</view><view class="row"><text>订单号</text><text selectable>{{item.orderNo}}</text></view><view class="muted">{{item.createdLabel}}</view><view class="row"><text>{{item.isPoints ? '兑换积分' : '应付金额'}}</text><text class="price">{{item.totalLabel}}</text></view><button class="secondary" data-id="{{item.orderId}}" bindtap="openOrder">查看订单详情</button></view><view wx:if="{{moreError}}" class="action-error" role="alert">{{moreError}}</view><button wx:if="{{rows.length < total}}" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">{{moreError ? '重试加载更多' : '加载更多'}}</button><view wx:else class="muted end">已显示全部订单</view></block>
+  <view wx:elif="{{state === 'empty'}}" class="state"><view>{{status || fulfillment ? '没有符合条件的订单' : '暂时没有订单'}}</view><button bindtap="shop">浏览商品</button></view>
+  <block wx:else><view wx:for="{{rows}}" wx:key="orderId" class="section order-summary"><view class="order-card-head"><text class="order-number" selectable>{{item.orderNo}}</text><text class="status-label">{{item.statusLabel}}</text></view><view class="muted">{{item.createdLabel}}</view><view class="row"><text>{{item.isPoints ? '兑换积分' : '应付金额'}}</text><text class="price">{{item.totalLabel}}</text></view><button class="secondary" data-id="{{item.orderId}}" bindtap="openOrder">查看订单详情</button></view><view wx:if="{{moreError}}" class="action-error" role="alert">{{moreError}}</view><button wx:if="{{rows.length < total}}" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">{{moreError ? '重试加载更多' : '加载更多'}}</button><view wx:else class="muted end">已显示全部订单</view></block>
 </view>

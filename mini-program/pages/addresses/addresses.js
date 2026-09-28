@@ -1,8 +1,8 @@
 const api = require('../../lib/api')
 
 Page({
-  data: { state: 'loading', error: '', addresses: [], selecting: false },
-  onLoad(options) { this.setData({ selecting: options.select === '1' }) },
+  data: { state: 'loading', error: '', addresses: [], selecting: false, selectedId: '' },
+  onLoad(options) { this.setData({ selecting: options.select === '1', selectedId: wx.getStorageSync('mall.selectedAddressId') || '' }) },
   onShow() { return this.refresh() },
   async refresh() {
     this.setData({ state: 'loading', error: '' })
@@ -12,10 +12,11 @@ Page({
     } catch (error) { this.setData({ state: error.statusCode === 401 ? 'auth' : 'error', error: error.message }) }
   },
   select(event) {
-    if (!this.data.selecting) return
+    if (!this.data.selecting || !this.data.addresses.some((item) => item.id === event.currentTarget.dataset.id)) return
     wx.setStorageSync('mall.selectedAddressId', event.currentTarget.dataset.id)
     wx.navigateBack({ delta: 1 })
   },
+  login() { wx.navigateTo({ url: '/pages/login/login?returnTo=addresses' }) },
   add() { wx.navigateTo({ url: '/pages/addresses/edit' }) },
   edit(event) { wx.navigateTo({ url: `/pages/addresses/edit?id=${encodeURIComponent(event.currentTarget.dataset.id)}` }) },
   remove(event) {

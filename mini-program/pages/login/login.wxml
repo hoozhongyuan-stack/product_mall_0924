@@ -1,7 +1,7 @@
-<view class="login-page"><view class="mark">品</view><view class="heading">登录后继续当前操作</view><view class="lead">完成微信登录后，返回确认订单，重新核对价格、库存和收货地址。</view>
+<view class="login-page"><view class="mark">品</view><view class="heading">登录后继续当前操作</view><view class="lead">完成微信登录后，返回刚才的页面，继续当前操作。</view>
   <view wx:if="{{error}}" class="error" role="alert">{{error}}</view>
   <view class="login-actions"><button class="primary" bindtap="login" loading="{{busy}}" disabled="{{!agreed || busy}}">微信信任登录</button><button class="secondary" bindtap="back">暂时返回</button>
-    <checkbox-group bindchange="toggleAgreement"><label class="agreement"><checkbox value="agree" checked="{{agreed}}" color="#24583d" />我同意使用微信身份登录并创建会员账号</label></checkbox-group>
+    <checkbox-group bindchange="toggleAgreement"><label class="agreement"><checkbox value="agree" checked="{{agreed}}" color="#A3202B" />我同意使用微信身份登录并创建会员账号</label></checkbox-group>
     <button class="privacy" bindtap="openPrivacy">查看小程序隐私保护指引</button>
   </view>
 </view>

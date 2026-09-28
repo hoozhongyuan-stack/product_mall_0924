@@ -1,0 +1,13 @@
+/* UI colors only. Published page/header/text colors remain owned by storefront configuration. */
+page {
+  --mall-brand: #A3202B;
+  --mall-brand-hover: #801B24;
+  --mall-brand-soft: #FFF2F0;
+  --mall-text: #20252A;
+  --mall-muted: #66717A;
+  --mall-border: #E7E9EB;
+  --mall-canvas: #F4F5F5;
+  --mall-surface: #FFFFFF;
+  --mall-success: #24765B;
+  --mall-danger: #B42318;
+}

@@ -1,1 +1,13 @@
-.edit-page{min-height:100vh;background:#f7f7f2;padding:24rpx 24rpx 160rpx;box-sizing:border-box;color:#243329}.field{background:#fff;padding:22rpx 26rpx;border-bottom:1rpx solid #dce6dd;font-size:26rpx}.field text{display:block;font-weight:600;margin-bottom:8rpx}.field input{height:60rpx}.switch{display:flex;align-items:center;justify-content:space-between;margin-top:18rpx}.switch text{margin:0}.error{color:#b42318;margin-top:20rpx;font-size:23rpx}.footer{position:fixed;bottom:0;left:0;right:0;padding:16rpx 24rpx env(safe-area-inset-bottom);background:#fff}.footer button,.state button{background:#24583d;color:#fff}.state{text-align:center;padding:130rpx 20rpx}
+.edit-page{min-height:100vh;background:var(--mall-canvas);padding:24rpx 24rpx 160rpx;box-sizing:border-box;color:var(--mall-text)}.field{background:#fff;padding:22rpx 26rpx;border-bottom:1rpx solid var(--mall-border);font-size:26rpx}.field text{display:block;font-weight:600;margin-bottom:8rpx}.field input{height:60rpx}.switch{display:flex;align-items:center;justify-content:space-between;margin-top:18rpx}.switch text{margin:0}.error{color:var(--mall-danger);margin-top:20rpx;font-size:23rpx}.footer{position:fixed;bottom:0;left:0;right:0;padding:16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));background:#fff}.footer button,.state button{background:var(--mall-brand);color:#fff}.state{text-align:center;padding:130rpx 20rpx}
+.edit-page { padding-bottom: calc(170rpx + env(safe-area-inset-bottom)); }
+.form-intro { color: var(--mall-muted); font-size: 25rpx; margin-bottom: 24rpx; }
+.field label, .field-label { display: block; font-weight: 600; margin-bottom: 12rpx; }
+.field .required { display: inline; color: var(--mall-danger); margin: 0; }
+.field input { min-height: 76rpx; padding: 0 18rpx; border: 1rpx solid var(--mall-border); border-radius: 8rpx; }
+.field-placeholder { color: var(--mall-muted); }
+.field-help { margin-top: 12rpx; font-size: 23rpx; color: var(--mall-muted); }
+.field-error { margin-top: 12rpx; font-size: 24rpx; color: var(--mall-danger); }
+.region-value { display: flex; align-items: center; justify-content: space-between; gap: 20rpx; min-height: 76rpx; padding: 0 18rpx; border: 1rpx solid var(--mall-border); border-radius: 8rpx; line-height: 1.6; }
+.chevron { width: 12rpx; height: 12rpx; border-top: 2rpx solid var(--mall-muted); border-right: 2rpx solid var(--mall-muted); transform: rotate(45deg); flex: none; }
+.switch .field-label { margin: 0; }
+.footer button { min-height: 88rpx; font-size: 28rpx; }

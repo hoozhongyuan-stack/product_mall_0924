@@ -2,7 +2,7 @@
 <view class="home-page" style="background-color: {{theme.pageBackgroundColor}};">
   <view class="home-header" style="background-color: {{theme.headerBackgroundColor}}; color: {{theme.brandTextColor}};">
     <view class="brand">商城首页</view>
-    <view class="home-actions"><button class="catalog-entry" style="color: {{theme.brandTextColor}};" bindtap="browseCatalog">商品分类 ›</button><button class="catalog-entry" style="color: {{theme.brandTextColor}};" bindtap="openCart">购物车</button><button class="catalog-entry" style="color: {{theme.brandTextColor}};" bindtap="openOrders">我的订单</button><button class="catalog-entry" style="color: {{theme.brandTextColor}};" bindtap="openMember">会员中心</button></view>
+    <button class="catalog-entry" style="color: {{theme.brandTextColor}};" bindtap="browseCatalog">浏览分类</button>
   </view>
 
   <view wx:if="{{state === 'loading'}}" class="home-state" role="status">正在加载首页…</view>

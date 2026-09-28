@@ -7,6 +7,7 @@ from .models import Order
 from .service import order_data
 from fulfillment.read import page_fulfillment_summaries
 from fulfillment.models import ShipmentCorrection
+from fulfillment.task_reads import TASK_FIELDS, filter_order_tasks
 
 
 def review_status(order, reported):
@@ -14,6 +15,10 @@ def review_status(order, reported):
 
 
 def list_orders(params, member=None):
+    task = params.get('fulfillment', '')
+    if (task and task not in TASK_FIELDS) or (
+            hasattr(params, 'getlist') and len(params.getlist('fulfillment')) > 1):
+        raise PaymentError('履约待办筛选参数不正确。')
     try:
         page, size = int(params.get('page', '1')), int(params.get('pageSize', '20'))
     except ValueError:
@@ -46,6 +51,8 @@ def list_orders(params, member=None):
         raise PaymentError('订单号搜索不超过 40 字。')
     if search:
         rows = rows.filter(order_no__icontains=search.strip())
+    if task:
+        rows = filter_order_tasks(rows, task)
     total = rows.count()
     page_rows = list(rows.order_by('-created_at', '-id')[(page-1)*size:page*size])
     summaries = page_fulfillment_summaries(page_rows)

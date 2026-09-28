@@ -1,1 +1,24 @@
 @import "./member.wxss";
+.profile-hero { display: flex; align-items: center; gap: 20rpx; padding: 16rpx 0 36rpx; }
+.profile-avatar { width: 100rpx; height: 100rpx; flex: none; border-radius: 50%; background: var(--mall-brand-soft); display: flex; align-items: center; justify-content: center; }
+.profile-avatar image { width: 60rpx; height: 60rpx; }
+.profile-identity { flex: 1; min-width: 0; }
+.profile-identity .grade-name { font-size: 32rpx; color: var(--mall-text); margin: 0; }
+.profile-identity .muted { font-size: 23rpx; }
+.profile-page .profile-link { margin: 0; padding: 8rpx 0 8rpx 12rpx; flex: none; background: transparent; color: var(--mall-brand); min-height: 72rpx; font-size: 23rpx; }
+.profile-section-head { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.profile-section-head .section-title { margin: 0; }
+.profile-section-head .text-link { margin: 0; padding: 8rpx 0; background: #fff; color: var(--mall-muted); min-height: 64rpx; font-size: 24rpx; }
+.order-shortcuts, .quick-entries { display: flex; }
+.order-shortcuts button, .quick-entries button { flex: 1; min-width: 0; margin: 12rpx 0 0; padding: 16rpx 0; display: flex; flex-direction: column; align-items: center; gap: 12rpx; background: #fff; color: var(--mall-text); font-size: 23rpx; line-height: 1.4; }
+.shortcut-symbol { position: relative; height: 44rpx; }
+.shortcut-symbol image, .quick-entries image { width: 44rpx; height: 44rpx; }
+.count-badge { position: absolute; min-width: 28rpx; padding: 1rpx 5rpx; top: -14rpx; left: 30rpx; border: 1rpx solid var(--mall-brand); border-radius: 24rpx; color: var(--mall-brand); background: #fff; font-size: 19rpx; white-space: nowrap; }
+.quick-entries { padding: 14rpx 12rpx; }
+.quick-entries button { margin: 0; }
+.profile-page .service-entry { width: 100%; display: flex; align-items: center; gap: 16rpx; background: #fff; color: var(--mall-text); text-align: left; margin-top: 0; padding: 26rpx 24rpx; }
+.service-entry .muted { flex: 1; text-align: right; font-size: 23rpx; }
+.chevron { width: 12rpx; height: 12rpx; border-top: 2rpx solid var(--mall-muted); border-right: 2rpx solid var(--mall-muted); transform: rotate(45deg); }
+.benefits-section { margin-top: 32rpx; }
+.benefits-section .grade-name { font-size: 30rpx; }
+@media(max-width:320px) { .profile-avatar { width: 80rpx; height: 80rpx; } .profile-identity .grade-name { font-size: 29rpx; } .profile-hero { gap: 12rpx; } }

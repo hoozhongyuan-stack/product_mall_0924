@@ -1,1 +1,9 @@
 @import "orders.wxss";
+.filter-scroll { width: 100%; margin-bottom: 24rpx; white-space: nowrap; border-bottom: 1rpx solid var(--mall-border); }
+.filters { display: inline-flex; flex-wrap: nowrap; gap: 0; margin: 0; }
+.filters button { flex: none; min-width: 100rpx; min-height: 88rpx; padding: 20rpx 16rpx; background: transparent; color: var(--mall-muted); border-radius: 0; border-bottom: 3rpx solid transparent; }
+.filters .active { color: var(--mall-brand); background: transparent; border-bottom-color: var(--mall-brand); font-weight: 700; }
+.order-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; padding-bottom: 18rpx; margin-bottom: 18rpx; border-bottom: 1rpx solid var(--mall-border); }
+.order-number { min-width: 0; font-size: 24rpx; color: var(--mall-muted); overflow-wrap: anywhere; }
+.order-card-head .status-label { flex: none; font-size: 25rpx; }
+.order-summary .secondary { width: auto; margin-left: auto; min-height: 72rpx; padding: 14rpx 24rpx; font-size: 25rpx; }

@@ -1,4 +1,4 @@
-<view class="checkout-page">
+<view class="pilot-page checkout-page">
   <view wx:if="{{state === 'loading'}}" class="state" role="status">正在重新核对商品、运费和优惠…</view>
   <view wx:elif="{{state !== 'ready'}}" class="state" role="alert">
     <view>{{error}}</view>
@@ -18,19 +18,33 @@
     <view class="card"><view class="heading">商品清单</view>
       <view wx:for="{{lines}}" wx:key="skuId" class="line"><image wx:if="{{item.image && !failedImages[item.skuId]}}" src="{{item.image}}" mode="aspectFill" data-id="{{item.skuId}}" binderror="onImageError" /><view wx:else class="media-fallback">暂无图片</view><view class="line-body"><view class="strong">{{item.name}}</view><view class="muted">{{item.specLabel}} · {{item.saleUnit}} × {{item.quantity}} · {{item.fulfillmentKind === 'SHIP' ? '快递发货' : '到店核销'}}</view><view wx:if="{{item.fulfillmentKind === 'REDEEM'}}" class="validity-line">{{item.redeemValidUntil ? '有效期至 ' + item.redeemValidUntil : '核销有效期暂不可用，请刷新报价。'}}</view><view class="price">{{item.price}}　× {{item.quantity}}</view><view wx:if="{{item.status !== 'OK'}}" class="warning">当前状态：{{item.status}}，可售 {{item.availableQuantity}} 件</view><view wx:if="{{item.priceChanged}}" class="warning">价格已更新，请确认</view></view></view>
     </view>
-    <view class="card"><view class="heading">优惠与支付</view>
+    <view class="card"><view class="heading">优惠信息</view>
       <view class="row"><text>优惠券</text><picker wx:if="{{loggedIn && couponOptions.length > 1}}" class="picker" mode="selector" range="{{couponOptions}}" range-key="title" value="{{couponIndex}}" bindchange="selectCoupon"><view>{{couponLabel}} ›</view></picker><text wx:else class="muted">{{loggedIn ? couponLabel : '登录后查看'}}</text></view>
       <view class="row points-row"><view><view>积分抵扣</view><view class="muted">{{availablePointsLabel}}</view></view><view wx:if="{{loggedIn && quote.availablePoints >= 0}}" class="points-control"><input type="number" value="{{pointsInput}}" bindinput="onPointsInput" aria-label="使用积分数量" /><button bindtap="applyPoints">应用</button></view></view>
       <view wx:if="{{benefitError}}" class="field-error" role="alert">{{benefitError}}</view>
-      <view class="row"><text>支付方式</text><text wx:if="{{!paymentChoices.length}}">收款入口待开放</text></view>
-      <radio-group wx:if="{{paymentChoices.length}}" bindchange="selectPayment" aria-label="选择支付方式"><label wx:for="{{paymentChoices}}" wx:key="value" class="payment-choice"><radio value="{{item.value}}" checked="{{paymentMethod === item.value}}" color="#24583D" disabled="{{submitting}}" />{{item.label}}</label></radio-group>
+    </view>
+    <view class="card"><view class="heading">支付方式</view>
+      <view class="row"><text>选择支付方式</text><text wx:if="{{!paymentChoices.length}}">收款入口待开放</text></view>
+      <radio-group wx:if="{{paymentChoices.length}}" bindchange="selectPayment" aria-label="选择支付方式"><label wx:for="{{paymentChoices}}" wx:key="value" class="payment-choice"><radio value="{{item.value}}" checked="{{paymentMethod === item.value}}" color="#A3202B" disabled="{{submitting}}" />{{item.label}}</label></radio-group>
       <view class="muted">仅显示店铺当前可用的支付方式。提交后，请在订单详情中完成付款。</view>
       <view wx:if="{{paymentMethod === 'OFFLINE' && offlinePolicy && offlinePolicy.configured}}" class="payment-instructions"><view class="strong">店铺付款说明</view><text selectable>{{offlinePolicy.instructions}}</text><view class="muted">提交后按订单详情中的说明付款。报告付款后仍待平台核实。</view></view>
     </view>
     <view class="card amount-card"><view class="row"><text>商品金额</text><text>{{goodsTotal}}</text></view><view class="row"><text>运费</text><text>{{shippingFee}}</text></view><view class="row"><text>优惠券抵扣</text><text>{{couponDiscount}}</text></view><view class="row"><text>积分抵扣</text><text>{{pointsDiscount}}</text></view><view class="row payable-row"><text class="strong">应付金额</text><text class="price">{{total}}</text></view></view>
     <view wx:if="{{quoteWarning}}" class="notice warning-notice" role="alert">{{quoteWarning}}<button wx:if="{{quote.confirmRequired && quote.ready}}" bindtap="confirmChanges">确认新价格</button><button wx:elif="{{!quote.ready}}" bindtap="backToCart">返回购物车</button><button wx:else bindtap="refresh">重新获取报价</button></view>
-    <view class="notice">报价约在 {{expiresLabel}} 失效；报价不预留库存。{{canSubmit ? '提交时由服务端再次核对库存与金额。' : '当前不满足提交条件，请核对地址、价格与收款方式开放状态。'}}</view>
+    <view class="notice">报价约在 {{expiresLabel}} 失效；报价不预留库存。{{!loggedIn ? '登录后将重新核对价格、库存与优惠资格。' : canSubmit ? '提交时将再次核对库存与金额。' : '请核对地址、价格与收款方式开放状态。'}}</view>
     <view wx:if="{{submitError}}" class="field-error" role="alert">{{submitError}}</view>
-    <view class="footer"><view class="footer-total"><text class="muted">应付金额</text><view class="price">{{total}}</view></view><button bindtap="submitOrder" loading="{{submitting}}" disabled="{{!canSubmit || submitting}}">{{canSubmit ? (paymentMethod === 'WECHAT' ? '提交微信支付订单' : '提交线下支付订单') : '暂不可提交'}}</button></view>
+    <view class="footer"><view class="footer-total"><text class="muted">应付金额</text><view class="price">{{total}}</view></view><button bindtap="submitOrder" loading="{{submitting}}" disabled="{{(loggedIn && !canSubmit) || submitting}}">{{!loggedIn ? '登录后继续' : canSubmit ? (paymentMethod === 'WECHAT' ? '提交微信支付订单' : '提交线下支付订单') : '暂不可提交'}}</button></view>
   </block>
+  <view wx:if="{{loginPromptOpen}}" class="pilot-modal" role="dialog" aria-modal="true" aria-label="登录后继续提交订单">
+    <view class="pilot-dialog"><view class="dialog-title">登录后继续提交订单</view><view class="dialog-copy">登录成功后返回当前确认订单页，并重新核对价格、库存和优惠资格。</view><view class="dialog-actions"><button class="secondary-button" bindtap="dismissLoginPrompt">暂不登录</button><button class="primary-button" bindtap="loginToContinue">去登录</button></view></view>
+  </view>
+  <view wx:if="{{stockPromptOpen}}" class="pilot-modal" role="dialog" aria-modal="true" aria-label="库存刚刚发生变化">
+    <view class="pilot-dialog"><view class="dialog-title">库存刚刚发生变化</view><view class="dialog-copy">商品可售数量不足，整笔订单尚未创建，也未锁定部分库存。调整后将重新核对价格与优惠资格。</view>
+      <view wx:if="{{state === 'loading'}}" class="dialog-copy" role="status">正在重新核对可售数量…</view>
+      <view wx:for="{{stockLines}}" wx:key="skuId" class="stock-detail"><view class="strong">{{item.name}}</view><view class="row"><text>原购买数量</text><text>{{item.quantity}} {{item.saleUnit || '件'}}</text></view><view class="row"><text>当前可售数量</text><text>{{item.availableQuantity >= 0 ? item.availableQuantity : '待核对'}} {{item.saleUnit || '件'}}</text></view></view>
+      <view wx:if="{{state === 'error'}}" class="field-error">{{error}}</view>
+      <view wx:if="{{state === 'ready' && !stockLines.length}}" class="dialog-copy">已重新获取报价，请关闭提示并核对商品与金额后再提交。</view>
+      <view class="dialog-actions"><button class="secondary-button" bindtap="backToCart">返回购物车</button><button wx:if="{{stockAdjustable}}" class="primary-button" bindtap="adjustStock">调整后重新报价</button><button wx:elif="{{state === 'error'}}" class="primary-button" bindtap="loadStockChange">重新核对</button><button wx:else class="primary-button" bindtap="dismissStockPrompt" disabled="{{state === 'loading'}}">查看商品</button></view>
+    </view>
+  </view>
 </view>

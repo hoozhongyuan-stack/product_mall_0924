@@ -14,6 +14,8 @@ const page = ref(1)
 const status = ref('')
 const method = ref('')
 const review = ref('')
+const fulfillment = ref('')
+const search = ref('')
 const canShip = computed(() => props.account.permissionCodes.includes('fulfillment.ship'))
 const carriers = ref<Carrier[]>([])
 const carriersLoading = ref(false)
@@ -43,11 +45,14 @@ async function load(reset = false) {
     if (status.value) query.set('status', status.value)
     if (method.value) query.set('paymentMethod', method.value)
     if (review.value) query.set('reported', review.value)
+    if (fulfillment.value) query.set('fulfillment', fulfillment.value)
+    if (search.value.trim()) query.set('search', search.value.trim())
     const result = await api<OrderList>(`/orders?${query}`)
     if (request === generation) { data.value = result; selected.value = []; bulkOpen.value = false }
   } catch (reason) { if (request === generation) { data.value = null; error.value = reason instanceof Error ? reason.message : '订单读取失败，请重试。' } }
   finally { if (request === generation) loading.value = false }
 }
+function resetFilters() { status.value = ''; method.value = ''; review.value = ''; fulfillment.value = ''; search.value = ''; void load(true) }
 function changePage(delta: number) { page.value += delta; void load() }
 function selectOrder(id: string, checked: boolean) { selected.value = checked ? [...selected.value, id] : selected.value.filter(value => value !== id) }
 function selectCurrentPage(checked: boolean) { selected.value = checked ? eligible.value.map(order => order.orderId) : [] }
@@ -82,11 +87,14 @@ onMounted(() => { void load(); void loadCarriers() })
 <template>
   <section class="page-content orders-page">
     <header class="page-heading"><div><h1>订单管理</h1><p>查看收款与履约进度；批量发货仅处理当前页已选订单，逐单显示结果。</p></div><div class="fulfillment-actions"><RouterLink v-if="account.permissionCodes.includes('aftersale.read')" to="/aftersales" class="secondary-button">售后管理</RouterLink><RouterLink v-if="account.permissionCodes.includes('fulfillment.redeem')" to="/redemptions" class="secondary-button">到店核销</RouterLink><RouterLink v-if="account.permissionCodes.includes('fulfillment.settings.manage')" to="/fulfillment/settings" class="secondary-button">履约设置</RouterLink><button class="secondary-button" :disabled="loading" @click="load()">刷新订单</button></div></header>
-    <form class="order-filters" @submit.prevent="load(true)">
+    <form class="order-filters" aria-label="筛选订单" @submit.prevent="load(true)">
+      <label>订单号<input v-model="search" type="search" placeholder="搜索订单号" /></label>
+      <label>履约待办<select v-model="fulfillment" aria-label="履约待办"><option value="">全部待办</option><option value="WAITING_SHIPMENT">待发货</option><option value="IN_TRANSIT">待收货</option><option value="WAITING_REDEMPTION">待核销</option><option value="AFTER_SALE">售后中</option></select></label>
       <label>订单状态<select v-model="status"><option value="">全部状态</option><option value="PENDING_PAYMENT">待付款</option><option value="PAID">已结算（付款 / 扣积分）</option><option value="CLOSED">已关闭</option></select></label>
       <label>结算方式<select v-model="method"><option value="">全部方式</option><option value="OFFLINE">线下支付</option><option value="WECHAT">微信支付</option><option value="POINTS">纯积分兑换</option></select></label>
       <label>核实状态<select v-model="review"><option value="">全部</option><option value="true">用户已报告付款</option><option value="false">未报告付款</option></select></label>
       <button class="primary-button" type="submit" :disabled="loading">查询订单</button>
+      <button class="secondary-button" type="button" :disabled="loading" @click="resetFilters">重置</button>
     </form>
     <p v-if="loading" role="status" class="loading-inline">正在读取订单…</p>
     <div v-else-if="error" class="notice" role="alert">{{ error }} <button class="text-button" @click="load()">重新加载</button></div>

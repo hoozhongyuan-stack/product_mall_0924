@@ -8,8 +8,8 @@
   <view wx:elif="{{state === 'empty'}}" class="state">当前分类暂无优惠券。可切换分类或前往领券。</view>
   <block wx:else>
     <view wx:for="{{rows}}" wx:key="id" class="section coupon">
-      <view class="coupon-head"><text class="coupon-value">{{item.amountLabel}}</text><text class="status-label">{{item.statusLabel}}</text></view>
-      <view class="section-title">{{item.title}}</view><view>{{item.thresholdLabel}}</view><view class="muted">{{item.scopeLabel}} · {{item.redemptionLabel}}</view><view class="muted valid-copy">{{item.validLabel}}</view>
+      <view class="coupon-head"><view><text class="coupon-value">{{item.amountLabel}}</text><view class="muted">{{item.thresholdLabel}}</view></view><text class="status-label">{{item.statusLabel}}</text></view>
+      <view class="section-title">{{item.title}}</view><view class="muted">{{item.scopeLabel}} · {{item.redemptionLabel}}</view><view class="muted valid-copy">{{item.validLabel}}</view>
       <view wx:if="{{item.productNames.length}}" class="products"><view class="muted">适用商品</view><button wx:for="{{item.productNames}}" wx:for-item="product" wx:key="id" class="product-link" data-row="{{item.id}}" data-id="{{product.id}}" bindtap="openProduct">{{product.name}}</button></view>
       <view class="muted valid-copy">{{item.statusCopy}}</view>
       <button wx:if="{{item.orderId}}" class="secondary" data-id="{{item.id}}" bindtap="openOrder">查看关联订单</button>

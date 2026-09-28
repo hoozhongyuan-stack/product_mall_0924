@@ -1,4 +1,4 @@
-<view class="detail-page">
+<view class="pilot-page detail-page">
   <view wx:if="{{state === 'loading'}}" class="detail-state" role="status">正在加载商品…</view>
   <view wx:elif="{{state === 'error'}}" class="detail-state" role="alert">
     <view class="state-title">商品加载失败</view><view class="state-copy">{{error}}</view>
@@ -22,22 +22,13 @@
     <view class="media-count">{{mediaIndex + 1}} / {{product.images.length + (product.videoUrl ? 1 : 0)}}{{product.videoUrl ? ' · 含视频' : ''}}</view>
 
     <view class="detail-main">
-      <view class="price-line"><text class="main-price">{{selectedPrice}}</text><text class="kind-tag">{{product.fulfillment}}</text></view>
       <view class="product-name">{{product.name}}</view>
+      <view class="price-line"><text class="main-price">{{selectedPrice}}</text><button class="share-link" open-type="share" aria-label="分享商品"><image src="/assets/nav/share.svg" mode="aspectFit" />分享</button></view>
+      <view class="stock-line"><text class="member-note">会员适用价以登录后的等级为准</text><text class="kind-tag">{{product.fulfillment}}</text></view>
       <view class="availability">{{product.availability}}</view>
       <view wx:if="{{product.fulfillmentKind === 'REDEEM'}}" class="validity-note" role="status">{{product.redeemValidUntil ? '到店核销有效期至 ' + product.redeemValidUntil : '核销有效期暂不可用，请稍后重试。'}}</view>
     </view>
-
-    <view class="detail-section">
-      <view class="section-heading">选择规格</view>
-      <view class="section-note">选择规格后可加入购物车；价格与库存以服务端报价为准。</view>
-      <view class="sku-options">
-        <button wx:for="{{product.skus}}" wx:key="id" class="sku-option {{selectedSkuId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="chooseSku">
-          <view class="sku-label">{{item.label}}</view><view class="sku-price">{{item.price}} / {{item.unit}} · 可售 {{item.availableQuantity}}</view>
-        </button>
-      </view>
-      <view class="quantity-row"><text>购买数量（可售 {{selectedAvailable}}）</text><view class="quantity-stepper"><button data-step="-1" bindtap="changeQuantity" disabled="{{quantity <= 1}}">−</button><text>{{quantity}}</text><button data-step="1" bindtap="changeQuantity" disabled="{{quantity >= selectedAvailable}}">＋</button></view></view>
-    </view>
+    <button class="spec-entry" bindtap="openSkuDrawer" aria-label="选择规格和数量"><text class="section-heading">选择规格</text><text class="selection-summary">{{selectedLabel ? selectedLabel + ' · ' + quantity + selectedUnit : '请选择规格和数量'}}</text><view class="chevron" aria-hidden="true"></view></button>
 
     <view class="detail-section description-section">
       <view class="section-heading">商品详情</view>
@@ -45,7 +36,28 @@
       <view wx:else class="section-note">暂无商品说明。</view>
     </view>
     <view class="bottom-spacer"></view>
-    <view class="purchase-bar"><button class="cart-link" bindtap="openCart">购物车</button><button class="cart-add" bindtap="addToCart" disabled="{{!selectedEligible}}">加入购物车</button><button bindtap="buyNow" disabled="{{!selectedEligible}}">直接购买</button></view>
+    <view class="purchase-bar"><button class="cart-link" bindtap="openCart" aria-label="购物车，当前 {{cartCount}} 件"><view class="cart-icon"><image src="/assets/nav/cart.svg" mode="aspectFit" /><text wx:if="{{cartCount}}" class="cart-count">{{cartCount > 99 ? '99+' : cartCount}}</text></view><text>购物车</text></button><button class="cart-add" bindtap="addToCart">加入购物车</button><button class="buy-button" bindtap="buyNow">直接购买</button></view>
+    <view wx:if="{{drawerOpen}}" class="sku-backdrop" bindtap="closeSkuDrawer" catchtouchmove="stopPropagation">
+      <view class="sku-sheet" role="dialog" aria-modal="true" aria-label="选择规格和数量" catchtap="stopPropagation">
+        <view class="sku-handle" aria-hidden="true"></view>
+        <view class="sku-intro">
+          <image wx:if="{{product.images.length && !failedImages[0]}}" class="sku-thumb" src="{{product.images[0]}}" mode="aspectFill" data-index="0" binderror="onImageError" />
+          <view wx:else class="sku-thumb media-fallback">暂无图片</view>
+          <view class="sku-summary"><view class="main-price">{{selectedPrice}}</view><view class="section-note">{{selectedLabel || '请选择规格'}} · 可售 {{selectedAvailable}} {{selectedUnit}}</view></view>
+          <button class="close-sheet" bindtap="closeSkuDrawer" aria-label="关闭规格选择"><view class="close-mark" aria-hidden="true"></view></button>
+        </view>
+        <scroll-view scroll-y class="sku-scroll">
+          <view class="section-heading">选择规格</view>
+          <view class="sku-options">
+            <button wx:for="{{product.skus}}" wx:key="id" class="sku-option {{selectedSkuId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="chooseSku" disabled="{{!item.cartEligible || item.availableQuantity <= 0}}" aria-label="{{item.label + (item.cartEligible ? '' : '，暂不可售')}}" aria-pressed="{{selectedSkuId === item.id}}">{{item.label}}<text wx:if="{{!item.cartEligible || item.availableQuantity <= 0}}"> · 暂无库存</text></button>
+          </view>
+          <view class="quantity-row"><text>购买数量</text><view class="quantity-stepper"><button data-step="-1" bindtap="changeQuantity" disabled="{{quantity <= 1}}" aria-label="减少购买数量">−</button><text>{{quantity}}</text><button data-step="1" bindtap="changeQuantity" disabled="{{quantity >= selectedAvailable || quantity >= 9999}}" aria-label="增加购买数量">＋</button></view></view>
+          <view wx:if="{{drawerError}}" class="drawer-error" role="alert">{{drawerError}}</view>
+          <view class="section-note">价格与库存以结算时的核对结果为准。</view>
+        </scroll-view>
+        <view class="sku-actions"><button class="cart-add" bindtap="confirmAddToCart" disabled="{{!selectedEligible || quantity > selectedAvailable}}">{{replacingCartItem ? '确认更换规格' : '加入购物车'}}</button><button wx:if="{{!replacingCartItem}}" class="buy-button" bindtap="confirmBuyNow" disabled="{{!selectedEligible || quantity > selectedAvailable}}">直接购买</button></view>
+      </view>
+    </view>
   </block>
+  <storefront-shell show-service="{{!drawerOpen}}" product-detail="{{true}}" />
 </view>
-<storefront-shell show-service="{{true}}" product-detail="{{true}}" />

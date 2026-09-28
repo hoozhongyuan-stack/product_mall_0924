@@ -130,7 +130,10 @@ def app_overview_view(request):
     if bad:return bad
     if request.GET:return error(request,400,'VALIDATION_FAILED','查询参数不正确。')
     rules=rules_data()
-    return response(request,{**member_rows([row])[0],'ruleRevision':rules['revision'],'rules':rules})
+    from fulfillment.task_reads import order_task_counts
+    from orders.models import Order
+    return response(request,{**member_rows([row])[0],'ruleRevision':rules['revision'],'rules':rules,
+        'orderCounts':order_task_counts(Order.objects.filter(member=row))})
 
 
 @cache_control(private=True, no_store=True)

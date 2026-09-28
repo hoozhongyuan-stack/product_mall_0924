@@ -2,5 +2,7 @@
   "navigationBarTitleText": "购物车",
   "usingComponents": {
     "storefront-shell": "/components/storefront-shell/index"
-  }
+  },
+  "navigationBarBackgroundColor": "#FFFFFF",
+  "navigationBarTextStyle": "black"
 }

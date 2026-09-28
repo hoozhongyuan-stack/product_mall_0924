@@ -9,7 +9,7 @@
 .micro-create input:focus-visible,.micro-editor-actions input:focus-visible{outline:2px solid var(--mall-color-focus);outline-offset:2px}
 .micro-page-rows{display:grid;gap:8px}
 .micro-page-row{display:grid;grid-template-columns:minmax(140px,1fr) auto auto;align-items:center;gap:12px;width:100%;padding:13px 15px;text-align:left;background:var(--mall-color-surface);border:1px solid var(--mall-color-border);border-radius:10px;color:var(--mall-color-text)}
-.micro-page-row:hover,.micro-page-row.selected{border-color:#84ad88;background:#f4faf3}
+.micro-page-row:hover,.micro-page-row.selected{border-color:var(--mall-color-brand);background:var(--mall-color-brand-soft)}
 .micro-page-row strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
 .micro-page-row span{font-size:12px}
 .micro-page-row:focus-visible{outline:3px solid var(--mall-color-focus);outline-offset:2px}

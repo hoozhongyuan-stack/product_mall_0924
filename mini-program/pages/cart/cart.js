@@ -3,12 +3,14 @@ const cart = require('../../lib/cart')
 const { money } = require('../../lib/catalog')
 
 Page({
-  data: { rows: [], state: 'loading', error: '', quote: null, total: '¥0', failedImages: {} },
+  data: { rows: [], state: 'loading', error: '', quote: null, total: '¥0', allSelected: false, selectedCount: 0, managing: false, failedImages: {} },
   onShow() { return this.refresh() },
   async refresh() {
     const token = this.refreshToken = (this.refreshToken || 0) + 1
     const rows = cart.read()
-    this.setData({ rows, state: rows.length ? 'loading' : 'empty', error: '', quote: null })
+    this.setData({ allSelected: rows.length > 0 && rows.every((row) => row.selected !== false),
+      selectedCount: rows.filter((row) => row.selected !== false).reduce((total, row) => total + row.quantity, 0),
+      rows: rows.map((row) => ({ ...row, price: Number.isSafeInteger(row.seenPriceFen) ? money(row.seenPriceFen) : '待核价', priceCached: true })), state: rows.length ? 'loading' : 'empty', error: '', quote: null })
     if (!rows.length) return
     const selected = cart.selected()
     if (!selected.length) { this.setData({ state: 'ready', total: '¥0' }); return }
@@ -18,11 +20,21 @@ Page({
       const lines = new Map(quote.lines.map((line) => [line.skuId, line]))
       this.setData({ state: 'ready', quote, total: money(quote.goodsTotalFen),
         rows: rows.map((row) => ({ ...row, live: lines.get(row.skuId) || null,
+          previousPrice: Number.isSafeInteger(row.seenPriceFen) ? money(row.seenPriceFen) : '',
+          fulfillmentLabel: lines.has(row.skuId) ? (lines.get(row.skuId).fulfillmentKind === 'REDEEM' ? '到店核销' : '快递发货') : '',
+          canReselect: /^[0-9a-fA-F-]{36}$/.test((lines.get(row.skuId) || {}).productId || ''),
           price: lines.has(row.skuId) ? lines.get(row.skuId).status === 'NOT_FOUND' ? '已失效' :
             money(lines.get(row.skuId).unitPriceFen) :
             Number.isSafeInteger(row.seenPriceFen) ? money(row.seenPriceFen) : '待核价',
           priceCached: !lines.has(row.skuId) })) })
     } catch (error) { if (token === this.refreshToken) this.setData({ state: 'ready', error: error.message, total: '¥0' }) }
+  },
+  toggleManaging() { this.setData({ managing: !this.data.managing }) },
+  reselectSku(event) {
+    const row = this.data.rows.find((item) => item.skuId === event.currentTarget.dataset.id)
+    const id = row && row.live && row.live.productId
+    if (!id || !/^[0-9a-fA-F-]{36}$/.test(id)) return
+    wx.navigateTo({ url: `/pages/product/detail?productId=${encodeURIComponent(id)}&selectSku=1&replaceSkuId=${encodeURIComponent(row.skuId)}` })
   },
   toggle(event) { cart.update(event.currentTarget.dataset.id, { selected: Boolean(event.detail.value.length) }); return this.refresh() },
   toggleAll() {
