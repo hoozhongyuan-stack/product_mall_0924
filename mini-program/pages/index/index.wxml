@@ -57,3 +57,4 @@
     </view>
   </block>
 </view>
+<storefront-shell show-navigation="{{true}}" show-service="{{true}}" />

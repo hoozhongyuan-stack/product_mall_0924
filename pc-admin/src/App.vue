@@ -122,6 +122,8 @@ async function signOut() {
         <RouterLink v-if="account.permissionCodes.includes('page.read')" to="/pages/home" class="nav-item">首页装修</RouterLink>
         <RouterLink v-if="account.permissionCodes.includes('page.read')" to="/pages/micro" class="nav-item">独立微页面</RouterLink>
         <RouterLink v-if="account.permissionCodes.includes('startup.read')" to="/store/info" class="nav-item">店铺信息</RouterLink>
+        <RouterLink v-if="account.permissionCodes.includes('navigation.read')" to="/store/navigation" class="nav-item">底部导航</RouterLink>
+        <RouterLink v-if="account.permissionCodes.includes('customer_service.read')" to="/store/customer-service" class="nav-item">客服悬浮入口</RouterLink>
       </nav>
     </aside>
     <div class="workspace">

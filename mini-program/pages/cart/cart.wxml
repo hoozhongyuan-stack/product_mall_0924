@@ -19,3 +19,4 @@
     <view class="footer"><button class="all" bindtap="toggleAll">全选 / 取消</button><view>合计 <text class="price">{{total}}</text></view><button class="primary" bindtap="checkout" disabled="{{!quote || !quote.ready || quote.confirmRequired}}">去结算</button></view>
   </block>
 </view>
+<storefront-shell show-navigation="{{true}}" />

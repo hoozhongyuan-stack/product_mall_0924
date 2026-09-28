@@ -13,7 +13,9 @@ from .models import Asset, Category, Product, Sku
 from .presentation import asset_data
 from .validation import CatalogError
 from pages.media_access import (asset_is_available_to_page_reader,
-                                asset_is_in_current_visible_publication)
+                                asset_is_in_current_visible_publication,
+                                storefront_readable_domains,
+                                asset_is_in_current_storefront_publication)
 from pages.startup_media_access import (asset_is_available_to_startup_reader,
                                         asset_is_in_current_startup_publication)
 
@@ -106,10 +108,12 @@ def admin_asset_file_view(request, asset_id):
     if "asset.read" not in granted:
         page_reference = "page.read" in granted and asset_is_available_to_page_reader(asset_id)
         startup_reference = "startup.read" in granted and asset_is_available_to_startup_reader(asset_id)
+        storefront_reference = any(f"{domain}.read" in granted for domain in
+                                   storefront_readable_domains(asset_id))
         own_unbound_upload = "asset.upload" in granted and (
             orphan_assets().filter(id=asset_id, created_by=actor).exists()
         )
-        if not page_reference and not startup_reference and not own_unbound_upload:
+        if not page_reference and not startup_reference and not storefront_reference and not own_unbound_upload:
             audit(request, "permission.denied", "asset", asset_id, actor, result="DENIED")
             return error(request, 403, "PERMISSION_DENIED", "当前账号没有此素材读取权限。")
     asset = Asset.objects.filter(id=asset_id).first()
@@ -130,9 +134,10 @@ def public_asset_file_view(request, asset_id):
              Q(gallery_images__asset_id=asset_id)).exists()
     published_page = asset_is_in_current_visible_publication(asset_id)
     published_startup = asset_is_in_current_startup_publication(asset_id)
+    published_storefront = asset_is_in_current_storefront_publication(asset_id)
     from points_exchange.media_access import asset_visible_for_exchange
     exchange=asset_visible_for_exchange(asset_id)
-    if not product and not published_page and not published_startup and not exchange:
+    if not product and not published_page and not published_startup and not published_storefront and not exchange:
         return error(request, 404, "NOT_FOUND", "素材不可用。")
     asset = Asset.objects.filter(id=asset_id).first()
     return file_response(request, asset, public=True) if asset else error(request, 404, "NOT_FOUND", "素材不可用。")

@@ -1,0 +1,21 @@
+<view wx:if="{{showNavigation}}" class="navigation-spacer" aria-hidden="true"></view>
+<view wx:if="{{showNavigation}}" class="navigation" role="navigation" aria-label="商城底部导航">
+  <button wx:for="{{items}}" wx:key="key" class="navigation-item {{activeKey === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="changeTab" aria-label="{{item.label}}" aria-current="{{activeKey === item.key ? 'page' : 'false'}}">
+    <image wx:if="{{!failedNavIcons[item.key]}}" class="navigation-icon" src="{{activeKey === item.key ? item.selectedIconUrl : item.iconUrl}}" mode="aspectFit" data-key="{{item.key}}" binderror="onNavIconError" />
+    <text wx:else class="navigation-icon-fallback" aria-hidden="true">{{item.label}}</text>
+    <text class="navigation-label">{{item.label}}</text>
+  </button>
+</view>
+<button wx:if="{{showService && service}}" class="service-float {{productDetail ? 'above-purchase' : ''}} {{showNavigation ? 'above-navigation' : ''}}" bindtap="openService" aria-label="{{service.prompt}}">
+  <image wx:if="{{!serviceIconFailed}}" src="{{service.iconUrl}}" class="service-icon" mode="aspectFit" binderror="onServiceIconError" />
+  <text wx:else class="service-fallback" aria-hidden="true">客服</text>
+  <text class="service-caption">{{service.prompt}}</text>
+</button>
+<view wx:if="{{qrOpen && service && service.mode === 'QR'}}" class="qr-backdrop" role="dialog" aria-label="客服二维码">
+  <view class="qr-panel">
+    <view class="qr-title">联系客服</view>
+    <image wx:if="{{!qrFailed}}" class="qr-image" src="{{service.qrUrl}}" mode="aspectFit" binderror="onQrError" />
+    <view wx:else class="qr-error" role="alert">二维码暂不可显示，请稍后再试。</view>
+    <button class="qr-close" bindtap="closeQr">关闭</button>
+  </view>
+</view>

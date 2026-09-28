@@ -18,6 +18,8 @@ PERMISSION_CODES = frozenset({
     "catalog.read", "catalog.write", "sku.status.write", "sku.unit.write", "sku.price.write",
     "asset.read", "asset.upload", "asset.delete", "page.read", "page.edit", "page.publish",
     "startup.read", "startup.edit", "startup.publish", "account.read", "account.manage",
+    "navigation.read", "navigation.edit", "navigation.publish",
+    "customer_service.read", "customer_service.edit", "customer_service.publish",
     "account.reset_credentials", "account.unlock", "permission.read", "permission.manage", "audit.read",
     "inventory.read", "inventory.manage", "inventory.review",
     "settlement.shipping.manage", "order.read", "payment.settings.manage", "payment.offline.confirm",

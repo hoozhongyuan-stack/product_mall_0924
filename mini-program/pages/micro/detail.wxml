@@ -31,3 +31,4 @@
     <template is="published-content" data="{{components: components, keyword: keyword, failedAssets: failedAssets}}" />
   </block>
 </view>
+<storefront-shell show-service="{{true}}" />

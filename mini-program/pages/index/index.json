@@ -1,5 +1,4 @@
 {
-  "navigationBarTitleText": "商品详情",
   "usingComponents": {
     "storefront-shell": "/components/storefront-shell/index"
   }

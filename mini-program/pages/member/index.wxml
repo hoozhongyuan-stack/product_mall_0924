@@ -12,3 +12,4 @@
     <button class="secondary" bindtap="openOrders">查看我的订单</button>
   </block>
 </view>
+<storefront-shell show-navigation="{{true}}" show-service="{{true}}" />

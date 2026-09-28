@@ -136,6 +136,9 @@ def confirm_view(request):
                 "group.create": "permission.manage", "group.update": "permission.manage",
                 "page.publish": "page.publish", "startup.publish": "startup.publish",
                 "page.rollback": "page.publish", "startup.rollback": "startup.publish",
+                "navigation.publish": "navigation.publish", "navigation.rollback": "navigation.publish",
+                "customer_service.publish": "customer_service.publish",
+                "customer_service.rollback": "customer_service.publish",
                 "payment.offline.confirm": "payment.offline.confirm",
                 "aftersale.review": "aftersale.review", "aftersale.return.accept": "aftersale.return.accept", "refund.offline.confirm": "refund.offline.confirm",
                 "refund.wechat.dispatch": "refund.prepare",
@@ -145,7 +148,9 @@ def confirm_view(request):
                 "exchange.publish": "exchange.publish"}
     if not isinstance(action, str) or action not in required or required[action] not in permissions(account):
         return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
-    read_permission = {"page.rollback": "page.read", "startup.rollback": "startup.read"}.get(action)
+    read_permission = {"page.rollback": "page.read", "startup.rollback": "startup.read",
+                       "navigation.rollback": "navigation.read",
+                       "customer_service.rollback": "customer_service.read"}.get(action)
     if read_permission and read_permission not in permissions(account):
         return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
     with transaction.atomic():

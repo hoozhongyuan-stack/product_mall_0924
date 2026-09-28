@@ -79,7 +79,9 @@ def references_page(request, asset_id, granted):
     total = query.count()
     items = []
     for row in query[(page - 1) * size:page * size]:
-        allowed = {"CATALOG": "catalog.read", "PAGE": "page.read", "STARTUP": "startup.read"}[row["domain"]] in granted
+        permission = {"CATALOG": "catalog.read", "PAGE": "page.read", "STARTUP": "startup.read",
+                      "NAVIGATION": "navigation.read", "CUSTOMER_SERVICE": "customer_service.read"}[row["domain"]]
+        allowed = permission in granted
         items.append({"domain": row["domain"], "objectId": row["object_id"] if allowed else None,
             "label": row["label"] if allowed else "引用受权限保护", "role": row["role"],
             "version": row["ref_version"], "state": row["state"]})

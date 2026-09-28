@@ -1,10 +1,10 @@
-from django.urls import path
+from django.urls import path, re_path
 
 from accounts import views
 from catalog import views as catalog_views
 from catalog import media_views
 from pages import views as page_views
-from pages import startup_views, history
+from pages import startup_views, history, storefront_views
 from inventory import views as inventory_views
 from checkout import views as checkout_views
 from customers import views as customer_views
@@ -24,6 +24,21 @@ from benefits import coupon_views
 from points_exchange import views as exchange_views
 
 urlpatterns = [
+    re_path(r"^api/v1/admin/(?P<segment>navigation|customer-service)/draft$", storefront_views.admin_view,
+         {"operation": "draft"}),
+    re_path(r"^api/v1/admin/(?P<segment>navigation|customer-service)/preview$", storefront_views.admin_view,
+         {"operation": "preview"}),
+    re_path(r"^api/v1/admin/(?P<segment>navigation|customer-service)/publish$", storefront_views.admin_view,
+         {"operation": "publish"}),
+    re_path(r"^api/v1/admin/(?P<segment>navigation|customer-service)/versions$", storefront_views.admin_view,
+         {"operation": "versions"}),
+    re_path(r"^api/v1/admin/(?P<segment>navigation|customer-service)/versions/"
+            r"(?P<version_id>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+         storefront_views.admin_view,
+         {"operation": "versions"}),
+    re_path(r"^api/v1/admin/(?P<segment>navigation|customer-service)/rollback$", storefront_views.admin_view,
+         {"operation": "rollback"}),
+    path("api/v1/app/storefront", storefront_views.public_view),
     path("api/v1/admin/exchange-offers", exchange_views.offers_view),
     path("api/v1/admin/exchange-offers/<uuid:offer_id>", exchange_views.offer_detail_view),
     path("api/v1/admin/exchange-offers/<uuid:offer_id>/availability", exchange_views.offer_availability_view),

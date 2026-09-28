@@ -1,0 +1,20 @@
+.navigation-spacer { height: calc(112rpx + env(safe-area-inset-bottom)); }
+.navigation { position: fixed; z-index: 8; left: 0; right: 0; bottom: 0; height: 112rpx; padding-bottom: env(safe-area-inset-bottom); display: flex; background: #fff; box-shadow: 0 -3rpx 16rpx rgba(20, 44, 26, .12); }
+.navigation-item { flex: 1; min-width: 0; height: 112rpx; margin: 0; padding: 8rpx 0 5rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3rpx; color: #607466; background: #fff; border-radius: 0; line-height: 1.2; }
+.navigation-item::after, .service-float::after, .qr-close::after { border: 0; }
+.navigation-item.active { color: #24583d; font-weight: 700; }
+.navigation-icon { width: 42rpx; height: 42rpx; }
+.navigation-icon-fallback { min-width: 42rpx; height: 42rpx; line-height: 42rpx; font-size: 20rpx; }
+.navigation-label { font-size: 21rpx; }
+.service-float { position: fixed; z-index: 7; right: 24rpx; bottom: calc(35rpx + env(safe-area-inset-bottom)); min-width: 104rpx; height: 104rpx; padding: 10rpx; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2rpx; background: #24583d; color: #fff; border-radius: 16rpx; box-shadow: 0 8rpx 22rpx rgba(18, 54, 29, .25); }
+.service-float.above-navigation { bottom: calc(145rpx + env(safe-area-inset-bottom)); }
+.service-float.above-purchase { bottom: calc(145rpx + env(safe-area-inset-bottom)); }
+.service-icon { width: 38rpx; height: 38rpx; }
+.service-fallback { font-size: 24rpx; line-height: 38rpx; }
+.service-caption { max-width: 130rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 20rpx; line-height: 1.3; }
+.qr-backdrop { position: fixed; z-index: 20; inset: 0; display: flex; align-items: center; justify-content: center; padding: 40rpx; background: rgba(13, 28, 18, .68); }
+.qr-panel { width: 100%; max-width: 590rpx; padding: 38rpx; box-sizing: border-box; background: #fff; color: #243329; border-radius: 16rpx; text-align: center; }
+.qr-title { font-size: 34rpx; font-weight: 700; }
+.qr-image { display: block; width: 470rpx; max-width: 100%; height: 470rpx; margin: 24rpx auto; }
+.qr-error { padding: 80rpx 0; color: #b42318; font-size: 26rpx; }
+.qr-close { width: 100%; margin: 14rpx 0 0; background: #24583d; color: #fff; border-radius: 10rpx; font-size: 27rpx; }

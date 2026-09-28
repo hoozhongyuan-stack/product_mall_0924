@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "专题页面"
+  "navigationBarTitleText": "专题页面",
+  "usingComponents": {
+    "storefront-shell": "/components/storefront-shell/index"
+  }
 }

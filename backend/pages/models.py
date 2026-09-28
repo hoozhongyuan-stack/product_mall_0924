@@ -149,3 +149,76 @@ class ContentRollbackRequest(models.Model):
         db_table = "content_rollback_request"
         constraints = [models.UniqueConstraint(fields=["actor", "domain", "object_id", "key"],
                                                name="unique_content_rollback_key")]
+
+
+class StorefrontConfig(models.Model):
+    domain = models.CharField(max_length=16, primary_key=True)
+    draft_revision = models.PositiveIntegerField(default=1)
+    draft_config = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "storefront_config"
+        constraints = [models.CheckConstraint(
+            condition=Q(domain__in=["navigation", "customer_service"]),
+            name="known_storefront_domain")]
+
+
+class StorefrontVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    config = models.ForeignKey(StorefrontConfig, on_delete=models.PROTECT, related_name="versions")
+    revision = models.PositiveIntegerField()
+    config_json = models.JSONField()
+    published_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    published_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "storefront_version"
+        constraints = [models.UniqueConstraint(fields=["config", "revision"], name="unique_storefront_revision")]
+
+
+class StorefrontPublication(models.Model):
+    config = models.OneToOneField(StorefrontConfig, on_delete=models.PROTECT, primary_key=True)
+    current_version = models.ForeignKey(StorefrontVersion, null=True, on_delete=models.PROTECT)
+    revision = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "storefront_publication"
+
+
+class StorefrontDraftAsset(models.Model):
+    config = models.ForeignKey(StorefrontConfig, on_delete=models.PROTECT)
+    asset = models.ForeignKey("catalog.Asset", on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = "storefront_draft_asset"
+        constraints = [models.UniqueConstraint(fields=["config", "asset"], name="unique_storefront_draft_asset")]
+
+
+class StorefrontVersionAsset(models.Model):
+    version = models.ForeignKey(StorefrontVersion, on_delete=models.PROTECT)
+    asset = models.ForeignKey("catalog.Asset", on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = "storefront_version_asset"
+        constraints = [models.UniqueConstraint(fields=["version", "asset"], name="unique_storefront_version_asset")]
+
+
+class StorefrontOperation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    config = models.ForeignKey(StorefrontConfig, on_delete=models.PROTECT)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    action = models.CharField(max_length=8)
+    key = models.CharField(max_length=128)
+    request_digest = models.CharField(max_length=64)
+    result = models.JSONField()
+    version = models.ForeignKey(StorefrontVersion, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "storefront_operation"
+        constraints = [models.UniqueConstraint(fields=["config", "actor", "action", "key"],
+                                                name="unique_storefront_operation_key"),
+                       models.CheckConstraint(condition=Q(action__in=["publish", "rollback"]),
+                                              name="known_storefront_action")]

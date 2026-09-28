@@ -1,1 +1,6 @@
-{"navigationBarTitleText":"会员中心"}
+{
+  "navigationBarTitleText": "会员中心",
+  "usingComponents": {
+    "storefront-shell": "/components/storefront-shell/index"
+  }
+}

@@ -2,7 +2,8 @@
 from django.db.models import Case, CharField, F, IntegerField, Value, When
 from django.db.models.functions import Cast
 
-from .models import PageDraftAsset, PageVersionAsset, StartupConfig, StartupConfigVersion
+from .models import (PageDraftAsset, PageVersionAsset, StartupConfig, StartupConfigVersion,
+                     StorefrontDraftAsset, StorefrontVersionAsset)
 
 
 FIELDS = ("domain", "object_id", "label", "role", "ref_version", "state")
@@ -24,7 +25,9 @@ def retained_asset_id_queries():
             StartupConfig.objects.filter(gif_asset__isnull=False).values("gif_asset_id"),
             StartupConfig.objects.filter(fallback_asset__isnull=False).values("fallback_asset_id"),
             StartupConfigVersion.objects.values("gif_asset_id"),
-            StartupConfigVersion.objects.values("fallback_asset_id")]
+            StartupConfigVersion.objects.values("fallback_asset_id"),
+            StorefrontDraftAsset.objects.values("asset_id"),
+            StorefrontVersionAsset.objects.values("asset_id")]
 
 
 def reference_queries(asset_id):
@@ -42,4 +45,14 @@ def reference_queries(asset_id):
             object_id="id", label=Value("启动配置", output_field=CharField()), role=role,
             version="revision", state=Case(When(startuppublication__current_version_id=F("id"),
             then=Value("CURRENT")), default=Value("HISTORY"), output_field=CharField())))
+    for domain, label in (("navigation", "底部导航"), ("customer_service", "客服悬浮配置")):
+        queries.append(reference_query(StorefrontDraftAsset.objects.filter(asset_id=asset_id, config_id=domain),
+            domain=domain.upper(), object_id="config_id", label=Value(label, output_field=CharField()),
+            role="CONFIG_IMAGE", version="config__draft_revision", state="DRAFT"))
+        queries.append(reference_query(StorefrontVersionAsset.objects.filter(
+            asset_id=asset_id, version__config_id=domain), domain=domain.upper(),
+            object_id="version__config_id", label=Value(label, output_field=CharField()),
+            role="CONFIG_IMAGE", version="version__revision",
+            state=Case(When(version__config__storefrontpublication__current_version_id=F("version_id"),
+                            then=Value("CURRENT")), default=Value("HISTORY"), output_field=CharField())))
     return queries

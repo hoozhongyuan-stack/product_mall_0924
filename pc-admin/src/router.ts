@@ -29,6 +29,8 @@ export const router = createRouter({
     { path: '/pages/home', component: () => import('./views/HomePageView.vue'), meta: { title: '首页装修', permission: 'page.read' } },
     { path: '/pages/micro', component: () => import('./views/MicroPageView.vue'), meta: { title: '独立微页面', permission: 'page.read' } },
     { path: '/store/info', component: () => import('./views/StoreInfoView.vue'), meta: { title: '店铺信息', permission: 'startup.read' } },
+    { path: '/store/navigation', component: () => import('./views/NavigationView.vue'), meta: { title: '底部导航', permission: 'navigation.read' } },
+    { path: '/store/customer-service', component: () => import('./views/CustomerServiceView.vue'), meta: { title: '客服悬浮入口', permission: 'customer_service.read' } },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })

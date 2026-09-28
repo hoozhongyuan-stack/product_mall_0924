@@ -3,10 +3,11 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { api, ApiError, confirmedWrite, type Account } from '../api'
 import HomePagePreview from '../views/pages/HomePagePreview.vue'
 import type { PageConfig } from '../views/pages/types'
+import type { CustomerServiceConfig, NavigationConfig } from './singleton-config.mjs'
 import { historyScope, keepRollbackIntent, matchesRollbackResult, parseRollbackIntent, persistRollbackIntent, rollbackBody, type RollbackIntent, type RollbackResult, type VersionSummary } from './publication-history'
-const props = defineProps<{ account: Account; base: string; objectId: string; startup?: boolean; disabled?: boolean; draftRevision: number }>()
+const props = defineProps<{ account: Account; base: string; objectId: string; startup?: boolean; domain?: 'navigation' | 'customer_service'; disabled?: boolean; draftRevision: number }>()
 const emit = defineEmits<{ rolledBack: [value: RollbackResult] }>()
-interface VersionDetail extends VersionSummary { config?: PageConfig; gifUrl?: string; fallbackUrl?: string }
+interface VersionDetail extends VersionSummary { config?: PageConfig | NavigationConfig | CustomerServiceConfig; gifUrl?: string; fallbackUrl?: string }
 interface HistoryPage { list: VersionSummary[]; total: number; page: number; pageSize: number; currentVersionId: string | null; publicationRevision: number; draftRevision: number }
 const open = ref(false)
 const loading = ref(false)
@@ -27,7 +28,11 @@ const reason = ref('')
 const password = ref('')
 const pending = ref<RollbackIntent | null>(null)
 const scope = computed(() => historyScope(props.account.accountId, props.base))
-const permission = computed(() => props.startup ? 'startup' : 'page')
+const permission = computed(() => props.domain || (props.startup ? 'startup' : 'page'))
+const navConfig = computed(() => props.domain === 'navigation' ? detail.value?.config as NavigationConfig | undefined : undefined)
+const serviceConfig = computed(() => props.domain === 'customer_service' ? detail.value?.config as CustomerServiceConfig | undefined : undefined)
+const pageConfig = computed(() => !props.startup && !props.domain ? detail.value?.config as PageConfig | undefined : undefined)
+const assetUrl = (id: string | null | undefined) => id ? `/api/v1/admin/assets/${encodeURIComponent(id)}/file` : ''
 const canRead = computed(() => props.account.permissionCodes.includes(`${permission.value}.read`))
 const canRollback = computed(() => canRead.value && props.account.permissionCodes.includes(`${permission.value}.publish`))
 const storageKey = (value: string) => `mall-publication-rollback:${value}`
@@ -139,7 +144,7 @@ onBeforeUnmount(() => { alive = false; generation++; detailGeneration++; operati
   <p v-else-if="history && !history.list.length">尚无发布历史。先保存、预览并发布内容。</p>
   <ul v-if="history?.list.length" class="history-versions" :aria-busy="loading">
    <li v-for="version in history.list" :key="version.versionId">
-    <div><strong>{{ version.name || (startup ? '启动配置' : '页面') }} · 修订 {{ version.revision }}</strong><el-tag v-if="version.isCurrent" type="success">当前线上</el-tag><span>{{ new Date(version.publishedAt).toLocaleString('zh-CN') }} · {{ publisher(version) }}</span></div>
+    <div><strong>{{ version.name || (startup ? '启动配置' : domain === 'navigation' ? '底部导航' : domain === 'customer_service' ? '客服悬浮入口' : '页面') }} · 修订 {{ version.revision }}</strong><el-tag v-if="version.isCurrent" type="success">当前线上</el-tag><span>{{ new Date(version.publishedAt).toLocaleString('zh-CN') }} · {{ publisher(version) }}</span></div>
     <el-button :disabled="loading || busy || !!pending" @click="readDetail(version.versionId)">查看版本</el-button>
    </li>
   </ul>
@@ -150,7 +155,9 @@ onBeforeUnmount(() => { alive = false; generation++; detailGeneration++; operati
   <section v-if="detail" class="history-detail" aria-label="历史版本详情">
    <h2>修订 {{ detail.revision }} 的内容</h2>
    <div v-if="startup" class="history-startup-preview"><figure><p v-if="failedMedia.includes('gif')" role="status">历史启动 GIF 无法读取，请检查素材状态。</p><img v-else :src="detail.gifUrl" alt="历史启动 GIF" @error="failedMedia = [...failedMedia, 'gif']" /><figcaption>启动 GIF</figcaption></figure><figure><p v-if="failedMedia.includes('fallback')" role="status">历史兜底图无法读取，请检查素材状态。</p><img v-else :src="detail.fallbackUrl" alt="历史静态兜底图" @error="failedMedia = [...failedMedia, 'fallback']" /><figcaption>静态兜底图</figcaption></figure></div>
-   <HomePagePreview v-else-if="detail.config" :config="detail.config" :stale="false" :page-name="detail.name" />
+   <div v-else-if="navConfig" class="history-navigation-preview" aria-label="历史底部导航预览"><div v-for="item in navConfig.items" :key="item.key"><div class="history-navigation-icons"><img v-if="item.iconAssetId && !failedMedia.includes(`${item.key}:normal`)" :src="assetUrl(item.iconAssetId)" :alt="`${item.label}普通图标`" @error="failedMedia = [...failedMedia, `${item.key}:normal`]" /><span v-else class="history-image-placeholder">{{ item.iconAssetId ? '图片失效' : '默认' }}</span><img v-if="item.selectedIconAssetId && !failedMedia.includes(`${item.key}:selected`)" :src="assetUrl(item.selectedIconAssetId)" :alt="`${item.label}选中图标`" @error="failedMedia = [...failedMedia, `${item.key}:selected`]" /><span v-else class="history-image-placeholder">{{ item.selectedIconAssetId ? '图片失效' : '默认' }}</span></div><strong>{{ item.label }}</strong><small>普通 / 选中</small></div></div>
+   <div v-else-if="serviceConfig" class="history-service-preview" aria-label="历史客服悬浮入口预览"><p>展示：{{ serviceConfig.enabled ? '开启' : '关闭' }} · 方式：{{ serviceConfig.mode === 'PHONE' ? '拨打电话' : serviceConfig.mode === 'QR' ? '客服二维码' : '未设置' }}</p><p v-if="serviceConfig.prompt">入口文案：{{ serviceConfig.prompt }}</p><p v-if="serviceConfig.mode === 'PHONE' && serviceConfig.phone">联系电话：{{ serviceConfig.phone }}</p><figure v-if="serviceConfig.qrAssetId"><img v-if="!failedMedia.includes('qr')" :src="assetUrl(serviceConfig.qrAssetId)" alt="历史客服二维码" @error="failedMedia = [...failedMedia, 'qr']" /><figcaption v-else>历史二维码素材无法读取。</figcaption></figure></div>
+   <HomePagePreview v-else-if="pageConfig" :config="pageConfig" :stale="false" :page-name="detail.name" />
    <form v-if="canRollback && (!detail.isCurrent || pending)" class="history-rollback" @submit.prevent="rollback">
     <h3>{{ pending ? '恢复原回退请求' : '切换线上到此版本' }}</h3><p>需填写原因并确认当前账号密码。此操作不会覆盖草稿。</p>
     <label>回退原因<el-input v-model="reason" type="textarea" :rows="3" maxlength="200" show-word-limit :disabled="busy || !!pending" /></label>
@@ -167,4 +174,5 @@ onBeforeUnmount(() => { alive = false; generation++; detailGeneration++; operati
 </template>
 <style>
 .publication-history-drawer{max-width:100vw;color:var(--mall-color-text,#243329)}.history-versions{list-style:none;padding:0;margin:24px 0}.history-versions li{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:16px 0;border-bottom:1px solid #dce6dd}.history-versions li>div{display:flex;gap:8px;flex-wrap:wrap;min-width:0}.history-versions li span:not(.el-tag){display:block;width:100%;color:#607466;overflow-wrap:anywhere}.history-detail{margin-top:32px}.history-detail h2{font-size:20px}.history-rollback{display:grid;gap:16px;margin-top:24px;padding-top:24px;border-top:1px solid #dce6dd}.history-rollback label{display:grid;gap:8px}.history-rollback .el-button{justify-self:start}.history-startup-preview{display:grid;grid-template-columns:1fr 1fr;gap:16px}.history-startup-preview figure{margin:0}.history-startup-preview img{display:block;width:100%;max-height:400px;object-fit:contain;background:#f4f6f1}.history-startup-preview figcaption{margin-top:8px;color:#607466}.history-success{color:#24583d;background:#f4f6f1;padding:12px}@media(max-width:600px){.history-versions li{align-items:start;flex-direction:column}.history-startup-preview{grid-template-columns:1fr}.publication-history-drawer .el-pagination{max-width:100%;overflow:auto}}
+.history-navigation-preview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;max-width:600px;padding:12px;background:#f4f6f1;border-radius:12px}.history-navigation-preview>div{min-width:0;display:grid;justify-items:center;gap:4px;text-align:center}.history-navigation-icons{display:flex;gap:4px}.history-navigation-preview img,.history-image-placeholder{width:32px;height:32px;object-fit:contain}.history-image-placeholder{font-size:10px;color:#49634f}.history-navigation-preview strong{font-size:13px}.history-navigation-preview small{font-size:11px;color:#49634f}.history-service-preview figure{margin:12px 0}.history-service-preview img{display:block;max-width:200px;max-height:200px;object-fit:contain}@media(max-width:600px){.history-navigation-preview{gap:4px;padding:8px}.history-navigation-preview img,.history-image-placeholder{width:28px}.history-navigation-preview small{font-size:10px}}
 </style>
