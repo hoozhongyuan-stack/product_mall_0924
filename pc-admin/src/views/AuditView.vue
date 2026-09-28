@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { api, type AuditEntry } from '../api'
+import { computed, onMounted, ref } from 'vue'
+import { api, type Account, type AuditEntry } from '../api'
+import ExportPanel from './exports/ExportPanel.vue'
+import type { ExportFilters } from './exports/client'
 
 interface AuditPage { items: AuditEntry[]; nextCursor: string | null; from: string; to: string; timeZone: string }
 interface Filters { from: string; to: string; actorId: string; actionCode: string; objectType: string; objectId: string; result: string }
@@ -14,6 +16,21 @@ const error = ref('')
 const cursor = ref('')
 const nextCursor = ref<string | null>(null)
 const previous = ref<string[]>([])
+const loadedRange = ref<{ from: string; to: string } | null>(null)
+const props = defineProps<{ account: Account }>()
+const canExport = computed(() => props.account.permissionCodes.includes('audit.export'))
+const exportFilters = computed<ExportFilters | null>(() => {
+  if (!loadedRange.value || loading.value || error.value) return null
+  const active = applied.value
+  return {
+    from: loadedRange.value.from, to: loadedRange.value.to,
+    ...(active.actorId && { actorId: active.actorId }),
+    ...(active.actionCode && { actionCode: active.actionCode }),
+    ...(active.objectType && { objectType: active.objectType }),
+    ...(active.objectId && { objectId: active.objectId }),
+    ...(active.result && { result: active.result }),
+  }
+})
 let generation = 0
 
 async function load(next = cursor.value) {
@@ -30,11 +47,13 @@ async function load(next = cursor.value) {
     nextCursor.value = page.nextCursor
     cursor.value = next
     range.value = `${page.from} 至 ${page.to} · ${page.timeZone}`
+    loadedRange.value = { from: page.from, to: page.to }
     return true
   } catch (reason) {
     if (current === generation) {
       logs.value = []
       nextCursor.value = null
+      loadedRange.value = null
       error.value = reason instanceof Error ? reason.message : '日志读取失败。'
     }
     return false
@@ -46,6 +65,7 @@ async function load(next = cursor.value) {
 function apply() {
   applied.value = { ...filters.value }
   previous.value = []
+  loadedRange.value = null
   void load('')
 }
 function reset() {
@@ -99,6 +119,7 @@ const resultText: Record<string, string> = { SUCCESS: '成功', DENIED: '已拒�
       <p v-if="!logs.length" class="empty-state">当前条件下没有操作日志。可调整日期或清除筛选。</p>
     </div>
     <div v-if="!error && !loading" class="audit-pages"><span>第 {{ previous.length + 1 }} 页</span><div><button class="secondary-button" :disabled="!previous.length" @click="back">上一页</button><button class="secondary-button" :disabled="!nextCursor" @click="forward">下一页</button></div></div>
+    <ExportPanel v-if="canExport" kind="AUDIT" :filters="exportFilters" :actor-id="account.accountId" />
   </section>
 </template>
 

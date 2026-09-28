@@ -120,6 +120,29 @@ def _position(token, fingerprint):
         raise ValueError("游标已失效，请重新查询。") from exc
 
 
+def audit_queryset(start, end, actor_filter="", action="", obj_type="", obj_id="", result=""):
+    """One filter path for paginated observation and bounded CSV production."""
+    rows = AuditLog.objects.filter(occurred_at__gte=start, occurred_at__lt=end)
+    if actor_filter:
+        rows = rows.filter(actor_id=actor_filter)
+    if action:
+        rows = rows.filter(action_code=action)
+    if obj_type:
+        rows = rows.filter(object_type=obj_type)
+    if obj_id:
+        rows = rows.filter(object_id=obj_id)
+    if result:
+        rows = rows.filter(result=result)
+    return rows
+
+
+def audit_entry(row):
+    return {"id": str(row.id), "actorId": str(row.actor_id) if row.actor_id else None,
+            "actionCode": row.action_code, "objectType": row.object_type, "objectId": row.object_id,
+            "before": _safe_json(row.before), "after": _safe_json(row.after), "result": row.result,
+            "requestId": str(row.request_id), "occurredAt": row.occurred_at.isoformat()}
+
+
 @never_cache
 def audit_view(request):
     bad = method(request, "GET")
@@ -138,17 +161,7 @@ def audit_view(request):
     limited = read_rate_limit(request, actor, "audit")
     if limited:
         return limited
-    rows = AuditLog.objects.filter(occurred_at__gte=start, occurred_at__lt=end)
-    if actor_filter:
-        rows = rows.filter(actor_id=actor_filter)
-    if action:
-        rows = rows.filter(action_code=action)
-    if obj_type:
-        rows = rows.filter(object_type=obj_type)
-    if obj_id:
-        rows = rows.filter(object_id=obj_id)
-    if result:
-        rows = rows.filter(result=result)
+    rows = audit_queryset(start, end, actor_filter, action, obj_type, obj_id, result)
     if position:
         rows = rows.filter(Q(occurred_at__lt=position[0]) | Q(occurred_at=position[0], id__lt=position[1]))
     rows = list(rows.order_by("-occurred_at", "-id")[:limit + 1])
@@ -157,9 +170,6 @@ def audit_view(request):
         last_row = rows[limit - 1]
         next_cursor = signing.dumps({"f": fingerprint, "at": last_row.occurred_at.isoformat(),
                                      "id": str(last_row.id)}, salt=SALT)
-    items = [{"id": str(row.id), "actorId": str(row.actor_id) if row.actor_id else None,
-              "actionCode": row.action_code, "objectType": row.object_type, "objectId": row.object_id,
-              "before": _safe_json(row.before), "after": _safe_json(row.after), "result": row.result,
-              "requestId": str(row.request_id), "occurredAt": row.occurred_at.isoformat()} for row in rows[:limit]]
+    items = [audit_entry(row) for row in rows[:limit]]
     return response(request, {"items": items, "nextCursor": next_cursor,
                               "from": first.isoformat(), "to": last.isoformat(), "timeZone": "Asia/Shanghai"})

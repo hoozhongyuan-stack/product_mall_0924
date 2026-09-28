@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { api } from '../api'
+import { computed, onMounted, ref } from 'vue'
+import { api, type Account } from '../api'
+import ExportPanel from './exports/ExportPanel.vue'
+import type { ExportFilters } from './exports/client'
 
 interface Day { date: string; paidOrderCount: number; paidAmountFen: number; pointsExchangeCount: number; refundCount: number; refundAmountFen: number; netAmountFen: number }
 interface Summary { from: string; to: string; timeZone: string; totals: Omit<Day, 'date'>; days: Day[] }
@@ -9,6 +11,9 @@ const to = ref('')
 const data = ref<Summary | null>(null)
 const loading = ref(true)
 const error = ref('')
+const props = defineProps<{ account: Account }>()
+const canExport = computed(() => props.account.permissionCodes.includes('business.report.export'))
+const exportFilters = computed<ExportFilters | null>(() => data.value && !loading.value && !error.value ? { from: data.value.from, to: data.value.to } : null)
 let generation = 0
 
 async function load() {
@@ -57,6 +62,7 @@ onMounted(() => { void load() })
           <tbody><tr v-for="day in data.days" :key="day.date"><th scope="row">{{ day.date }}</th><td>{{ day.paidOrderCount }}</td><td>{{ yuan(day.paidAmountFen) }}</td><td>{{ day.refundCount }}</td><td>{{ yuan(day.refundAmountFen) }}</td><td>{{ yuan(day.netAmountFen) }}</td><td>{{ day.pointsExchangeCount }}</td></tr></tbody></table>
       </div>
     </template>
+    <ExportPanel v-if="canExport" kind="BUSINESS" :filters="exportFilters" :actor-id="account.accountId" />
   </section>
 </template>
 

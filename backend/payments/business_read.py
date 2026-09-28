@@ -37,6 +37,29 @@ GROUP BY day ORDER BY day
 """
 
 
+def business_summary(first, last, start, end):
+    """Use one SQL snapshot for the API and the asynchronous CSV producer."""
+    with connection.cursor() as cursor:
+        cursor.execute(SQL, [start, end, start, end, start, end])
+        facts = {row[0]: tuple(int(value) for value in row[1:]) for row in cursor.fetchall()}
+    totals = {"paidOrderCount": 0, "paidAmountFen": 0, "pointsExchangeCount": 0,
+              "refundCount": 0, "refundAmountFen": 0, "netAmountFen": 0}
+    days = []
+    current = first
+    while current <= last:
+        paid_count, paid_fen, points_count, refund_count, refund_fen = facts.get(current, (0, 0, 0, 0, 0))
+        item = {"date": current.isoformat(), "paidOrderCount": paid_count, "paidAmountFen": paid_fen,
+                "pointsExchangeCount": points_count, "refundCount": refund_count,
+                "refundAmountFen": refund_fen, "netAmountFen": paid_fen - refund_fen}
+        days.append(item)
+        for field in totals:
+            totals[field] += item[field]
+        current += timedelta(days=1)
+    return {"from": first.isoformat(), "to": last.isoformat(),
+            "timeZone": "Asia/Shanghai", "basis": {"payment": "Order.paid_at",
+            "refund": "RefundIntent.succeeded_at"}, "totals": totals, "days": days}
+
+
 @never_cache
 def summary_view(request):
     bad = method(request, "GET")
@@ -54,22 +77,4 @@ def summary_view(request):
     limited = read_rate_limit(request, actor, "business")
     if limited:
         return limited
-    with connection.cursor() as cursor:
-        cursor.execute(SQL, [start, end, start, end, start, end])
-        facts = {row[0]: tuple(int(value) for value in row[1:]) for row in cursor.fetchall()}
-    totals = {"paidOrderCount": 0, "paidAmountFen": 0, "pointsExchangeCount": 0,
-              "refundCount": 0, "refundAmountFen": 0, "netAmountFen": 0}
-    days = []
-    current = first
-    while current <= last:
-        paid_count, paid_fen, points_count, refund_count, refund_fen = facts.get(current, (0, 0, 0, 0, 0))
-        item = {"date": current.isoformat(), "paidOrderCount": paid_count, "paidAmountFen": paid_fen,
-                "pointsExchangeCount": points_count, "refundCount": refund_count,
-                "refundAmountFen": refund_fen, "netAmountFen": paid_fen - refund_fen}
-        days.append(item)
-        for field in totals:
-            totals[field] += item[field]
-        current += timedelta(days=1)
-    return response(request, {"from": first.isoformat(), "to": last.isoformat(),
-                              "timeZone": "Asia/Shanghai", "basis": {"payment": "Order.paid_at",
-                              "refund": "RefundIntent.succeeded_at"}, "totals": totals, "days": days})
+    return response(request, business_summary(first, last, start, end))

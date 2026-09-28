@@ -2,8 +2,7 @@
 
 Files live under the deployment-owned persistent MEDIA_ROOT. New objects use
 media/, code/, export/ namespaces; historical product/startup/page keys remain
-readable. Only media has a consumer in E0. Code and export policies reserve the
-boundary without exposing build, publication or export functionality.
+readable. Each namespace has its own consumer and retention policy.
 """
 import json
 import logging

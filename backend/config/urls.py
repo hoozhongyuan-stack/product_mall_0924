@@ -27,8 +27,12 @@ from points_exchange import views as exchange_views
 from notifications import views as notification_views
 from notifications import task_views as notification_task_views
 from code_versions import views as code_version_views
+from report_exports import views as export_views
 
 urlpatterns = [
+    path("api/v1/admin/exports", export_views.exports_view),
+    path("api/v1/admin/exports/<uuid:task_id>", export_views.export_detail_view),
+    path("api/v1/admin/exports/<uuid:task_id>/download", export_views.export_download_view),
     path("api/v1/admin/code-versions", code_version_views.versions_view),
     path("api/v1/admin/code-versions/<uuid:version_id>", code_version_views.version_detail_view),
     path("api/v1/admin/code-sync-jobs", code_version_views.jobs_view),

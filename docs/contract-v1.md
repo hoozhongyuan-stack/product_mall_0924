@@ -570,4 +570,15 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 现金经营支付只取 `Order` 的 `order_kind=CASH,status=PAID,paid_at`，金额用订单 `payable_fen`；零元现金单计支付笔数、金额0。`POINTS` 已支付订单单列 `pointsExchangeCount`，不混入现金笔数和金额。退款只取 `RefundIntent.status=SUCCEEDED,succeeded_at`，金额用 `amount_fen`；一笔成功意图计一笔退款。分别按上海本地成功日期归属，半开时刻窗 `[起始日00:00,结束日后一天00:00)`；净成交为窗口支付减窗口退款，可为负。外部 `PaymentReceipt.paid_at` 和 `RefundEvidence.refunded_at` 不是本系统确认入账时间。三类聚合在同一 PostgreSQL 语句快照中执行，不以订单与退款连接造成重复计数。
 
-审计列表保留可用的动作、对象和结果元信息；`before/after` 仅在读取时递归输出白名单枚举、数字和布尔值，其余字符串及敏感键遮盖，嵌套输出有深度与节点上限。底层审计证据不改写。两个接口均需实时后台会话鉴权，私有响应禁止缓存；按账号和自然分钟分别限制审计 60 次、经营 30 次，超限返回 429 与 `Retry-After`。限流仅写独立配额桶，不修改交易或审计事实；过期配额桶须在 E5 运维调度中清理。E4.1 再做按权限异步导出、文件下载重验和24小时清理，本片不提供导出入口。
+审计列表保留可用的动作、对象和结果元信息；`before/after` 仅在读取时递归输出白名单枚举、数字和布尔值，其余字符串及敏感键遮盖，嵌套输出有深度与节点上限。底层审计证据不改写。两个接口均需实时后台会话鉴权，私有响应禁止缓存；按账号和自然分钟分别限制审计 60 次、经营 30 次，超限返回 429 与 `Retry-After`。限流仅写独立配额桶，不修改交易或审计事实；过期配额桶须在 E5 运维调度中清理。按权限异步导出、下载重验和24小时清理见5.30。
+
+### 5.30 E4.1：审计与经营异步导出
+
+| 接口／命令 | 契约 |
+| --- | --- |
+| `POST /api/v1/admin/exports` | JSON `{kind,filters,requestKey}`。`kind=AUDIT` 需 `audit.read` 与 `audit.export`，`BUSINESS` 需 `business.report.read` 与 `business.report.export`；`requestKey` 为客户端 UUID。同操作者同键同条件返回原任务，不同条件返回409。筛选按 E4.0 校验并冻结为明确的上海日期区间；只排入持久任务，不在 HTTP 请求中生成文件。 |
+| `GET /api/v1/admin/exports`、`GET /exports/{taskId}` | 只显示本人且当前具备对应双权限的任务；列表支持 `kind` 与签名游标、默认20最多100项。DTO 包含 `taskId/requestKey/kind/filters/status/attemptCount/rowCount/fileBytes/failureCode/createdAt/completedAt/expiresAt`，不返回私有对象键。 |
+| `GET /api/v1/admin/exports/{taskId}/download` | 本人任务、当前双权限、`READY`、24小时内才提供 CSV；读取固定任务 UUID 对象，校验常规文件、大小和 SHA-256，最终再次校验账号与任务状态。私有禁缓存、`attachment`、`nosniff`；跨账号404、未就绪409、过期410、文件不可用503。 |
+| `manage.py run_export_jobs [--limit N] [--watch]`、`purge_expired_exports` | worker 用行锁与租约抢占任务，在独立进程生成 CSV，文件 `0600`、同卷原子安装并同步后才将任务标为 `READY`；失败保留安全失败码，过期租约最多重试3次。`--watch` 持续处理并执行24小时清理；独立清理命令可供调度／恢复使用。正式部署监督与定时调度在 E5 接线。 |
+
+经营 CSV 复用 E4.0 的单语句聚合函数，按已完成的支付和退款事实生成每日行，金额保持整数分；审计 CSV 复用 E4.0 的出站脱敏投影，并将所有可能构成电子表格公式的文本转为安全文本。审计最多20000行，单文件受私有 `export/` 的100 MiB上限约束；总保留文件与在制预留默认不超过1 GiB。每轮先清理过期文件，再领取任务；生成前按全部活跃 worker 的单文件上限预留磁盘，并保留至少256 MiB空闲。每账号每小时最多10次新任务、同时最多3个待处理／生成任务；容量不足返回安全失败码。文件到期即拒绝下载，清理保留任务元数据和审计；文件删除失败可重试，强制中断残留的导出专用临时文件按租约辨认并清理，孤儿文件不能变成可下载成功任务。管理台从**已查询生效**的筛选条件创建任务，未知提交结果保留原请求号核对或同键重试。
