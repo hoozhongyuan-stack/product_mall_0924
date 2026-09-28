@@ -14,9 +14,9 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.cache import never_cache
 
+from common.http import cursor_response, method
 from accounts.models import AdminAccount, AuditLog
 from accounts.security import audit, confirm_action, error, parse_json, require, require_live, response
-from accounts.views import method
 
 from .models import EVENT_TYPES, MessageAttempt, MessageTask
 
@@ -141,7 +141,7 @@ def tasks_view(request):
         next_cursor = signing.dumps({"v": 1, "f": fingerprint, "at": last.created_at.isoformat(),
                                      "id": str(last.pk)}, salt=CURSOR_SALT)
     now = timezone.now()
-    return response(request, {"items": [_summary(row, now) for row in rows[:limit]],
+    return cursor_response(request, {"items": [_summary(row, now) for row in rows[:limit]],
                               "nextCursor": next_cursor})
 
 

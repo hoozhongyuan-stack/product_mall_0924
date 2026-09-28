@@ -17,10 +17,10 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.cache import never_cache
 from django.views.decorators.vary import vary_on_cookie
 
+from common.http import cursor_response, method
 from accounts.models import AdminAccount
 from accounts.read_rate_limit import read_rate_limit
 from accounts.security import audit, error, parse_json, permissions, require, require_live, response
-from accounts.views import method
 from catalog.storage import LocalStorage
 from catalog.validation import CatalogError
 
@@ -160,7 +160,7 @@ def _list(request):
         last = rows[limit - 1]
         next_cursor = signing.dumps({"actor": str(actor.pk), "kind": kind,
                                      "at": last.created_at.isoformat(), "id": str(last.pk)}, salt=CURSOR_SALT)
-    return response(request, {"items": [_task_item(row) for row in rows[:limit]], "nextCursor": next_cursor})
+    return cursor_response(request, {"items": [_task_item(row) for row in rows[:limit]], "nextCursor": next_cursor})
 
 
 @never_cache

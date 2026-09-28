@@ -6,8 +6,8 @@ import uuid
 
 from django.db import transaction
 
+from common.http import parse_json_object, method
 from accounts.security import audit, confirm_action, error, require, require_live, response
-from accounts.views import method
 from catalog.media import asset_path, png_dimensions, available_asset, lock_available_assets
 from catalog.models import Asset
 from catalog.asset_access import authorize_asset_binding
@@ -26,15 +26,7 @@ class StartupError(Exception):
 
 
 def _body(request):
-    if request.content_type != "application/json" or len(request.body) > 8192:
-        raise StartupError("请发送不超过 8 KB 的 JSON 请求。")
-    try:
-        value = json.loads(request.body)
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise StartupError("JSON 格式不正确。") from exc
-    if not isinstance(value, dict):
-        raise StartupError("请求内容必须是对象。")
-    return value
+    return parse_json_object(request, max_bytes=8192, error_type=StartupError)
 
 
 def _revision(value):

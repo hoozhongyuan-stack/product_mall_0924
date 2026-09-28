@@ -6,23 +6,16 @@ from datetime import timedelta
 from django.contrib.auth import login, logout
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import IntegrityError, transaction
-from django.http import HttpResponseNotAllowed
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils import timezone
 
+from common.http import method
 from .models import AccountGroup, ActionConfirmation, AdminAccount, AuditLog, GroupPermission, PermissionGroup
 from .security import (PERMISSION_CODES, audit, bump_versions, confirm_action, current_account,
                        error, lock_until, parse_json, permissions, require, response,
                        source_fingerprint, validate_new_password)
 
 DUMMY_PASSWORD_HASH = make_password("unused-login-timing-value")
-
-
-def method(request, *allowed):
-    request.request_id = uuid.uuid4()
-    if request.method not in allowed:
-        return HttpResponseNotAllowed(allowed)
-    return None
 
 
 def body_or_error(request):

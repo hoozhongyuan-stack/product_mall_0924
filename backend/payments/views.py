@@ -1,8 +1,8 @@
 """Offline configuration, member statements, and PC funds reconciliation."""
 from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
+from common.http import method
 from accounts.security import audit, error, parse_json, require, response
-from accounts.views import method
 from customers.auth import resolve_member
 from orders.models import Order
 from orders.queries import admin_order_data

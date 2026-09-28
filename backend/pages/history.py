@@ -8,8 +8,8 @@ from django.db import transaction
 from django.views.decorators.cache import never_cache
 from django.views.decorators.vary import vary_on_cookie
 
+from common.http import offset_response, method
 from accounts.security import audit, confirm_action, error, require, require_live, response
-from accounts.views import method
 from catalog.page_targets import assets_exist
 from catalog.storage import storage_unavailable
 from catalog.validation import CatalogError
@@ -106,7 +106,7 @@ def history_response(request, domain, page_id, version_id):
                              "fallbackUrl": _asset_url(version.fallback_asset_id)})
             return response(request, data)
         page, size = pagination(request)
-        return response(request, {"list": [version_metadata(row, publication) for row in
+        return offset_response(request, {"list": [version_metadata(row, publication) for row in
             versions[(page - 1) * size:page * size]], "total": versions.count(), "page": page, "pageSize": size,
             "currentVersionId": str(publication.current_version_id) if publication.current_version_id else None,
             "publicationRevision": publication.revision, "draftRevision": content.draft_revision})

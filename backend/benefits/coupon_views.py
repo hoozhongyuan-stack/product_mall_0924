@@ -2,9 +2,9 @@
 from uuid import UUID,uuid4
 from functools import wraps
 from django.db import connection, transaction, IntegrityError
-from django.http import HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.cache import patch_vary_headers
+from common.http import offset_response, method
 from accounts.security import (require,require_live,permissions,parse_json,response as base_response,error,confirm_action,audit)
 from customers.auth import require_member
 from customers.models import Member
@@ -15,8 +15,8 @@ from .coupon_operations import (campaign_data,get_campaign,create_campaign,updat
     publish_campaign,set_distribution,claim_coupon,issue_coupons,fingerprint,revision_value,EDITABLE)
 from .coupon_reads import paging,campaign_rows,claimable_rows,member_coupon_rows
 
-def response(request,data=None,status=200):
-    result=base_response(request,data,status)
+def response(request,data=None,status=200,**kwargs):
+    result=base_response(request,data,status,**kwargs)
     result['Cache-Control']='no-store'
     return result
 
@@ -41,7 +41,7 @@ def _no_query(request):
 
 
 def _method(request,*methods):
-    return HttpResponseNotAllowed(methods) if request.method not in methods else None
+    return method(request,*methods)
 
 
 def _deny(request,exc):
@@ -152,7 +152,7 @@ def campaigns_view(request):
     if request.method=='POST': return _write_view(request,'create')
     account,bad=_read(request)
     if bad: return bad
-    try: return response(request,campaign_rows(request))
+    try: return offset_response(request,campaign_rows(request), pagination_key='pagination', respond=response)
     except BenefitError as exc: return _deny(request,exc)
 
 
@@ -194,7 +194,7 @@ def campaign_issuances_view(request,campaign_id):
                 'kind':row.kind,'quantity':row.quantity,'reason':row.reason,
                 'actorLabel':row.actor.display_name if row.actor else '会员本人','createdAt':row.created_at.isoformat()}
                for row in query[(page-1)*size:page*size]]
-        return response(request,{'items':items,'pagination':{'page':page,'pageSize':size,'total':total}})
+        return offset_response(request,{'items':items,'pagination':{'page':page,'pageSize':size,'total':total}}, pagination_key='pagination', respond=response)
     except BenefitError as exc: return _deny(request,exc)
 
 
@@ -208,7 +208,7 @@ def campaign_product_options_view(request):
         page,size=paging(request,{'q'}); search=request.GET.get('q','').strip()
         if len(search)>100: raise BenefitError('关键词过长。','VALIDATION_FAILED')
         items,total=search_product_options(search,page,size)
-        return response(request,{'items':items,'pagination':{'page':page,'pageSize':size,'total':total}})
+        return offset_response(request,{'items':items,'pagination':{'page':page,'pageSize':size,'total':total}}, pagination_key='pagination', respond=response)
     except BenefitError as exc: return _deny(request,exc)
 
 
@@ -238,7 +238,7 @@ def app_campaigns_view(request):
     if bad: return bad
     member,bad=require_member(request)
     if bad: return bad
-    try: return response(request,claimable_rows(request,member))
+    try: return offset_response(request,claimable_rows(request,member), pagination_key='pagination', respond=response)
     except BenefitError as exc: return _deny(request,exc)
 
 
@@ -281,5 +281,5 @@ def app_coupons_view(request):
     if bad: return bad
     member,bad=require_member(request)
     if bad: return bad
-    try: return response(request,member_coupon_rows(request,member))
+    try: return offset_response(request,member_coupon_rows(request,member), pagination_key='pagination', respond=response)
     except BenefitError as exc: return _deny(request,exc)

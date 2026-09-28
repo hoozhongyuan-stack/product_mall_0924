@@ -2,8 +2,8 @@
 from uuid import UUID
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from common.http import method
 from accounts.security import error, parse_json, response
-from accounts.views import method
 from customers.auth import resolve_member
 from .service import PaymentError
 from .wechat_service import create_prepay, handle_notification, query_payment

@@ -1,5 +1,5 @@
+from common.http import offset_response, method
 from accounts.security import error, require, response
-from accounts.views import method
 from payments.service import PaymentError
 from .models import Order
 from .queries import admin_order_data, list_orders
@@ -13,7 +13,7 @@ def orders_view(request):
     if denied:
         return denied
     try:
-        return response(request, list_orders(request.GET))
+        return offset_response(request, list_orders(request.GET))
     except PaymentError as exc:
         return error(request, exc.status, exc.code, str(exc))
 

@@ -5,10 +5,10 @@ from datetime import timedelta
 from django.db import connection
 from django.views.decorators.cache import never_cache
 
+from common.http import method
 from accounts.read_window import read_window
 from accounts.read_rate_limit import read_rate_limit
 from accounts.security import error, require, response
-from accounts.views import method
 
 
 SQL = """

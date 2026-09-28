@@ -1,5 +1,5 @@
+from common.http import method
 from accounts.security import error, parse_json, response, source_fingerprint
-from accounts.views import method
 from customers.auth import resolve_member
 from django.views.decorators.csrf import csrf_exempt
 

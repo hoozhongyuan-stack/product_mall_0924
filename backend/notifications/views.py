@@ -7,9 +7,9 @@ from math import ceil
 from django.db import transaction
 from django.utils import timezone
 
+from common.http import method
 from accounts.models import AdminAccount, AuditLog
 from accounts.security import audit, error, parse_json, require, require_live, response
-from accounts.views import method
 
 from .models import EVENT_TYPES, SubscriptionTemplateDraft
 

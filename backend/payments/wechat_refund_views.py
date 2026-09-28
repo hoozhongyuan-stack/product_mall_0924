@@ -3,9 +3,9 @@ from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from common.http import method
 from accounts.models import AdminAccount
 from accounts.security import require, parse_json, permissions, confirm_action, audit
-from accounts.views import method
 from aftersales.models import AfterSaleCase
 from aftersales.views import result, fail, key
 from orders.models import Order

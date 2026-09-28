@@ -1,8 +1,8 @@
 """D2 member logistics and CSRF/session protected warehouse confirmation."""
 from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
+from common.http import method
 from accounts.security import require, confirm_action, audit
-from accounts.views import method
 from .views import member, key, result, fail, limited
 from .models import AfterSaleCase, ReturnAcceptance
 from .service import _locked_case, AfterSaleError

@@ -5,8 +5,8 @@ from django.db.models import Q
 from django.views.decorators.cache import never_cache
 from django.views.decorators.vary import vary_on_cookie
 
+from common.http import offset_response, method
 from accounts.security import audit, error, permissions, require, response
-from accounts.views import method
 
 from .media import orphan_assets, serve_asset, store_asset
 from .models import Asset, Category, Product, Sku
@@ -35,7 +35,7 @@ def assets_view(request):
             granted = set(permissions(actor))
             if not granted.intersection({"asset.read", "asset.upload"}):
                 return error(request, 403, "PERMISSION_DENIED", "当前账号没有素材查询权限。")
-            return response(request, library_page(request, actor, granted))
+            return offset_response(request, library_page(request, actor, granted))
         # Reject declared oversize requests before Django parses multipart data.
         maximum = max(settings.PRODUCT_VIDEO_MAX_BYTES, settings.STARTUP_GIF_MAX_BYTES,
                       settings.PRODUCT_IMAGE_MAX_BYTES) + 65536
@@ -66,7 +66,7 @@ def asset_references_view(request, asset_id):
         return error(request, 404, "NOT_FOUND", "素材不存在。")
     try:
         from .asset_library import references_page
-        return response(request, references_page(request, asset_id, set(permissions(actor))))
+        return offset_response(request, references_page(request, asset_id, set(permissions(actor))))
     except CatalogError as exc:
         return error(request, exc.status, exc.code, str(exc))
 

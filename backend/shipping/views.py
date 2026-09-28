@@ -2,8 +2,8 @@
 
 from django.db import transaction
 
+from common.http import method
 from accounts.security import audit, error, parse_json, require, response
-from accounts.views import method
 
 from .models import ShippingPolicy
 

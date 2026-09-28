@@ -7,8 +7,8 @@ from django.db import transaction
 from django.views.decorators.cache import never_cache
 from django.views.decorators.vary import vary_on_cookie
 
+from common.http import offset_response, parse_json_object, method
 from accounts.security import audit, confirm_action, error, require, require_live, response
-from accounts.views import method
 from catalog.asset_access import authorize_asset_binding
 from catalog.media import asset_path, inspect_file, lock_available_assets
 from catalog.models import Asset
@@ -25,15 +25,7 @@ DOMAINS = {"navigation": "navigation", "customer-service": "customer_service"}
 
 
 def _body(request):
-    if request.content_type != "application/json" or len(request.body) > 8192:
-        raise PageConfigError("请发送不超过 8 KB 的 JSON 请求。")
-    try:
-        values = json.loads(request.body)
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise PageConfigError("JSON 格式不正确。") from exc
-    if not isinstance(values, dict):
-        raise PageConfigError("请求内容须为对象。")
-    return values
+    return parse_json_object(request, max_bytes=8192, error_type=PageConfigError, object_message='请求内容须为对象。')
 
 
 def _revision(values):
@@ -246,7 +238,7 @@ def _versions(request, domain, version_id):
             return error(request, 404, "NOT_FOUND", "历史版本不存在。")
         return response(request, {**_metadata(version, publication), "config": version.config_json})
     page, size = pagination(request)
-    return response(request, {"list": [_metadata(version, publication) for version in
+    return offset_response(request, {"list": [_metadata(version, publication) for version in
                                query[(page - 1) * size:page * size]], "total": query.count(),
                               "page": page, "pageSize": size,
                               "currentVersionId": str(publication.current_version_id)

@@ -5,8 +5,8 @@ from uuid import UUID
 from django.db import transaction
 from django.views.decorators.csrf import csrf_exempt
 
+from common.http import method
 from accounts.security import audit, error, parse_json, permissions, require, response
-from accounts.views import method
 from customers.auth import resolve_member
 from .models import Carrier, FulfillmentPolicy, RedeemEvent, Shipment
 from .service import (FulfillmentError, auto_confirm_receipts, batch_ship,

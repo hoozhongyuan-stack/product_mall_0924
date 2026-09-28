@@ -5,8 +5,8 @@ import uuid
 from django.db import IntegrityError
 from django.db.models import Count, Q, Sum
 
+from common.http import offset_response, method
 from accounts.security import error, parse_json, require, response
-from accounts.views import method
 from catalog.inventory_access import stock_skus
 
 from .models import InboundDocument, InventoryBalance, InventoryLedger, OutboundDocument, StocktakeDocument, Warehouse
@@ -84,7 +84,7 @@ def skus_view(request):
                   "productName": row.product.name, "baseUnit": row.current_unit.base_unit,
                   "saleUnit": row.current_unit.sale_unit, "ratio": row.current_unit.ratio,
                   "unitVersionId": str(row.current_unit_id)} for row in rows]
-        return response(request, {"items": items, "page": page, "pageSize": size, "total": total})
+        return offset_response(request, {"items": items, "page": page, "pageSize": size, "total": total})
     except InventoryError as exc:
         return failure(request, exc)
 
@@ -119,7 +119,7 @@ def balances_view(request):
                   "reservedBaseUnits": row.reserved_base_units,
                   "availableBaseUnits": row.on_hand_base_units - row.reserved_base_units}
                  for row in rows]
-        return response(request, {"items": items, "page": page, "pageSize": size, "total": total})
+        return offset_response(request, {"items": items, "page": page, "pageSize": size, "total": total})
     except (InventoryError, ValueError) as exc:
         return failure(request, exc if isinstance(exc, InventoryError) else InventoryError(str(exc)))
 
@@ -151,7 +151,7 @@ def inbounds_view(request):
             item = inbound_data(row, include_lines=False)
             item.update(itemCount=row.line_count, totalBaseUnits=row.line_total or 0)
             items.append(item)
-        return response(request, {"items": items, "page": page, "pageSize": size, "total": total})
+        return offset_response(request, {"items": items, "page": page, "pageSize": size, "total": total})
     except InventoryError as exc:
         return failure(request, exc)
 
@@ -218,7 +218,7 @@ def outbounds_view(request):
             item = outbound_data(row, include_lines=False)
             item.update(itemCount=row.line_count, totalBaseUnits=row.line_total or 0)
             items.append(item)
-        return response(request, {"items": items, "page": page, "pageSize": size, "total": total})
+        return offset_response(request, {"items": items, "page": page, "pageSize": size, "total": total})
     except InventoryError as exc:
         return failure(request, exc)
     except IntegrityError:
@@ -286,7 +286,7 @@ def stocktakes_view(request):
             item = stocktake_data(row, include_lines=False)
             item["itemCount"] = row.item_count
             items.append(item)
-        return response(request, {"items": items, "page": page, "pageSize": size, "total": total})
+        return offset_response(request, {"items": items, "page": page, "pageSize": size, "total": total})
     except InventoryError as exc:
         return failure(request, exc)
     except IntegrityError:
@@ -412,7 +412,7 @@ def ledgers_view(request):
                                Q(order_line__order__order_no__icontains=keyword))
         total = rows.count()
         rows = rows.order_by("-occurred_at", "-id")[(page - 1) * size:page * size]
-        return response(request, {"items": [ledger_data(row) for row in rows],
+        return offset_response(request, {"items": [ledger_data(row) for row in rows],
                                   "page": page, "pageSize": size, "total": total})
     except InventoryError as exc:
         return failure(request, exc)

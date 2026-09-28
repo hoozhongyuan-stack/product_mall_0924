@@ -3,11 +3,17 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": {"node": "^20.19.0 || >=22.12.0"},
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vue-tsc --noEmit && vite build",
-    "test": "node --test tests/*.test.mjs && vue-tsc --noEmit && vite build"
+    "test": "node --test tests/*.test.mjs && vitest run && vue-tsc --noEmit && vite build",
+    "test:components": "vitest run",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include='src/**/*.mjs' --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 tests/*.test.mjs && vitest run --coverage",
+    "test:browser": "playwright test --project=desktop --project=mobile",
+    "test:integration": "python3 scripts/run-browser-integration.py"
   },
   "dependencies": {
     "element-plus": "2.14.6",
@@ -15,9 +21,15 @@
     "vue-router": "5.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@vitejs/plugin-vue": "6.0.9",
+    "@vitest/coverage-v8": "5.0.2",
+    "@vue/test-utils": "2.5.1",
+    "happy-dom": "20.14.5",
     "typescript": "5.9.3",
     "vite": "8.3.0",
+    "vitest": "5.0.2",
     "vue-tsc": "3.3.11"
-  }
+  },
+  "packageManager": "pnpm@11.15.1"
 }

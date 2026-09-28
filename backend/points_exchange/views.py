@@ -1,10 +1,9 @@
 """CSRF admin endpoints and bearer-protected points order endpoints."""
 from functools import wraps
-from uuid import uuid4
 from django.db import IntegrityError
-from django.http import HttpResponseNotAllowed
 from django.utils.cache import patch_vary_headers
 from django.views.decorators.csrf import csrf_exempt
+from common.http import offset_response, method
 from accounts.security import require_live,parse_json,response,error
 from customers.auth import resolve_member
 from orders.service import OrderError
@@ -17,8 +16,7 @@ def endpoint(*methods):
     def decorate(view):
         @wraps(view)
         def wrapper(request,*args,**kwargs):
-            request.request_id=uuid4()
-            try: result=HttpResponseNotAllowed(methods) if request.method not in methods else view(request,*args,**kwargs)
+            try: result=method(request,*methods) or view(request,*args,**kwargs)
             except OrderError as exc: result=error(request,exc.status,exc.code,str(exc),exc.details)
             except (ValueError,TypeError): result=error(request,400,'VALIDATION_FAILED','请求内容格式不正确。')
             except IntegrityError: result=error(request,409,'EXCHANGE_CONFLICT','积分商品已被其他操作修改，请核对后重试。')
@@ -53,7 +51,7 @@ def _write(request,action,offer_id=None):
 def offers_view(request):
     actor,bad=_admin(request)
     if bad:return bad
-    return _write(request,'create') if request.method=='POST' else response(request,list_offers(request.GET))
+    return _write(request,'create') if request.method=='POST' else offset_response(request,list_offers(request.GET), pagination_key='pagination')
 
 
 @endpoint('GET','PUT')
@@ -74,7 +72,7 @@ def offer_availability_view(request,offer_id):
 @endpoint('GET')
 def sku_options_view(request):
     actor,bad=_admin(request,'exchange.manage')
-    return bad or response(request,sku_options(request.GET))
+    return bad or offset_response(request,sku_options(request.GET), pagination_key='pagination')
 
 
 @endpoint('GET')
@@ -86,7 +84,7 @@ def admin_operations_view(request,key):
 @csrf_exempt
 @endpoint('GET')
 def products_view(request):
-    return response(request,list_offers(request.GET,public=True))
+    return offset_response(request,list_offers(request.GET,public=True), pagination_key='pagination')
 
 
 @csrf_exempt

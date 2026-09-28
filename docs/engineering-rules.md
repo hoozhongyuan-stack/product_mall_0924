@@ -6,6 +6,7 @@
 
 | 位置 | 职责 | 调用边界 |
 | --- | --- | --- |
+| `backend/common/http.py` | 无业务状态的 HTTP 响应、JSON 对象解析、方法检查与显式分页元数据 | 不依赖业务模型、鉴权或缓存策略；业务域传入自己的限制与错误类型。旧导入入口只做兼容转发。 |
 | `backend/config/` | Django 配置、URL 装配和部署入口 | 不放商品、页面等业务规则。 |
 | `backend/accounts/` | 后台账号、权限、会话、确认凭证和审计 | 其他模块通过公开的鉴权/审计入口使用，不直接改账号或权限表。 |
 | `backend/catalog/` | 分类、商品、SKU、素材及其公开展示条件 | `pages` 等模块需要商品状态时，通过明确的只读查询或业务入口获取；不在本模块操作页面发布表。 |
@@ -31,7 +32,9 @@
 
 新模块先写明其负责的数据、业务操作与对外契约，再建目录。跨模块读写应有命名明确的入口；涉及多个模块的事务由发起业务操作的一方协调，避免双向依赖。当前 `catalog/views.py` 和 `ProductManagement.vue` 已承担较多职责，后续修改相关功能时按操作拆分，不为目录整齐做一次性重构。
 
-现存待收敛的跨域依赖：业务视图引用 `accounts.views.method`；页面与商品模块仍需通过命名明确的只读入口交换目标与素材状态。独立微页面切片已将原先 `pages` 对 `catalog` 模型/媒体内部函数的直接读取收敛到 `catalog/page_targets.py`，将 `catalog/media_views.py` 对页面素材表的直接读取收敛到 `pages/media_access.py`；PC 两域共用的 `Asset` DTO 移到 `pc-admin/src/shared/media.ts`。下次触及剩余跨域调用时继续提取带测试的接口，不为修目录而改变现有业务行为。
+公共 HTTP 能力已收敛到 `common.http`，业务视图不再跨域导入 `accounts.views.method`；旧入口保留兼容转发。分页由视图显式选择 `offset_response` 或 `cursor_response`，禁止按普通业务数据的字段名推断分页。已有 v1 `data` 原样保留，新增 `meta` 的口径见契约。页面与商品模块通过 `catalog/page_targets.py`、`pages/media_access.py` 交换目标与素材状态，PC 共用 `shared/media.ts` 的 `Asset` DTO。下次触及其他跨域调用时继续提取带测试的命名接口，不为修目录改变业务行为。
+
+稳定重复的前端能力已提取：`shared/csv.mjs` 负责表格导出转义；`shared/persistent-operation.ts` 负责持久操作的生命周期和运输状态，优惠券与积分兑换包装器保留请求校验、权限、恢复结果匹配；`views/catalog/ProductMediaEditor.vue` 负责受控媒体输入与上传并发隔离，父表单保留商品校验、修订号和保存权限；`views/pages/targets.ts` 负责目标加载与可恢复错误。新增业务优先复用这些入口，不复制完整实现。
 
 ## 2. 依赖与组件规则
 

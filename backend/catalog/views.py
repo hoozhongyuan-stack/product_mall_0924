@@ -7,8 +7,8 @@ from django.db import transaction
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.utils import timezone
 
+from common.http import offset_response, parse_json_object, method
 from accounts.security import audit, error, permissions, require, response
-from accounts.views import method
 
 from .media import resolve_media, set_gallery
 from .models import BatchCategoryRequest, Category, MemberGrade, Product, Sku, SkuGradePrice, SkuSpecSelection, SkuUnitVersion
@@ -26,15 +26,7 @@ def failure(request, exc):
 
 
 def body(request):
-    if request.content_type != "application/json" or len(request.body) > 262144:
-        raise CatalogError("请发送不超过 256 KB 的 JSON 请求。")
-    try:
-        values = json.loads(request.body)
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise CatalogError("JSON 格式不正确。") from exc
-    if not isinstance(values, dict):
-        raise CatalogError("请求内容必须是对象。")
-    return values
+    return parse_json_object(request, max_bytes=262144, error_type=CatalogError)
 
 
 def page_args(request):
@@ -178,7 +170,7 @@ def sku_rows_view(request):
             rows = rows.filter(product__fulfillment_kind=fulfillment)
         total = rows.count()
         items = rows[(page - 1) * size:page * size]
-        return response(request, {"rows": [sku_data(item) for item in items],
+        return offset_response(request, {"rows": [sku_data(item) for item in items],
                                   "page": page, "pageSize": size, "total": total})
     except CatalogError as exc:
         return failure(request, exc)
@@ -629,7 +621,7 @@ def public_products_view(request):
                      (not item.redeem_valid_until or item.redeem_valid_until < timezone.localdate()) else
                      "AVAILABLE" if item.has_available_stock else "STOCK_NOT_READY"}
                 for item in page_items]
-        return response(request, {"rows": rows, "page": page, "pageSize": size, "total": total})
+        return offset_response(request, {"rows": rows, "page": page, "pageSize": size, "total": total})
     except CatalogError as exc:
         return failure(request, exc)
 

@@ -1,6 +1,5 @@
 import hashlib
 import hmac
-import json
 import time
 from datetime import timedelta
 
@@ -9,9 +8,9 @@ from django.contrib.auth import logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import JsonResponse
 from django.utils import timezone
 
+from common.http import response, error, parse_json_object
 from .models import ActionConfirmation, AdminAccount, AuditLog, GroupPermission
 
 PERMISSION_CODES = frozenset({
@@ -34,26 +33,8 @@ PERMISSION_CODES = frozenset({
 })
 
 
-def response(request, data=None, status=200):
-    payload = {"success": True, "data": data if data is not None else {}, "requestId": str(request.request_id)}
-    return JsonResponse(payload, status=status)
-
-
-def error(request, status, code, message, details=None):
-    return JsonResponse({"success": False, "error": {"code": code, "message": message, "details": details or []},
-                         "requestId": str(request.request_id)}, status=status)
-
-
 def parse_json(request):
-    if request.content_type != "application/json" or len(request.body) > 32768:
-        raise ValueError("请发送不超过 32 KB 的 JSON 请求。")
-    try:
-        body = json.loads(request.body)
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise ValueError("JSON 格式不正确。") from exc
-    if not isinstance(body, dict):
-        raise ValueError("请求内容必须是对象。")
-    return body
+    return parse_json_object(request)
 
 
 def audit(request, action, obj_type, obj_id="", actor=None, before=None, after=None, result="SUCCESS"):

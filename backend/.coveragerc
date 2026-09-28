@@ -1,0 +1,13 @@
+[run]
+source = .
+omit =
+    */tests/*
+    */migrations/*
+    manage.py
+
+[report]
+fail_under = 80
+show_missing = True
+
+[xml]
+output = coverage/coverage.xml

@@ -1,5 +1,5 @@
+from common.http import method
 from accounts.security import require, parse_json
-from accounts.views import method
 from aftersales.views import fail, result, key
 from .offline_refunds import prepare_reconciliation, confirm_reconciliation
 from .refunds import RefundError

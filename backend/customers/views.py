@@ -1,14 +1,12 @@
-import json
 import hashlib
 import re
-import uuid
 
 from django.db import IntegrityError, transaction
 from django.db.models import F
-from django.http import HttpResponseNotAllowed, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
+from common.http import response as success, error as failure, method as prepare, parse_json_object
 from catalog.models import MemberGrade
 
 from .auth import (InvalidWechatCode, WechatExchangeUnavailable, code_digest, configured_credentials,
@@ -16,34 +14,8 @@ from .auth import (InvalidWechatCode, WechatExchangeUnavailable, code_digest, co
 from .models import CustomerAddress, Member, MemberSession, WechatCodeUse
 
 
-def success(request, data=None, status=200):
-    return JsonResponse({"success": True, "data": data if data is not None else {},
-                         "requestId": str(getattr(request, "request_id", uuid.uuid4()))}, status=status)
-
-
-def failure(request, status, code, message, details=None):
-    return JsonResponse({"success": False, "error": {"code": code, "message": message,
-                                                       "details": details or []},
-                         "requestId": str(getattr(request, "request_id", uuid.uuid4()))}, status=status)
-
-
-def prepare(request, *methods):
-    request.request_id = uuid.uuid4()
-    if request.method not in methods:
-        return HttpResponseNotAllowed(methods)
-    return None
-
-
 def parse_body(request):
-    if request.content_type != "application/json" or len(request.body) > 8192:
-        raise ValueError("请发送不超过 8 KB 的 JSON 请求。")
-    try:
-        body = json.loads(request.body)
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise ValueError("JSON 格式不正确。") from exc
-    if not isinstance(body, dict):
-        raise ValueError("请求内容必须是对象。")
-    return body
+    return parse_json_object(request, max_bytes=8192)
 
 
 def grade_data(grade):

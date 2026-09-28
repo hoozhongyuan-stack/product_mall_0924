@@ -5,8 +5,8 @@ import json
 
 from django.db import connection, transaction
 
+from common.http import offset_response, parse_json_object, method
 from accounts.security import audit, confirm_action, error, require, require_live, response
-from accounts.views import method
 from catalog.page_targets import assets_exist
 from catalog.asset_access import authorize_asset_binding
 from catalog.validation import CatalogError
@@ -37,15 +37,7 @@ def _default_micro_config():
 
 
 def _body(request):
-    if request.content_type != "application/json" or len(request.body) > 262144:
-        raise PageConfigError("请发送不超过 256 KB 的 JSON 请求。")
-    try:
-        value = json.loads(request.body)
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise PageConfigError("JSON 格式不正确。") from exc
-    if not isinstance(value, dict):
-        raise PageConfigError("请求内容必须是对象。")
-    return value
+    return parse_json_object(request, max_bytes=262144, error_type=PageConfigError)
 
 
 def _revision(value):
@@ -281,7 +273,7 @@ def pages_view(request):
                  if page.pagepublication.current_version else None,
                  "updatedAt": page.updated_at.isoformat()}
                 for page in queryset[(page_no - 1) * page_size:page_no * page_size]]
-        return response(request, {"rows": rows, "page": page_no, "pageSize": page_size, "total": total})
+        return offset_response(request, {"rows": rows, "page": page_no, "pageSize": page_size, "total": total})
     try:
         values = _body(request)
         if set(values) != {"name"}:

@@ -8,8 +8,9 @@ import { applyCurrentPublication, currentPublication, publicationIntent, matches
 import { api, ApiError, type Account, type Confirmation } from '../api'
 import HomePagePreview from './pages/HomePagePreview.vue'
 import PageComponentEditor from './pages/PageComponentEditor.vue'
-import { applyUploadedAsset, componentNames, createComponent, normalizeConfig, type ComponentType, type HomeDraft, type HomePreview, type HomePublication, type MicroPageList, type PageComponent, type PageConfig, type UploadedAssetBinding } from './pages/types'
+import { applyUploadedAsset, componentNames, createComponent, normalizeConfig, type ComponentType, type HomeDraft, type HomePreview, type HomePublication, type PageComponent, type PageConfig, type UploadedAssetBinding } from './pages/types'
 import './pages/home.css'
+import { usePageTargets } from './pages/targets'
 
 const props = defineProps<{ account: Account }>()
 const canEdit = computed(() => props.account.permissionCodes.includes('page.edit'))
@@ -30,10 +31,9 @@ const publishPassword = ref('')
 const publishIntent = ref<PublishIntent | null>(null)
 const publicationRefresh = ref<{ base: string; objectId: string } | null>(null)
 const publicationRecoveryBlocked = ref(false)
-const categories = ref<{ id: string; name: string }[]>([])
-const products = ref<{ productId: string; name: string }[]>([])
-const pages = ref<{ pageId: string; name: string }[]>([])
-const targetWarning = ref('')
+const { categories, products, pages: linkPages, warning: targetWarning, loading: targetsLoading, load: loadTargets } = usePageTargets()
+const pages = computed(() => linkPages.value.filter(item => item.publishedRevision !== null)
+  .map(item => ({ pageId: item.pageId, name: item.name })))
 const componentTypes: ComponentType[] = ['CAROUSEL', 'IMAGE_HOTZONE', 'DIVIDER', 'SEARCH', 'NOTICE', 'FILING']
 
 const dirty = computed(() => !!editor.value && savedSnapshot.value !== JSON.stringify(editor.value))
@@ -66,18 +66,7 @@ async function loadDraft() {
   } catch (reason) { error.value = message(reason) }
   finally { loading.value = false }
 }
-async function loadTargets() {
-  const [category, product, page] = await Promise.allSettled([
-    fetch('/api/v1/app/categories').then((result) => result.json()),
-    fetch('/api/v1/app/products?page=1&pageSize=100').then((result) => result.json()),
-    api<MicroPageList>('/pages?page=1&pageSize=50'),
-  ])
-  if (category.status === 'fulfilled' && category.value.success && Array.isArray(category.value.data)) categories.value = category.value.data
-  if (product.status === 'fulfilled' && product.value.success && Array.isArray(product.value.data?.rows)) products.value = product.value.data.rows
-  if (page.status === 'fulfilled') pages.value = page.value.rows.filter((item) => item.publishedRevision !== null)
-    .map((item) => ({ pageId: item.pageId, name: item.name }))
-  if ([category, product, page].some((result) => result.status === 'rejected')) targetWarning.value = '部分目标列表暂不可用，可输入已知的分类、商品或微页面 ID。'
-}
+
 onMounted(() => { void loadDraft(); void loadTargets(); window.addEventListener('beforeunload', beforeUnload) })
 onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
 function beforeUnload(event: BeforeUnloadEvent) {
@@ -320,7 +309,8 @@ function rolledBack(result: RollbackResult) {
             <label v-if="canEdit" class="home-toggle"><input type="checkbox" :checked="selected.visible" @change="updateComponent({ ...selected, visible: ($event.target as HTMLInputElement).checked })">显示此组件</label>
             <span v-else class="badge badge-muted">{{ selected.visible ? '显示中' : '已隐藏' }}</span>
             <fieldset :disabled="!canEdit" class="home-settings-fieldset"><PageComponentEditor :disabled="!canEdit || Boolean(busy)" :component="selected" :can-upload="canUpload" :categories="categories" :products="products" :pages="pages" @change="updateComponent" @uploaded="bindUploadedAsset" /></fieldset>
-            <p v-if="targetWarning" class="help-text">{{ targetWarning }}</p>
+            <p v-if="targetsLoading" class="help-text" role="status">正在读取目标列表…</p>
+            <p v-else-if="targetWarning" class="help-text" role="alert">{{ targetWarning }} <button type="button" class="text-button" @click="loadTargets">重试读取目标</button></p>
             <button v-if="canEdit" type="button" class="text-button danger home-remove" @click="removeComponent(selected.componentId)">移除组件</button>
           </template>
           <div v-else class="home-theme-fields">

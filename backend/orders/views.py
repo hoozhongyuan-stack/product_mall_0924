@@ -4,8 +4,8 @@ from uuid import UUID
 
 from django.views.decorators.csrf import csrf_exempt
 
+from common.http import offset_response, method
 from accounts.security import error, parse_json, response
-from accounts.views import method
 from customers.auth import resolve_member
 
 from .models import Order
@@ -31,7 +31,7 @@ def orders_view(request):
         from .queries import list_orders
         from payments.service import PaymentError
         try:
-            return response(request, list_orders(request.GET, member))
+            return offset_response(request, list_orders(request.GET, member))
         except PaymentError as exc:
             return error(request, exc.status, exc.code, str(exc))
     try:

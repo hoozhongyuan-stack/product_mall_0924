@@ -5,8 +5,8 @@ from django.views.decorators.vary import vary_on_headers
 from django.db import transaction, connection
 from django.db.models import Q
 from django.views.decorators.csrf import csrf_exempt
+from common.http import offset_response, method
 from accounts.security import require, response as base_response, error as base_error, parse_json, confirm_action, audit, permissions
-from accounts.views import method
 from benefits.policy import rules_data, current_policy, validate_rules, update_rules_locked, body_digest
 from benefits.service import BenefitError
 from .models import Member, MemberRuleChange
@@ -42,7 +42,7 @@ def _page(request,extra=()):
 
 
 def _list_result(request,rows,total,page,size):
-    return response(request,{'items':rows,'pagination':{'page':page,'pageSize':size,'total':total}})
+    return offset_response(request,{'items':rows,'pagination':{'page':page,'pageSize':size,'total':total}}, pagination_key='pagination', respond=response)
 
 
 @cache_control(private=True, no_store=True)
@@ -71,9 +71,9 @@ def member_list_view(request):
         total=query.count()
         from catalog.models import MemberGrade
         from .operations import grade_data
-        return response(request,{"items":member_rows(query[(page-1)*size:page*size]),
+        return offset_response(request,{"items":member_rows(query[(page-1)*size:page*size]),
             "pagination":{"page":page,"pageSize":size,"total":total},
-            "grades":[grade_data(row) for row in MemberGrade.objects.filter(enabled=True).order_by("rank")]})
+            "grades":[grade_data(row) for row in MemberGrade.objects.filter(enabled=True).order_by("rank")]}, pagination_key='pagination', respond=response)
     except ValueError as exc:return _failure(request,exc)
 
 

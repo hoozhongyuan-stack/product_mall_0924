@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import { csvTable } from '../../shared/csv.mjs'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import AssetPicker from '../../shared/AssetPicker.vue'
+import ProductMediaEditor from './ProductMediaEditor.vue'
 import { ApiError, api, type Account } from '../../api'
 import ProductCreateForm from './ProductCreateForm.vue'
 import ProductSpecEditor from './ProductSpecEditor.vue'
 import type { Asset, Category, MemberGrade, ProductDetail, SaleStatus, SkuPage, SkuRow } from './types'
-import { fenToYuan, validateMediaFile, yuanToFen } from './types'
+import { fenToYuan, yuanToFen } from './types'
 
 type SkuAction = 'status' | 'price' | 'prices' | 'unit'
 type BatchAction = 'ON_SALE' | 'OFF_SALE' | 'CATEGORY'
@@ -71,9 +72,8 @@ const productDescription = ref('')
 const productMainImage = ref<Asset | null>(null)
 const productGalleryImages = ref<Asset[]>([])
 const productVideo = ref<Asset | null>(null)
-const productUploadSlot = ref('')
-const productMediaError = ref('')
-let productUploadSequence = 0
+const productMediaBusy = ref(false)
+const createMediaBusy = ref(false)
 const editingSku = ref<SkuRow | null>(null)
 const skuAction = ref<SkuAction>('status')
 const skuStatus = ref<SaleStatus>('OFF_SALE')
@@ -92,7 +92,7 @@ const productDirty = computed(() => {
     || productMainImage.value?.assetId !== (original.mainImage?.assetId ?? undefined)
     || productGalleryImages.value.map((item) => item.assetId).join(',') !== (original.galleryImages || []).map((item) => item.assetId).join(',')
     || productVideo.value?.assetId !== (original.video?.assetId ?? undefined)
-    || Boolean(productUploadSlot.value)
+    || productMediaBusy.value
 })
 const skuDirty = computed(() => {
   const original = editingSku.value
@@ -174,23 +174,22 @@ async function load(page = 1) {
 onMounted(() => { void load() })
 function applyFilters() { void load(1) }
 function clearFilters() { keyword.value = ''; categoryId.value = ''; statusFilter.value = ''; fulfillmentFilter.value = ''; void load(1) }
-function canLeaveEditor() { return !hasUnsaved.value || window.confirm('当前商品资料尚未保存，离开后已填写的内容会丢失。确定继续吗？') }
+function canLeaveEditor() { return !productMediaBusy.value && !createMediaBusy.value && (!hasUnsaved.value || window.confirm('当前商品资料尚未保存，离开后已填写的内容会丢失。确定继续吗？')) }
 function closeEditors(force = false) {
   if (!force && !canLeaveEditor()) return false
-  productUploadSequence += 1
   productLoadSequence += 1
   productLoading.value = false
   productLoadError.value = ''
   productEditorError.value = ''
   productFieldErrors.value = {}
   specDirty.value = false
-  productUploadSlot.value = ''
+  productMediaBusy.value = false
+  createMediaBusy.value = false
   formOpen.value = false
   createDirty.value = false
   editingProduct.value = null
   editingSku.value = null
   error.value = ''
-  productMediaError.value = ''
   return true
 }
 function openCreate() {
@@ -225,7 +224,7 @@ async function openProduct(id: string) {
 
 async function saveProduct() {
   const target = editingProduct.value
-  if (!target) return
+  if (!target || saving.value || !canWrite.value) return
   const activeCategory = activeLeafCategories.value.some((item) => item.id === productCategoryId.value)
   productFieldErrors.value = {
     ...(productName.value.trim() ? {} : { name: '请填写商品名称。' }),
@@ -239,10 +238,10 @@ async function saveProduct() {
     return
   }
   if (target.status === 'ON_SALE' && !productMainImage.value) {
-    productMediaError.value = '商品上架前须上传正方形主图。'
+    productEditorError.value = '商品上架前须上传正方形主图。'
     return
   }
-  if (productUploadSlot.value) { productMediaError.value = '请等待素材上传完成后再保存。'; return }
+  if (productMediaBusy.value) { productEditorError.value = '请等待素材上传完成后再保存。'; return }
   saving.value = true
   productEditorError.value = ''
   try {
@@ -274,44 +273,6 @@ function specsSaved() {
   closeEditors(true)
   ElMessage.success('规格与 SKU 已保存')
   void load(pageData.value.page)
-}
-
-async function selectProductMedia(event: Event, role: 'main' | 'gallery' | 'video', index?: number) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file || productUploadSlot.value || !editingProduct.value || !canUpload.value) return
-  if (role === 'gallery' && index === undefined && productGalleryImages.value.length >= 8) {
-    productMediaError.value = '附图最多 8 张，请先移除一张再添加。'
-    return
-  }
-  const sequence = ++productUploadSequence
-  const productId = editingProduct.value.productId
-  const slot = role === 'gallery' ? `gallery-${index ?? 'new'}` : role
-  productUploadSlot.value = slot
-  productMediaError.value = ''
-  try {
-    const invalid = await validateMediaFile(file, role)
-    if (invalid) { if (sequence === productUploadSequence) productMediaError.value = invalid; return }
-    const body = new FormData()
-    body.append('file', file)
-    body.append('kind', role === 'video' ? 'VIDEO' : 'IMAGE')
-    const asset = await api<Asset>('/assets', { method: 'POST', body })
-    if (sequence !== productUploadSequence || editingProduct.value?.productId !== productId) return
-    if (role === 'main') productMainImage.value = asset
-    else if (role === 'video') productVideo.value = asset
-    else if (index === undefined) productGalleryImages.value = [...productGalleryImages.value, asset]
-    else productGalleryImages.value = productGalleryImages.value.map((item, position) => position === index ? asset : item)
-  } catch (reason) {
-    if (sequence === productUploadSequence) productMediaError.value = reason instanceof Error ? reason.message : '素材上传失败，请重试。'
-  } finally { if (sequence === productUploadSequence) productUploadSlot.value = '' }
-}
-
-function removeProductMedia(role: 'main' | 'gallery' | 'video', index?: number) {
-  if (role === 'main') productMainImage.value = null
-  else if (role === 'video') productVideo.value = null
-  else if (index !== undefined) productGalleryImages.value = productGalleryImages.value.filter((_, position) => position !== index)
-  productMediaError.value = ''
 }
 
 function openSku(row: SkuRow, action: SkuAction) {
@@ -495,12 +456,6 @@ async function saveInlineGrade(row: SkuRow) {
   } finally { savingGradeSku.value = '' }
 }
 
-function csvCell(value: string | number): string {
-  const raw = String(value)
-  const safe = /^[\s\uFEFF]*[=+@\-]/.test(raw) ? `'${raw}` : raw
-  return `"${safe.replaceAll('"', '""')}"`
-}
-
 function exportSelected() {
   if (!selectedRows.value.length) return
   const header = ['商品编号', '商品名称', '规格', '商品类型', '分类', 'SKU编码', '日常价（元）', '等级价（元）', '商品状态', 'SKU状态', '库存']
@@ -509,7 +464,7 @@ function exportSelected() {
     row.fulfillmentKind === 'SHIP' ? '快递发货' : '到店核销', categoryName(row.categoryId), row.skuCode,
     fenToYuan(row.listPriceFen), row.gradePrices.map((price) => `${gradeName(price.gradeId)}:${fenToYuan(price.priceFen)}`).join(' / '),
     row.productStatus, row.saleStatus, '未接入'])
-  const csv = `\uFEFF${[header, ...rows].map((cells) => cells.map(csvCell).join(',')).join('\r\n')}`
+  const csv = csvTable([header, ...rows])
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
   const link = document.createElement('a')
   link.href = url
@@ -526,7 +481,7 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
 <template>
   <div class="catalog-section">
     <div class="page-heading"><div><h2>商品与 SKU</h2><p>列表每行对应一个 SKU。商品名称、商品编号、规格与 SKU 编码分开显示。</p></div>
-      <button v-if="canCreate" class="primary-button" type="button" :disabled="loading || !hasActiveLeaf" @click="openCreate">新建商品</button>
+      <button v-if="canCreate" class="primary-button" type="button" :disabled="loading || !hasActiveLeaf || productMediaBusy || createMediaBusy" @click="openCreate">新建商品</button>
     </div>
     <p v-if="canCreate && !loading && !hasActiveLeaf" class="hint">请先在“分类”中创建启用的一级及二级分类。</p>
     <p v-if="canWrite && !canCreate" class="hint">创建商品包含 SKU 状态、价格和单位写入，当前账号需要这三项权限。</p>
@@ -561,7 +516,7 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
             <td class="catalog-grade-cell"><div v-if="grades.some((grade) => grade.enabled)" class="catalog-grade-list"><label v-for="grade in grades.filter((item) => item.enabled)" :key="grade.id"><span>{{ grade.name }}</span><input :value="inlineGradeDrafts[row.skuId]?.[grade.id] || ''" inputmode="decimal" :aria-label="`${row.skuCode} ${grade.name}等级价（元）`" placeholder="—" :disabled="!canPrice || savingGradeSku === row.skuId" @input="updateInlineGrade(row.skuId, grade.id, ($event.target as HTMLInputElement).value)" /></label></div><span v-else>暂无启用的等级</span><small v-if="inlineErrors[row.skuId]" class="catalog-inline-error" role="alert">{{ inlineErrors[row.skuId] }}</small></td>
             <td class="catalog-stock-pending">到库存管理查看<small>按 SKU 与仓库查询</small></td>
             <td><span :class="['badge', row.saleStatus === 'ON_SALE' ? 'badge-good' : 'badge-muted']">{{ row.saleStatus === 'ON_SALE' ? 'SKU 上架' : 'SKU 下架' }}</span><small class="catalog-product-meta">商品{{ row.productStatus === 'DRAFT' ? '草稿' : row.productStatus === 'ON_SALE' ? '在售' : '下架' }}</small></td>
-            <td class="catalog-actions"><button v-if="canWrite" class="text-button" type="button" :disabled="productLoading" @click="openProduct(row.productId)">编辑商品</button>
+            <td class="catalog-actions"><button v-if="canWrite" class="text-button" type="button" :disabled="productLoading || productMediaBusy || createMediaBusy" @click="openProduct(row.productId)">编辑商品</button>
               <button v-if="canStatus" class="text-button" type="button" @click="openSku(row, 'status')">SKU 状态</button>
               <button v-if="canPrice" class="text-button" type="button" @click="openSku(row, 'price')">日常价</button>
               <button v-if="canPrice" class="text-button" type="button" :disabled="!inlineGradeChanged(row) || savingGradeSku === row.skuId" @click="saveInlineGrade(row)">{{ savingGradeSku === row.skuId ? '保存中…' : '保存等级价' }}</button>
@@ -595,14 +550,14 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
     </template>
     <button v-if="error && !loading" class="text-button retry" type="button" @click="load(pageData.page)">重新加载</button>
 
-    <ProductCreateForm v-if="formOpen" :categories="categories" @created="created" @cancel="closeEditors()" @dirty-change="createDirty = $event" />
+    <ProductCreateForm v-if="formOpen" :categories="categories" @created="created" @cancel="closeEditors()" @dirty-change="createDirty = $event" @busy-change="createMediaBusy = $event" />
     <section v-if="productLoading || productLoadError" class="panel action-panel catalog-editor" aria-label="商品详情加载状态">
       <p v-if="productLoading" role="status">正在加载商品资料与 SKU…</p>
       <template v-else><p class="error notice" role="alert">{{ productLoadError }}</p>
         <button class="secondary-button" type="button" @click="openProduct(loadingProductId)">重试加载商品</button></template>
     </section>
     <form v-if="editingProduct" class="panel action-panel catalog-editor" novalidate @submit.prevent="saveProduct">
-      <div class="panel-heading"><div><h3>编辑商品资料</h3><p>{{ editingProduct.productNo }} · 修订 {{ editingProduct.productRevision }}</p></div><button class="text-button" type="button" @click="closeEditors()">取消</button></div>
+      <div class="panel-heading"><div><h3>编辑商品资料</h3><p>{{ editingProduct.productNo }} · 修订 {{ editingProduct.productRevision }}</p></div><button class="text-button" type="button" :disabled="productMediaBusy || createMediaBusy || saving" @click="closeEditors()">取消</button></div>
       <p v-if="productEditorError" class="error notice" role="alert">{{ productEditorError }}</p>
       <div class="form-grid"><label>商品名称<input ref="productNameInput" v-model="productName" maxlength="120" required :aria-invalid="!!productFieldErrors.name" @input="productFieldErrors.name = undefined" /><small v-if="productFieldErrors.name" class="catalog-field-error">{{ productFieldErrors.name }}</small></label>
         <label>二级分类<select ref="productCategorySelect" v-model="productCategoryId" required :aria-invalid="!!productFieldErrors.category" @change="productFieldErrors.category = undefined"><option value="" disabled>请选择</option><option v-for="item in categories.filter((row) => row.parentId && row.status === 'ACTIVE' && categories.some((parent) => parent.id === row.parentId && parent.status === 'ACTIVE'))" :key="item.id" :value="item.id">{{ item.name }}</option></select><small v-if="productFieldErrors.category" class="catalog-field-error">{{ productFieldErrors.category }}</small></label>
@@ -611,38 +566,19 @@ function created() { formOpen.value = false; createDirty.value = false; ElMessag
         </div>
       <p class="help-text">商品当前{{ editingProduct.status === 'DRAFT' ? '为草稿' : editingProduct.status === 'ON_SALE' ? '在售' : '已下架' }}。商品销售状态由 SKU 自动计算；请在列表的“SKU 状态”操作上架或下架。</p>
       <p v-if="!canStatus" class="help-text">当前账号没有调整 SKU 上下架状态的权限。</p>
-      <section class="catalog-media-section" aria-labelledby="edit-media-title">
-        <h4 id="edit-media-title">商品图片与视频</h4>
-        <p class="help-text">上架前须有正方形主图。图片支持 JPG、PNG，每张不超过 10 MB；建议宽高至少 800 像素。视频支持 MP4，不超过 50 MB。</p>
-        <p v-if="productMediaError" class="error notice" role="alert">{{ productMediaError }}</p>
-        <div class="catalog-media-group"><h5>主图 · 1:1</h5><div class="catalog-media-grid"><div class="catalog-media-slot">
-          <img v-if="productMainImage" :src="productMainImage.adminUrl" alt="当前商品主图" /><div v-else class="catalog-media-placeholder">尚无主图</div>
-          <div class="catalog-media-controls"><label v-if="canUpload" class="secondary-button catalog-media-picker">{{ productUploadSlot === 'main' ? '上传中…' : productMainImage ? '替换主图' : '上传主图' }}<input class="catalog-media-file" type="file" accept="image/jpeg,image/png" :disabled="!!productUploadSlot || saving" @change="selectProductMedia($event, 'main')" /></label><AssetPicker kind="IMAGE" square :excluded-ids="productGalleryImages.map(item => item.assetId)" :disabled="!!productUploadSlot || saving" :target-key="JSON.stringify([editingProduct?.productId || '', productMainImage?.assetId])" @select="productMainImage = $event" />
-            <button v-if="productMainImage" class="text-button danger" type="button" :disabled="!!productUploadSlot || saving" @click="removeProductMedia('main')">移除</button></div>
-          <small v-if="productMainImage">{{ productMainImage.width }} × {{ productMainImage.height }} 像素</small>
-        </div></div></div>
-        <div class="catalog-media-group"><h5>附图 · 最多 8 张</h5><div class="catalog-media-grid">
-          <div v-for="(asset, index) in productGalleryImages" :key="asset.assetId" class="catalog-media-slot"><img :src="asset.adminUrl" :alt="`商品附图 ${index + 1}`" />
-            <div class="catalog-media-controls"><label v-if="canUpload" class="secondary-button catalog-media-picker">{{ productUploadSlot === `gallery-${index}` ? '上传中…' : '替换' }}<input class="catalog-media-file" type="file" accept="image/jpeg,image/png" :disabled="!!productUploadSlot || saving" @change="selectProductMedia($event, 'gallery', index)" /></label>
-              <button class="text-button danger" type="button" :disabled="!!productUploadSlot || saving" @click="removeProductMedia('gallery', index)">移除</button><AssetPicker kind="IMAGE" :disabled="!!productUploadSlot || saving" :excluded-ids="[productMainImage?.assetId || '', ...productGalleryImages.filter((_, position) => position !== index).map(item => item.assetId)]" :target-key="JSON.stringify([editingProduct?.productId || '', productGalleryImages.map(item => item.assetId)])" @select="productGalleryImages = productGalleryImages.map((item, position) => position === index ? $event : item)" /></div></div>
-          <div v-if="productGalleryImages.length < 8" class="catalog-media-slot catalog-media-add"><div class="catalog-media-placeholder">添加图片</div><label v-if="canUpload" class="secondary-button catalog-media-picker">{{ productUploadSlot === 'gallery-new' ? '上传中…' : '选择图片' }}<input class="catalog-media-file" type="file" accept="image/jpeg,image/png" :disabled="!!productUploadSlot || saving" @change="selectProductMedia($event, 'gallery')" /></label><AssetPicker kind="IMAGE" :disabled="!!productUploadSlot || saving" :excluded-ids="[productMainImage?.assetId || '', ...productGalleryImages.map(item => item.assetId)]" :target-key="JSON.stringify([editingProduct?.productId || '', productGalleryImages.map(item => item.assetId)])" @select="productGalleryImages = [...productGalleryImages, $event]" /></div>
-        </div></div>
-        <div class="catalog-media-group"><h5>主图视频 · 可选</h5><div class="catalog-media-grid"><div class="catalog-media-slot catalog-media-video">
-          <video v-if="productVideo" :src="productVideo.adminUrl" controls preload="metadata" aria-label="当前商品视频" /><div v-else class="catalog-media-placeholder">尚无视频</div>
-          <div class="catalog-media-controls"><label v-if="canUpload" class="secondary-button catalog-media-picker">{{ productUploadSlot === 'video' ? '上传中…' : productVideo ? '替换视频' : '上传视频' }}<input class="catalog-media-file" type="file" accept="video/mp4" :disabled="!!productUploadSlot || saving" @change="selectProductMedia($event, 'video')" /></label><AssetPicker kind="VIDEO" :disabled="!!productUploadSlot || saving" :target-key="JSON.stringify([editingProduct?.productId || '', productVideo?.assetId])" @select="productVideo = $event" />
-            <button v-if="productVideo" class="text-button danger" type="button" :disabled="!!productUploadSlot || saving" @click="removeProductMedia('video')">移除</button></div>
-        </div></div></div>
-      </section>
+      <ProductMediaEditor v-model:main-image="productMainImage" v-model:gallery-images="productGalleryImages" v-model:video="productVideo"
+        :target-key="JSON.stringify([account.accountId, editingProduct.productId])" :can-upload="canUpload" :disabled="saving || !canWrite"
+        @busy-change="productMediaBusy = $event" />
       <label>商品描述（HTML，服务端会过滤）<textarea v-model="productDescription" rows="4" /></label>
       <p class="help-text">SKU 上架后商品可在小程序展示；是否可购买仍由当前库存与报价决定。规格与 SKU 修改在下方独立核对并保存。</p>
-      <button class="primary-button" type="submit" :disabled="saving || !!productUploadSlot">{{ saving ? '保存中…' : '保存商品资料' }}</button>
+      <button class="primary-button" type="submit" :disabled="saving || productMediaBusy || !canWrite">{{ saving ? '保存中…' : '保存商品资料' }}</button>
     </form>
     <section v-if="editingProduct" class="panel action-panel catalog-editor" aria-label="商品规格编辑">
       <ProductSpecEditor :product="editingProduct" :grades="grades" :can-edit="canEditSpecs" :basic-dirty="productDirty"
         @dirty-change="specDirty = $event" @saved="specsSaved" />
     </section>
     <form v-if="editingSku" class="panel action-panel catalog-editor" @submit.prevent="saveSku">
-      <div class="panel-heading"><div><h3>编辑 SKU {{ editingSku.skuCode }}</h3><p>{{ editingSku.productName }} · 修订 {{ editingSku.skuRevision }}</p></div><button class="text-button" type="button" @click="closeEditors()">取消</button></div>
+      <div class="panel-heading"><div><h3>编辑 SKU {{ editingSku.skuCode }}</h3><p>{{ editingSku.productName }} · 修订 {{ editingSku.skuRevision }}</p></div><button class="text-button" type="button" :disabled="productMediaBusy || createMediaBusy || saving" @click="closeEditors()">取消</button></div>
       <label v-if="skuAction === 'status'">SKU 状态<select v-model="skuStatus"><option value="OFF_SALE">下架</option><option value="ON_SALE">上架</option></select></label>
       <label v-else-if="skuAction === 'price'">日常价（元）<input v-model="dailyPriceYuan" inputmode="decimal" required /></label>
       <template v-else-if="skuAction === 'prices'"><p>日常价 ¥{{ fenToYuan(editingSku.listPriceFen) }}。留空的已启用等级不设专属价；已停用等级的原价格会保留。</p>

@@ -7,8 +7,8 @@ from django.db.models import OuterRef, Q, Subquery
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.cache import never_cache
 
+from common.http import cursor_response, method
 from accounts.security import error, require, response
-from accounts.views import method
 
 from .models import CodeBuildJob, CodeSourceProvenance, CodeVersion
 from .service import object_status
@@ -81,7 +81,7 @@ def versions_view(request):
     if bad:
         return bad
     result, bad = _page(request, _versions(), "code-version-list", _version)
-    return bad or response(request, result)
+    return bad or cursor_response(request, result)
 
 
 @never_cache
@@ -109,4 +109,4 @@ def jobs_view(request):
     if bad:
         return bad
     result, bad = _page(request, CodeBuildJob.objects.all(), "code-job-list", _job)
-    return bad or response(request, result)
+    return bad or cursor_response(request, result)

@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from common.http import offset_response, method
 from accounts.security import (
     error,
     response,
@@ -13,7 +14,6 @@ from accounts.security import (
     confirm_action,
     audit,
 )
-from accounts.views import method
 from customers.auth import resolve_member
 from .models import AfterSaleCase, AfterSaleEvent
 from .service import (
@@ -35,8 +35,8 @@ def fail(request, exc):
     )
 
 
-def result(request, data, status=200):
-    r = response(request, data, status=status)
+def result(request, data, status=200, **kwargs):
+    r = response(request, data, status=status, **kwargs)
     r["Cache-Control"] = "private, no-store"
     return r
 
@@ -119,7 +119,7 @@ def member_cases_view(request):
         return bad
     try:
         if request.method == "GET":
-            return result(request, list_cases(request.GET, m))
+            return offset_response(request, list_cases(request.GET, m), respond=result)
         b = body_fields(
             request, {"lineId", "kind", "redemptionScope", "quantity", "reason"}
         )
@@ -187,7 +187,7 @@ def admin_cases_view(request):
     if bad:
         return bad
     try:
-        return result(request, list_cases(request.GET, actor=a))
+        return offset_response(request, list_cases(request.GET, actor=a), respond=result)
     except ValueError as exc:
         return fail(request, exc)
 

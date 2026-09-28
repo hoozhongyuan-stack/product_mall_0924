@@ -12,11 +12,11 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.cache import never_cache
 
+from common.http import cursor_response, method
 from .models import AuditLog
 from .read_window import read_window
 from .read_rate_limit import read_rate_limit
-from .security import error, require, response
-from .views import method
+from .security import error, require
 
 
 QUERY_KEYS = frozenset({"from", "to", "actorId", "actionCode", "objectType", "objectId", "result", "limit", "cursor"})
@@ -171,5 +171,5 @@ def audit_view(request):
         next_cursor = signing.dumps({"f": fingerprint, "at": last_row.occurred_at.isoformat(),
                                      "id": str(last_row.id)}, salt=SALT)
     items = [audit_entry(row) for row in rows[:limit]]
-    return response(request, {"items": items, "nextCursor": next_cursor,
+    return cursor_response(request, {"items": items, "nextCursor": next_cursor,
                               "from": first.isoformat(), "to": last.isoformat(), "timeZone": "Asia/Shanghai"})
