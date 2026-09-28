@@ -15,7 +15,7 @@ from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from accounts.models import AccountGroup, AdminAccount, GroupPermission, PermissionGroup
-from code_versions.models import CodeBuildJob, CodeVersion
+from code_versions.models import CodeBuildJob, CodeSourceProvenance, CodeVersion
 from code_versions.package import PackageError, build_package
 from code_versions import package as package_module
 from code_versions.service import build_local_version
@@ -200,15 +200,18 @@ class VersionApiTests(TestCase):
             version_label="local-abc", source_digest="a" * 64, package_sha256="b" * 64,
             package_bytes=100, file_count=2, object_key="code/private.zip",
             storage_status="READY", platform_status="NOT_CONFIGURED")
+        CodeSourceProvenance.objects.create(version=version, source_revision="a" * 40)
         CodeBuildJob.objects.create(status="FAILED", failure_code="SOURCE_INVALID",
                                     completed_at=timezone.now())
         list_response = self.client.get("/api/v1/admin/code-versions")
         self.assertEqual(list_response.status_code, 200, list_response.content)
         self.assertIn("no-store", list_response["Cache-Control"])
         self.assertEqual(list_response.json()["data"]["items"][0]["versionId"], str(version.pk))
+        self.assertEqual(list_response.json()["data"]["items"][0]["sourceRevision"], "a" * 40)
         detail = self.client.get(f"/api/v1/admin/code-versions/{version.pk}")
         jobs = self.client.get("/api/v1/admin/code-sync-jobs")
         self.assertEqual(detail.status_code, 200, detail.content)
+        self.assertEqual(detail.json()["data"]["sourceRevision"], "a" * 40)
         self.assertEqual(jobs.status_code, 200, jobs.content)
         self.assertEqual(jobs.json()["data"]["items"][0]["failureCode"], "SOURCE_INVALID")
         self.assertNotIn("code/private.zip", list_response.content.decode() + detail.content.decode())

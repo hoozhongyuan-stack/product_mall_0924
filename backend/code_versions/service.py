@@ -15,8 +15,9 @@ from django.utils import timezone
 from catalog.storage import LocalStorage, lock_storage
 from catalog.validation import CatalogError
 
-from .models import CodeBuildJob, CodeVersion
+from .models import CodeBuildJob, CodeSourceProvenance, CodeVersion
 from .package import PackageError, build_package
+from .trusted_source import REVISION, build_git_package
 
 
 LOGGER = logging.getLogger(__name__)
@@ -89,14 +90,14 @@ def _record_failure(job, code):
     LOGGER.warning("Mini Program local source snapshot failed: %s", code)
 
 
-def _start_job():
+def _start_job(source_revision=""):
     with transaction.atomic():
         CodeBuildJob.objects.filter(status="STARTED").update(
             status="FAILED", failure_code="INTERRUPTED", completed_at=timezone.now())
-        return CodeBuildJob.objects.create()
+        return CodeBuildJob.objects.create(source_revision=source_revision)
 
 
-def _store_version(job, package):
+def _store_version(job, package, source_revision=""):
     storage = LocalStorage()
     key = storage.key("code", f"source-{package.package_sha256}.zip")
     with transaction.atomic():
@@ -114,22 +115,34 @@ def _store_version(job, package):
                 package_sha256=package.package_sha256, package_bytes=len(package.data),
                 file_count=package.file_count, object_key=key, storage_status="READY",
                 platform_status="NOT_CONFIGURED")
+        if source_revision:
+            # A previous local snapshot may have identical bytes but no proven
+            # origin. Keep that immutable version and attach a separate fact.
+            proof = CodeSourceProvenance.objects.filter(source_revision=source_revision).first()
+            if proof and proof.version_id != version.pk:
+                raise CodeBuildError("VERSION_CONFLICT")
+            if not proof:
+                CodeSourceProvenance.objects.create(version=version,
+                                                    source_revision=source_revision)
         job.version = version
         job.status = "SUCCEEDED"
+        job.source_revision = source_revision
         job.completed_at = timezone.now()
-        job.save(update_fields=["version", "status", "completed_at"])
+        job.save(update_fields=["version", "status", "source_revision", "completed_at"])
         return version
 
 
-def build_local_version():
-    """Build one snapshot; persist STARTED before I/O and retain safe failures."""
+def _run_build(package_builder, source_revision=""):
+    """Persist STARTED before I/O; success, proof and version commit together."""
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_advisory_lock(%s)", [BUILD_LOCK])
     try:
-        job = _start_job()
+        requested_revision = (source_revision if isinstance(source_revision, str) and
+                              REVISION.fullmatch(source_revision) else "")
+        job = _start_job(requested_revision)
         try:
-            package = build_package(settings.MINIPROGRAM_SOURCE_ROOT, settings.STORAGE_CODE_MAX_BYTES)
-            return _store_version(job, package)
+            package = package_builder()
+            return _store_version(job, package, source_revision)
         except (PackageError, CodeBuildError) as exc:
             _record_failure(job, exc.code)
             raise
@@ -153,3 +166,16 @@ def build_local_version():
         except DatabaseError:
             # The connection has gone away; PostgreSQL released its session lock.
             LOGGER.error("Mini Program build database connection was lost")
+
+
+def build_local_version():
+    """Build one local snapshot without asserting a Git revision."""
+    return _run_build(lambda: build_package(settings.MINIPROGRAM_SOURCE_ROOT,
+                                           settings.STORAGE_CODE_MAX_BYTES))
+
+
+def build_trusted_version(repo_root, expected_revision):
+    """Build from Git objects after proving the checkout matches expected HEAD."""
+    return _run_build(lambda: build_git_package(repo_root, expected_revision,
+                                                settings.STORAGE_CODE_MAX_BYTES),
+                      expected_revision)

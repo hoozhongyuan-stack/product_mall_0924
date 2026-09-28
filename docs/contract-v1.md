@@ -552,3 +552,11 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 | `GET /api/v1/admin/code-sync-jobs` | 需 `code.version.read`；同样分页，返回最近构建任务及 `STARTED/SUCCEEDED/FAILED` 与安全失败代码。 |
 
 版本 DTO 为 `versionId/versionLabel/sourceRevision/sourceDigest/packageSha256/packageBytes/fileCount/storageStatus/platformStatus/createdAt/completedAt/failureCode`；`sourceRevision` 在没有可验证提交来源时为 `null`，`platformStatus` 本片固定 `NOT_CONFIGURED`。任务 DTO 为 `taskId/versionId/status/failureCode/createdAt/completedAt`。管理台仅查询版本与任务，不提供浏览器上传、构建、预览、提审或发布按钮。接口使用当前后台会话与独立只读权限、私有响应禁止缓存；不返回本地路径、密钥、原始异常或包内容。平台凭据、真实构建／自动上传能力、预览／提审／发布及可信平台回执在后续 E3 切片和真实主体环境分别验收，任何本地 `READY` 都不可作为可提审或已发布状态。
+
+### 5.28 E3.1：可信 Git 来源与部署自动同步
+
+部署入口为 `scripts/deploy-with-code-sync.sh [后续启动命令及参数]`。受信部署控制器须在检出完整提交后，设置 `MALL_RELEASE_REVISION` 为该提交的完整 SHA；可用 `MALL_PYTHON` 指向部署 Python。入口先用不接受替换引用的 Git 核对 HEAD 和干净检出，**再**执行数据库迁移、`sync_deployed_miniprogram --expected-revision`、可选的后续启动命令。预检、迁移或同步任何一步失败均非零退出，后续命令不会启动；目前仓库尚无完整应用编排，部署系统须以此入口接线，E5 再验完整容器升级与恢复。`build_miniprogram_source` 仍保留为不声明 Git 来源的手动本地快照命令。
+
+可信同步要求工作目录是干净的 Git 根目录，完整预期 SHA 与当前 `HEAD` 一致。源码包只从该提交中 `mini-program/` 的 Git blob 读取，禁用 Git 替换引用并剔除外部 `GIT_*` 环境覆盖，按 E3.0 相同规则生成确定性 ZIP；前后重验检出状态。缺失 Git、修订不匹配、脏检出、非法源码、包过大或存储／数据库失败均拒绝成功，并按安全失败码记录任务（数据库完全不可用时不能保证失败行）。Git SHA 证明包字节来自指定提交，不等于提交签名、部署主机可信或微信平台验收。
+
+同内容重复同步复用不可变版本，但每次增加构建任务。成功时在同一事务内写入不可变的版本—提交来源证明；旧 E3.0 版本若与提交包摘要完全相同，也可新增证明而不改写旧版本。版本 DTO 的 `sourceRevision` 只从已验证证明读取，未证明仍为 `null`。任务 DTO 增加 `sourceRevision`：合法格式的预期提交 SHA 在任务开始时记录，失败任务仅表示请求目标、**不代表来源已验证**；成功任务才表示核验通过。同一源码对应多个提交时，各提交分别留证明，版本读模型展示最近一次通过验证的提交；任务展示本次提交。版本、证明及包不提供下载；`platformStatus` 仍为 `NOT_CONFIGURED`，不能据此提审或声称已发布。

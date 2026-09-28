@@ -38,6 +38,7 @@ class CodeBuildJob(models.Model):
                                 related_name="build_jobs")
     status = models.CharField(max_length=10, default="STARTED")
     failure_code = models.CharField(max_length=32, blank=True)
+    source_revision = models.CharField(max_length=64, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -55,3 +56,19 @@ class CodeBuildJob(models.Model):
                                                 version__isnull=True) & ~Q(failure_code="")),
                                    name="mini_code_job_state_shape"),
         ]
+
+
+class CodeSourceProvenance(models.Model):
+    """Verified Git source for an immutable package; never rewritten."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    version = models.ForeignKey(CodeVersion, on_delete=models.PROTECT,
+                                related_name="provenances")
+    source_revision = models.CharField(max_length=64, unique=True)
+    verified_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "mini_code_source_provenance"
+        ordering = ["-verified_at", "-id"]
+        indexes = [models.Index(fields=["version", "-verified_at", "-id"],
+                                name="mini_code_prov_latest_idx")]
