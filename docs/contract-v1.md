@@ -538,3 +538,17 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 任务摘要字段为 `taskId/eventType/status/reasonCode/attemptCount/occurredAt/createdAt/updatedAt/nextAttemptAt/leaseUntil/recoverable`；详情另有 `attempts:[{ordinal,outcome,failureCode,startedAt,finishedAt}]`。`recoverable` 是服务端按当前事实计算的提示，不代替 POST 中的行锁重验。筛选只接受固定事件和任务状态；日期可为 `YYYY-MM-DD` 或带时区 ISO 时间。只读和写入均使用当前会话鉴权、私有响应不缓存；写入在领域锁后复查当前权限并记录审计。
 
 过期 `CLAIMED` 沿既有恢复作业转为 `UNKNOWN`，不得回到 `READY`。即使异常数据出现 `RESERVED` 的**当前租约**带发送尝试，也须保守地转为 `UNKNOWN`。重复或并发点击由任务锁与快照条件拒绝；网络结果未知时客户端先重新读取，不自动重复提交。正式微信模板、授权、发送、真实接收和部署调度仍另行验收。
+
+### 5.27 E3.0：服务端代码源码快照与私有版本基础
+
+部署流程完成数据库迁移后执行 `python backend/manage.py build_miniprogram_source`。命令从部署拥有的固定 `mini-program/` 源码目录生成确定性 ZIP：固定的根文件和 `assets/components/lib/pages` 目录、排序后的文件名、固定 ZIP 元数据；忽略测试、依赖、隐藏和私有配置，逐级拒绝符号链接与非法文件，受 `STORAGE_CODE_MAX_BYTES` 限制。整树二次读取摘要不一致时拒绝，部署流程仍须在源码更新完成后才启动命令。它是**源码快照**，不是微信编译包。来源身份以实际文件名和内容计算 SHA-256；本片不把未经证明的 Git 提交号写成可信来源修订。
+
+包以 `0600` 权限先写入与持久化媒体根同卷的私有临时文件，完整同步后按摘要无覆盖安装到 `code/`；包和元信息摘要、文件数、字节数写入由数据库触发器禁止 UPDATE／DELETE 的 `CodeVersion`。重复构建同一源码验证既有文件摘要并复用版本，另产生一次构建任务记录；不同内容产生新版本。构建任务先持久化 `STARTED`，成功记 `SUCCEEDED`，可判定错误记 `FAILED` 和安全错误码；进程中断留下的任务在下次运行时转 `INTERRUPTED`。文件已安装而数据库失败时，按内容摘要保留私有文件供下次核验复用，不能由素材清理器删除。数据库完全不可用时命令非零退出；无失败行不能解释为同步成功。数据库版本的 `READY` 记录是构建成功事实；查询列表以文件存在和大小返回 `STORED_UNVERIFIED`，详情完成摘要复核后才返回当前 `READY`，缺失或不匹配返回 `UNAVAILABLE`。这些状态都不表示微信平台已收到。
+
+| 接口 | 契约 |
+| --- | --- |
+| `GET /api/v1/admin/code-versions` | 需 `code.version.read`；按创建时间与 UUID 倒序，默认20、最多100条，不透明签名 `cursor` 翻页。返回 `data:{items,nextCursor}`。 |
+| `GET /api/v1/admin/code-versions/{versionId}` | 需 `code.version.read`；返回该版本的非敏感元数据，无代码包下载或物理路径。 |
+| `GET /api/v1/admin/code-sync-jobs` | 需 `code.version.read`；同样分页，返回最近构建任务及 `STARTED/SUCCEEDED/FAILED` 与安全失败代码。 |
+
+版本 DTO 为 `versionId/versionLabel/sourceRevision/sourceDigest/packageSha256/packageBytes/fileCount/storageStatus/platformStatus/createdAt/completedAt/failureCode`；`sourceRevision` 在没有可验证提交来源时为 `null`，`platformStatus` 本片固定 `NOT_CONFIGURED`。任务 DTO 为 `taskId/versionId/status/failureCode/createdAt/completedAt`。管理台仅查询版本与任务，不提供浏览器上传、构建、预览、提审或发布按钮。接口使用当前后台会话与独立只读权限、私有响应禁止缓存；不返回本地路径、密钥、原始异常或包内容。平台凭据、真实构建／自动上传能力、预览／提审／发布及可信平台回执在后续 E3 切片和真实主体环境分别验收，任何本地 `READY` 都不可作为可提审或已发布状态。

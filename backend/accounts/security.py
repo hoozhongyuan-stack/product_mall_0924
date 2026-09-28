@@ -30,6 +30,7 @@ PERMISSION_CODES = frozenset({
     "coupon.read", "coupon.manage", "coupon.publish", "coupon.issue", "coupon.issue.repeat",
     "exchange.read", "exchange.manage", "exchange.publish",
     "notification.read", "notification.manage", "notification.recover",
+    "code.version.read",
 })
 
 

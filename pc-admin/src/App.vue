@@ -126,6 +126,7 @@ async function signOut() {
         <RouterLink v-if="account.permissionCodes.includes('startup.read')" to="/store/info" class="nav-item">店铺信息</RouterLink>
         <RouterLink v-if="account.permissionCodes.includes('navigation.read')" to="/store/navigation" class="nav-item">底部导航</RouterLink>
         <RouterLink v-if="account.permissionCodes.includes('customer_service.read')" to="/store/customer-service" class="nav-item">客服悬浮入口</RouterLink>
+        <RouterLink v-if="account.permissionCodes.includes('code.version.read')" to="/store/code-versions" class="nav-item">代码版本</RouterLink>
       </nav>
     </aside>
     <div class="workspace">

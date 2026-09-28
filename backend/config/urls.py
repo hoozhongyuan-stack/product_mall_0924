@@ -24,8 +24,12 @@ from benefits import coupon_views
 from points_exchange import views as exchange_views
 from notifications import views as notification_views
 from notifications import task_views as notification_task_views
+from code_versions import views as code_version_views
 
 urlpatterns = [
+    path("api/v1/admin/code-versions", code_version_views.versions_view),
+    path("api/v1/admin/code-versions/<uuid:version_id>", code_version_views.version_detail_view),
+    path("api/v1/admin/code-sync-jobs", code_version_views.jobs_view),
     path("api/v1/admin/subscription-message-tasks", notification_task_views.tasks_view),
     path("api/v1/admin/subscription-message-tasks/<uuid:task_id>", notification_task_views.task_detail_view),
     path("api/v1/admin/subscription-message-tasks/<uuid:task_id>/recover-reservation",

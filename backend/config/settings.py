@@ -17,6 +17,7 @@ PRODUCT_MEDIA_ORPHAN_GLOBAL_QUOTA_BYTES = 1024 * 1024 * 1024
 STORAGE_TEMPORARY_TTL = timedelta(hours=24)
 # Reserved private storage boundaries; E0 does not build code or export reports.
 STORAGE_CODE_MAX_BYTES = int(os.environ.get("STORAGE_CODE_MAX_BYTES", str(200 * 1024 * 1024)))
+MINIPROGRAM_SOURCE_ROOT = BASE_DIR.parent / "mini-program"
 STORAGE_EXPORT_MAX_BYTES = int(os.environ.get("STORAGE_EXPORT_MAX_BYTES", str(100 * 1024 * 1024)))
 FILE_UPLOAD_MAX_MEMORY_SIZE = 0
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "local-only-change-before-deploy")
@@ -66,6 +67,7 @@ INSTALLED_APPS = [
     "benefits",
     "points_exchange",
     "notifications",
+    "code_versions",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
