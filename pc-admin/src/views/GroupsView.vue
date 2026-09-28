@@ -12,7 +12,7 @@ const permissionOptions = [
   ['startup.read', '查看启动素材'], ['startup.edit', '编辑启动素材'], ['startup.publish', '发布启动素材'],
   ['account.read', '查看账号'], ['account.manage', '管理账号'],
   ['account.reset_credentials', '重置账号凭据'], ['account.unlock', '解锁账号'],
-  ['permission.read', '查看权限组'], ['permission.manage', '管理权限组'], ['audit.read', '查看操作日志'],
+  ['permission.read', '查看权限组'], ['permission.manage', '管理权限组'], ['audit.read', '查看操作日志'], ['business.report.read', '查看经营统计'],
   ['member.read', '查看会员与权益'], ['member.rules.read', '查看等级与积分规则'], ['member.rules.manage', '管理等级与积分规则'],
   ['coupon.read', '查看优惠券活动'], ['coupon.manage', '管理优惠券草稿（需查看券）'], ['coupon.publish', '发布与暂停发券（需查看券）'], ['coupon.issue', '向会员发券（需查看券及会员）'], ['coupon.issue.repeat', '重复发券（需发券权限）'],
   ['exchange.read', '查看积分商城商品'], ['exchange.manage', '配置兑换积分（需查看兑换）'], ['exchange.publish', '开启与暂停兑换（需查看兑换）'],

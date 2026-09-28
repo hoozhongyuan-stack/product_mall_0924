@@ -23,7 +23,8 @@ class RefundIntent(models.Model):
 
     class Meta:
         db_table = "refund_intent"
-        indexes = [models.Index(fields=["status", "created_at"], name="refund_recovery_queue_idx")]
+        indexes = [models.Index(fields=["status", "created_at"], name="refund_recovery_queue_idx"),
+                   models.Index(fields=["succeeded_at"], condition=Q(status="SUCCEEDED"), name="refund_success_fact_idx")]
         constraints = [
             models.UniqueConstraint(fields=["created_by", "request_key"], name="refund_actor_key_unique"),
             models.CheckConstraint(condition=Q(amount_fen__gt=0), name="refund_intent_amount_positive"),

@@ -344,17 +344,3 @@ def group_detail_view(request, group_id):
         audit(request, "group.update", "permission_group", group.id, actor,
               before={"permissionCodes": before}, after={"permissionCodes": sorted(set(codes))})
     return response(request, group_data(group))
-
-
-def audit_view(request):
-    bad = method(request, "GET")
-    if bad:
-        return bad
-    account, bad = require(request, "audit.read")
-    if bad:
-        return bad
-    logs = AuditLog.objects.select_related("actor").all()[:100]
-    return response(request, [{"id": str(item.id), "actorId": str(item.actor_id) if item.actor_id else None,
-        "actionCode": item.action_code, "objectType": item.object_type, "objectId": item.object_id,
-        "before": item.before, "after": item.after, "result": item.result,
-        "requestId": str(item.request_id), "occurredAt": item.occurred_at.isoformat()} for item in logs])

@@ -560,3 +560,14 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 可信同步要求工作目录是干净的 Git 根目录，完整预期 SHA 与当前 `HEAD` 一致。源码包只从该提交中 `mini-program/` 的 Git blob 读取，禁用 Git 替换引用并剔除外部 `GIT_*` 环境覆盖，按 E3.0 相同规则生成确定性 ZIP；前后重验检出状态。缺失 Git、修订不匹配、脏检出、非法源码、包过大或存储／数据库失败均拒绝成功，并按安全失败码记录任务（数据库完全不可用时不能保证失败行）。Git SHA 证明包字节来自指定提交，不等于提交签名、部署主机可信或微信平台验收。
 
 同内容重复同步复用不可变版本，但每次增加构建任务。成功时在同一事务内写入不可变的版本—提交来源证明；旧 E3.0 版本若与提交包摘要完全相同，也可新增证明而不改写旧版本。版本 DTO 的 `sourceRevision` 只从已验证证明读取，未证明仍为 `null`。任务 DTO 增加 `sourceRevision`：合法格式的预期提交 SHA 在任务开始时记录，失败任务仅表示请求目标、**不代表来源已验证**；成功任务才表示核验通过。同一源码对应多个提交时，各提交分别留证明，版本读模型展示最近一次通过验证的提交；任务展示本次提交。版本、证明及包不提供下载；`platformStatus` 仍为 `NOT_CONFIGURED`，不能据此提审或声称已发布。
+
+### 5.29 E4.0：审计筛选与经营统计口径读模型
+
+| 接口 | 权限与返回 |
+| --- | --- |
+| `GET /api/v1/admin/audit-logs` | `audit.read`。接受 `from/to`（上海时区日期，含首尾，默认近90个自然日）、`actorId/actionCode/objectType/objectId/result` 精确筛选，`limit` 默认20最多100及签名 `cursor`；返回 `data:{items,nextCursor,from,to,timeZone}`。时间、UUID倒序游标绑定筛选，最长1小时；改筛选须从第一页查起。现有仅返回数组的旧接口同址升级，PC 同步更新。 |
+| `GET /api/v1/admin/business-summary` | 独立权限 `business.report.read`。接受 `from/to`，默认近90个自然日，最大90日；返回 `data:{from,to,timeZone,basis,totals,days}`，每天含 `date/paidOrderCount/paidAmountFen/pointsExchangeCount/refundCount/refundAmountFen/netAmountFen`，金额为整数分。 |
+
+现金经营支付只取 `Order` 的 `order_kind=CASH,status=PAID,paid_at`，金额用订单 `payable_fen`；零元现金单计支付笔数、金额0。`POINTS` 已支付订单单列 `pointsExchangeCount`，不混入现金笔数和金额。退款只取 `RefundIntent.status=SUCCEEDED,succeeded_at`，金额用 `amount_fen`；一笔成功意图计一笔退款。分别按上海本地成功日期归属，半开时刻窗 `[起始日00:00,结束日后一天00:00)`；净成交为窗口支付减窗口退款，可为负。外部 `PaymentReceipt.paid_at` 和 `RefundEvidence.refunded_at` 不是本系统确认入账时间。三类聚合在同一 PostgreSQL 语句快照中执行，不以订单与退款连接造成重复计数。
+
+审计列表保留可用的动作、对象和结果元信息；`before/after` 仅在读取时递归输出白名单枚举、数字和布尔值，其余字符串及敏感键遮盖，嵌套输出有深度与节点上限。底层审计证据不改写。两个接口均需实时后台会话鉴权，私有响应禁止缓存；按账号和自然分钟分别限制审计 60 次、经营 30 次，超限返回 429 与 `Retry-After`。限流仅写独立配额桶，不修改交易或审计事实；过期配额桶须在 E5 运维调度中清理。E4.1 再做按权限异步导出、文件下载重验和24小时清理，本片不提供导出入口。

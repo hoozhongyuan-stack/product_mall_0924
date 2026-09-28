@@ -47,7 +47,8 @@ class Order(models.Model):
         indexes = [models.Index(fields=["-created_at", "-id"], name="order_admin_created_idx"),
                    models.Index(fields=["payment_method", "status", "-created_at"], name="order_method_status_idx"),
                    models.Index(fields=["member", "-created_at"], name="order_member_created_idx"),
-                   models.Index(fields=["status", "expires_at"], name="order_status_expiry_idx")]
+                   models.Index(fields=["status", "expires_at"], name="order_status_expiry_idx"),
+                   models.Index(fields=["paid_at"], condition=Q(status="PAID"), name="order_paid_fact_idx")]
         constraints = [
             models.CheckConstraint(condition=(Q(order_kind="CASH",payment_method__in=["OFFLINE","WECHAT"]) |
                 Q(order_kind="POINTS",payment_method="POINTS",goods_total_fen=0,shipping_fee_fen=0,coupon_id__isnull=True,

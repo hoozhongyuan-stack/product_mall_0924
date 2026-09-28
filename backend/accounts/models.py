@@ -98,6 +98,24 @@ class AuditLog(models.Model):
     class Meta:
         db_table = "audit_log"
         ordering = ["-occurred_at"]
+        indexes = [models.Index(fields=["-occurred_at", "-id"], name="audit_time_id_idx"),
+                   models.Index(fields=["actor", "-occurred_at", "-id"], name="audit_actor_time_idx"),
+                   models.Index(fields=["action_code", "-occurred_at", "-id"], name="audit_action_time_idx")]
+
+
+class AdminReadQuota(models.Model):
+    """Per-account minute bucket for expensive private observation endpoints."""
+
+    actor = models.ForeignKey(AdminAccount, on_delete=models.CASCADE)
+    scope = models.CharField(max_length=20)
+    window_start = models.DateTimeField(db_index=True)
+    count = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        db_table = "admin_read_quota"
+        constraints = [models.UniqueConstraint(fields=["actor", "scope", "window_start"], name="admin_read_quota_unique"),
+                       models.CheckConstraint(condition=Q(scope__in=["audit", "business"]), name="admin_read_quota_scope"),
+                       models.CheckConstraint(condition=Q(count__lte=60), name="admin_read_quota_count")]
 
 
 class ActionConfirmation(models.Model):

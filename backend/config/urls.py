@@ -1,6 +1,7 @@
 from django.urls import path, re_path
 
 from accounts import views
+from accounts import audit_read
 from catalog import views as catalog_views
 from catalog import media_views
 from pages import views as page_views
@@ -20,6 +21,7 @@ from aftersales import views as aftersale_views
 from aftersales import return_views
 from payments import refund_views
 from payments import wechat_refund_views
+from payments import business_read
 from benefits import coupon_views
 from points_exchange import views as exchange_views
 from notifications import views as notification_views
@@ -136,7 +138,8 @@ urlpatterns = [
     path("api/v1/admin/accounts/<uuid:account_id>", views.account_detail_view),
     path("api/v1/admin/permission-groups", views.groups_view),
     path("api/v1/admin/permission-groups/<uuid:group_id>", views.group_detail_view),
-    path("api/v1/admin/audit-logs", views.audit_view),
+    path("api/v1/admin/audit-logs", audit_read.audit_view),
+    path("api/v1/admin/business-summary", business_read.summary_view),
     path("api/v1/admin/warehouses", inventory_views.warehouses_view),
     path("api/v1/admin/settlement/shipping-policy", shipping_views.shipping_policy_view),
     path("api/v1/admin/inventory/skus", inventory_views.skus_view),

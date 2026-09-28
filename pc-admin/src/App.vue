@@ -107,6 +107,7 @@ async function signOut() {
         <RouterLink v-if="account.permissionCodes.includes('account.read')" to="/accounts" class="nav-item">子账号</RouterLink>
         <RouterLink v-if="account.permissionCodes.includes('permission.read')" to="/permission-groups" class="nav-item">权限组</RouterLink>
         <RouterLink v-if="account.permissionCodes.includes('audit.read')" to="/audit-logs" class="nav-item">操作日志</RouterLink>
+        <RouterLink v-if="account.permissionCodes.includes('business.report.read')" to="/business/summary" class="nav-item">经营统计</RouterLink>
         <RouterLink v-if="account.permissionCodes.includes('notification.read')" to="/subscription-messages" class="nav-item">订阅消息</RouterLink>
         <RouterLink v-if="account.permissionCodes.includes('notification.read')" to="/subscription-message-tasks" class="nav-item">消息任务</RouterLink>
         <RouterLink v-if="account.permissionCodes.includes('asset.read') || account.permissionCodes.includes('asset.upload')" to="/assets" class="nav-item">素材中心</RouterLink>

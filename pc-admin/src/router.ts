@@ -7,6 +7,7 @@ export const router = createRouter({
     { path: '/accounts', component: () => import('./views/AccountsView.vue'), meta: { title: '子账号', permission: 'account.read' } },
     { path: '/permission-groups', component: () => import('./views/GroupsView.vue'), meta: { title: '权限组', permission: 'permission.read' } },
     { path: '/audit-logs', component: () => import('./views/AuditView.vue'), meta: { title: '操作日志', permission: 'audit.read' } },
+    { path: '/business/summary', component: () => import('./views/BusinessSummaryView.vue'), meta: { title: '经营统计', permission: 'business.report.read' } },
     { path: '/subscription-messages', component: () => import('./views/SubscriptionMessagesView.vue'), meta: { title: '订阅消息', permission: 'notification.read' } },
     { path: '/subscription-message-tasks', component: () => import('./views/SubscriptionMessageTasksView.vue'), meta: { title: '消息任务', permission: 'notification.read' } },
     { path: '/store/code-versions', component: () => import('./views/CodeVersionsView.vue'), meta: { title: '代码版本', permission: 'code.version.read' } },
