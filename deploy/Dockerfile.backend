@@ -4,7 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DJANGO_SETTINGS_MODULE=config.settings
 
-RUN apt-get update \
+ARG E5_APT_MIRROR=deb.debian.org
+RUN case "$E5_APT_MIRROR" in deb.debian.org|mirrors.aliyun.com) ;; *) exit 1 ;; esac \
+    && sed -i "s|deb.debian.org|$E5_APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install --no-install-recommends -y git ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 mall \

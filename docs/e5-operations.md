@@ -68,6 +68,8 @@ UAT 组合为 `compose.production.yaml` + `compose.uat.yaml`（资源）+ `compo
 
 ### 小磁盘主机使用预构建镜像
 
+后端镜像默认使用 Debian 官方软件源。阿里云 UAT 主机若访问该源过慢，可在私有环境文件中设置 `E5_APT_MIRROR=mirrors.aliyun.com`；此变量只影响镜像构建，Dockerfile 仅接受官方源与该镜像源。
+
 目标机空间有限时，在可信构建机从固定、干净的发布检出构建默认三张镜像：`product-mall-backend:<完整SHA>`、`product-mall-admin:<完整SHA>`、`product-mall-ops:<完整SHA>`。仅当 `E5_CODE_RELEASE_ENABLED=1` 时增加独立 Node 镜像 `product-mall-mini-ci:<完整SHA>`。本机为arm64而目标为x86时明确构建 `--platform linux/amd64`；不能直接发送本机架构镜像。标签和 `org.opencontainers.image.revision` 必须与目标提交一致。Node 镜像只复制上传代码和冻结依赖，不复制后端源码或私有文件。冻结的 `miniprogram-ci@2.1.47` 对 `protobufjs@7.5.6` 作跨主版本覆盖，本地依赖审计仍有 12 项 high、0 项 critical（2026-09-29 锁文件）；测试只使用模拟 SDK 和 protobuf 往返检查，未完成真实账号/IP 白名单、微信上传、提审、发布及真机验收。默认不启动上传服务，镜像构建成功不等于可启用生产上传。
 
 如需在隔离 UAT 中验证代码发布，先用 `secrets.token_urlsafe(48)` 生成至少 32 字符的随机 token，存入检出目录外、权限 0600 的独立文件。将绝对路径设为 `E5_MINI_CI_DISPATCH_TOKEN_FILE`，并显式设置 `E5_CODE_RELEASE_ENABLED=1`；部署脚本在停写前核验文件类型、权限和格式。第三方平台配置的授权回调路径必须是 `/api/v1/wechat/open-platform/authorization-callback`，微信消息票据回调路径是 `/api/v1/wechat/open-platform/events`；两者需要目标环境的 HTTPS 入口。后台按顺序配置组件凭据、接收验证票据、由目标小程序管理员授权代码管理权限、上传开发小程序代码密钥、选择不可变版本上传、提审、刷新审核结果、发布。对 `UNKNOWN`／`RELEASE_UNKNOWN`，先到微信后台人工核查，再带说明和密码确认关闭任务；关闭不证明平台操作成功。

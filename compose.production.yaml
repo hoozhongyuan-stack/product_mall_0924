@@ -82,6 +82,7 @@ services:
       dockerfile: deploy/Dockerfile.backend
       args:
         MALL_BUILD_REVISION: ${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+        E5_APT_MIRROR: ${E5_APT_MIRROR:-deb.debian.org}
     command: ["sh", "/app/scripts/deploy-with-code-sync.sh"]
     depends_on:
       db: {condition: service_healthy}
