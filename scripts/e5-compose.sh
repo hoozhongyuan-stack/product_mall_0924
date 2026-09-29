@@ -30,6 +30,46 @@ case "${E5_IMAGE_MODE:-build}" in
     build|prebuilt) ;;
     *) echo 'E5_IMAGE_MODE must be build or prebuilt.' >&2; exit 2 ;;
 esac
+if [ -n "${E5_ENV_FILE:-}" ]; then
+    e5_env_literal() {
+        awk -v key="$1" '
+            $0 ~ "^[[:space:]]*(export[[:space:]]+)?" key "([[:space:]]|=|$)" {
+                count++
+                if ($0 !~ "^[[:space:]]*(export[[:space:]]+)?" key "[[:space:]]*=") { bad=1; next }
+                value=$0; sub(/^[^=]*=/,"",value)
+                gsub(/^[[:space:]]+|[[:space:]]+$/,"",value)
+                if (value == "") bad=1
+            }
+            END { if (bad || count > 1) exit 1; if (count) print value }
+        ' "$E5_ENV_FILE"
+    }
+    e5_file_release=$(e5_env_literal E5_CODE_RELEASE_ENABLED) || {
+        echo 'Invalid or duplicate E5_CODE_RELEASE_ENABLED in the environment file.' >&2
+        exit 2
+    }
+    if [ -n "$e5_file_release" ]; then
+        if [ "${E5_CODE_RELEASE_ENABLED+x}" = x ] && [ "$E5_CODE_RELEASE_ENABLED" != "$e5_file_release" ]; then
+            echo 'Shell and environment-file code-release settings must agree.' >&2
+            exit 2
+        fi
+        E5_CODE_RELEASE_ENABLED=$e5_file_release
+        export E5_CODE_RELEASE_ENABLED
+    fi
+    e5_file_token=$(e5_env_literal E5_MINI_CI_DISPATCH_TOKEN_FILE) || {
+        echo 'Invalid or duplicate CI token path in the environment file.' >&2
+        exit 2
+    }
+    if [ -n "$e5_file_token" ]; then
+        if [ "${E5_MINI_CI_DISPATCH_TOKEN_FILE+x}" = x ] &&
+           [ "$E5_MINI_CI_DISPATCH_TOKEN_FILE" != "$e5_file_token" ]; then
+            echo 'Shell and environment-file CI token paths must agree.' >&2
+            exit 2
+        fi
+        E5_MINI_CI_DISPATCH_TOKEN_FILE=$e5_file_token
+        export E5_MINI_CI_DISPATCH_TOKEN_FILE
+    fi
+    unset e5_file_release e5_file_token
+fi
 case "${E5_CODE_RELEASE_ENABLED:-0}" in
     0|1) ;;
     *) echo 'E5_CODE_RELEASE_ENABLED must be 0 or 1.' >&2; exit 2 ;;

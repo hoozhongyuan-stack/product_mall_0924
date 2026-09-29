@@ -158,6 +158,26 @@ class UatOrchestrationTests(unittest.TestCase):
             for call in calls:
                 if call.startswith('compose '): self.assertIn('compose.uat.yaml', call)
 
+    def test_file_enabled_code_release_is_paused_for_backup_and_preflight_checks_token(self):
+        token = self.root / 'mini-ci-token'
+        token.write_text('A' * 48)
+        token.chmod(0o600)
+        env_file = self.root / 'release.env'
+        env_file.write_text('E5_DEPLOY_PROFILE=uat\nE5_CODE_RELEASE_ENABLED=1\n'
+                            f'E5_MINI_CI_DISPATCH_TOKEN_FILE={token}\n')
+        self.env['E5_ENV_FILE'] = str(env_file)
+        self.env.pop('E5_CODE_RELEASE_ENABLED', None)
+        self.env.pop('E5_MINI_CI_DISPATCH_TOKEN_FILE', None)
+        result, calls = self.run_script('e5-backup-cycle.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any('--profile code-release' in call for call in calls))
+        self.assertTrue(any(' stop admin web export-worker mini-ci-adapter code-upload-worker scheduler' in call
+                            for call in calls))
+        self.assertTrue(any('mini-ci-adapter' in call and '--entrypoint sh' in call for call in calls))
+        refused, calls = self.run_script('e5-deploy.sh', ['upgrade'], fail='token')
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertFalse(any(' stop ' in call or ' up ' in call for call in calls))
+
     def test_prebuilt_mode_checks_only_enabled_release_images_and_never_builds(self):
         self.env['E5_IMAGE_MODE'] = 'prebuilt'
         for script, args in [('e5-deploy.sh', ['upgrade']), ('e5-recover.sh', ['e5-2026-09-28-synthetic'])]:
