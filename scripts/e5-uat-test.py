@@ -22,7 +22,8 @@ class UatCompositionTests(unittest.TestCase):
                'POSTGRES_USER': 'synthetic', 'E5_BACKUP_HOST_DIR': '/tmp/synthetic-backups',
                'E5_WECHAT_CREDENTIAL_KEY_FILE': '/tmp/synthetic-key', 'E5_DEPLOY_PROFILE': 'uat',
                'MALL_EDGE_NETWORK': 'synthetic-mall-edge', 'MALL_EDGE_ALIAS': 'synthetic-mall',
-               'WECHAT_CODE_UPLOAD_EGRESS_IP': '8.152.204.21'}
+               'WECHAT_CODE_UPLOAD_EGRESS_IP': '8.152.204.21',
+               'MALL_MINIPROGRAM_API_BASE_URL': 'https://uat.example.com'}
         profiles = ['--profile', 'ops'] + (['--profile', 'code-release'] if code_release else [])
         return json.loads(subprocess.check_output(['docker', 'compose', *profiles, '-f',
                           str(ROOT / 'compose.production.yaml'), '-f', str(ROOT / 'compose.uat.yaml'), '-f',
@@ -42,6 +43,7 @@ class UatCompositionTests(unittest.TestCase):
         self.assertEqual(web['environment']['EXCHANGE_ORDER_ENABLED'], '0')
         self.assertEqual(web['environment']['WECHAT_REFUND_ENABLED'], '0')
         self.assertEqual(web['environment']['WECHAT_CODE_UPLOAD_EGRESS_IP'], '8.152.204.21')
+        self.assertEqual(web['environment']['MALL_MINIPROGRAM_API_BASE_URL'], 'https://uat.example.com')
         cache = next(row for row in rows['admin']['tmpfs'] if row.startswith('/var/cache/nginx:'))
         self.assertGreaterEqual(int(re.search(r'size=(\d+)', cache).group(1)), 60 * 1024 * 1024)
         self.assertGreaterEqual(int(rows['admin']['mem_limit']), 96 * 1024 * 1024)

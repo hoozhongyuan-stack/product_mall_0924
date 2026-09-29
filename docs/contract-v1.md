@@ -592,6 +592,8 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 管理台优先提供 `CI_DIRECT` 直传操作：选择已同步到后台的不可变代码版本、微信版本号及说明，凭目标小程序上传私钥和密码确认创建 `POST /api/v1/admin/code-release/uploads` 任务。服务器对所选版本重新核对摘要、AppID、HTTPS API 地址与密钥修订，再由隔离 worker 调用 `miniprogram-ci`；最新版本的只读条件检查不阻止选择其他已就绪版本，所选版本以服务端提交校验为准。直传成功仅表示微信接收开发版本，`reviewAvailable=false`，不得据此开放本系统的第三方平台提审按钮。未知结果禁止自动重试，须核查微信后台后处理。
 
+受信任部署可配置 `MALL_MINIPROGRAM_API_BASE_URL` 为无路径的公开 HTTPS 源站。固定提交的 Git 小程序源码先在检出目录外暂存，再将当前受管 AppID 与该源站写入暂存包；生成后摘要与版本号绑定最终字节，不改写 Git 工作树或已存的旧版本。配置缺失时沿用原始源码，游客 AppID 或本机 API 地址会被发布条件阻断。
+
 #### E3.2 第三方平台代码发布链路
 
 第三方平台组件与开发小程序分别配置。`GET/PUT /api/v1/admin/integrations/wechat-open-platform` 管理组件 AppID、开发小程序 AppID、固定 HTTPS 授权回调地址及加密保存的组件 AppSecret、消息 Token 和 EncodingAESKey；写操作需要微信集成管理权限和密码确认，不回显原文。`POST .../authorize` 生成目标小程序管理员授权链接；微信票据和授权回调经签名、AES、组件 AppID、时效与一次性 state 校验。授权状态向微信实时查询，必须确认目标 AppID、小程序类型、正常账号状态及代码管理权限集 18；网络或平台异常显示 `UNVERIFIED`，不得据已保存令牌显示 `PASS`。

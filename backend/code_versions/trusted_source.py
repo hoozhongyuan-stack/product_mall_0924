@@ -1,15 +1,52 @@
 """Materialize a fixed Git commit's Mini Program blobs for E3 deployment."""
 
 import os
+import json
 import re
 import subprocess
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .package import IGNORED_DIRS, ROOT_FILES, SOURCE_DIRS, PackageError, build_package
 
 
 REVISION = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
+APP_ID = re.compile(r"wx[0-9a-fA-F]{16}\Z")
+API_ORIGIN = re.compile(r"https://[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}\Z")
+API_LITERAL = re.compile(r"(apiBaseUrl\s*:\s*)(['\"])([^'\"]+)\2")
+HOST_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\Z")
+
+
+def _valid_api_origin(value):
+    if not isinstance(value, str) or not API_ORIGIN.fullmatch(value):
+        return False
+    parsed = urlsplit(value)
+    host = parsed.hostname or ''
+    labels = host.split('.')
+    return (parsed.scheme == 'https' and parsed.netloc == host and
+            not host.endswith(('.local', '.localhost', '.test', '.invalid')) and
+            all(HOST_LABEL.fullmatch(label) for label in labels))
+
+
+def _apply_release_config(root, app_id, api_base_url):
+    if not APP_ID.fullmatch(app_id or '') or not _valid_api_origin(api_base_url):
+        raise PackageError('RELEASE_CONFIG_INVALID')
+    try:
+        config_path = root / 'project.config.json'
+        config = json.loads(config_path.read_text(encoding='utf-8'))
+        if not isinstance(config, dict):
+            raise ValueError()
+        script_path = root / 'app.js'
+        script = script_path.read_text(encoding='utf-8')
+        if len(API_LITERAL.findall(script)) != 1:
+            raise ValueError()
+        config_path.write_text(json.dumps({**config, 'appid': app_id}, ensure_ascii=False,
+                                          separators=(',', ':')) + '\n', encoding='utf-8')
+        script_path.write_text(API_LITERAL.sub(lambda match: match.group(1) +
+                               json.dumps(api_base_url), script), encoding='utf-8')
+    except (OSError, ValueError, UnicodeError) as exc:
+        raise PackageError('RELEASE_CONFIG_INVALID') from exc
 
 
 def _git(repo, *args):
@@ -72,7 +109,8 @@ def _entries(repo, revision):
         yield parts, object_id
 
 
-def build_git_package(repo_root, expected_revision, maximum_bytes):
+def build_git_package(repo_root, expected_revision, maximum_bytes, *, release_app_id=None,
+                      api_base_url=None):
     """Package Git blobs only when a clean checkout is pinned to full HEAD."""
     if not isinstance(maximum_bytes, int) or maximum_bytes <= 0:
         raise PackageError("PACKAGE_TOO_LARGE")
@@ -103,6 +141,8 @@ def build_git_package(repo_root, expected_revision, maximum_bytes):
                 target = destination.joinpath(*parts)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(content)
+            if release_app_id is not None or api_base_url is not None:
+                _apply_release_config(destination / 'mini-program', release_app_id, api_base_url)
             package = build_package(destination / "mini-program", maximum_bytes)
     except OSError as exc:
         raise PackageError("SOURCE_UNAVAILABLE") from exc
