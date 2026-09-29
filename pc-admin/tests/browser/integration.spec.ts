@@ -1,5 +1,6 @@
 /** No HTTP mocks: isolated Django + PostgreSQL, actual CSRF/session and persistence. */
-import { expect, test } from '@playwright/test'
+import { expect, test, type APIResponse, type Response } from '@playwright/test'
+import { readFileSync } from 'node:fs'
 import { openSection, screenshot } from './fixtures'
 
 test('real isolated database: login and create a persisted coupon draft', async ({ page }, testInfo) => {
@@ -47,7 +48,7 @@ test('real isolated database: securely replace and retain mini-program credentia
   await page.getByLabel('账号', { exact: true }).fill(process.env.MALL_E2E_OWNER!)
   await page.getByLabel('密码', { exact: true }).fill(password)
   await page.getByRole('button', { name: '登录', exact: true }).click()
-  await openSection(page, '店铺与小程序')
+  await openSection(page, '小程序')
   await page.getByRole('link', { name: '小程序接入', exact: true }).click()
   await page.getByLabel('小程序 AppID', { exact: true }).fill(appId)
   await page.getByText('替换密钥', { exact: true }).click()
@@ -89,4 +90,95 @@ test('real isolated database: securely replace and retain mini-program credentia
   expect(browserState).not.toContain(syntheticSecret)
   expect(browserState).not.toContain(password)
   await screenshot(page, testInfo, 'real-database-wechat-secret-redacted')
+})
+
+// Real local storage, decoder, database, CSRF and revision handling. No publication or platform call.
+test('real isolated database: bulk upload images and persist a referenced product description', async ({ page }, testInfo) => {
+  expect(process.env.MALL_E2E_OWNER, 'Run through the isolated integration launcher').toBeTruthy()
+  expect(process.env.MALL_E2E_OWNER_PASSWORD).toBeTruthy()
+  await page.goto('/')
+  await page.getByLabel('账号', { exact: true }).fill(process.env.MALL_E2E_OWNER!)
+  await page.getByLabel('密码', { exact: true }).fill(process.env.MALL_E2E_OWNER_PASSWORD!)
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await expect(page.getByRole('button', { name: '退出', exact: true })).toBeVisible()
+  await page.goto('/assets')
+
+  const unique = `${testInfo.project.name}_${Date.now()}`
+  const filenames = [`description_${unique}_one.png`, `description_${unique}_two.png`]
+  // The same committed synthetic PNG used by the isolated visual seed; both files must decode for real.
+  const png = readFileSync(new URL('../../../mini-program/assets/startup-brand.png', import.meta.url))
+  const responses: Response[] = []
+  page.on('response', response => {
+    if (new URL(response.url()).pathname === '/api/v1/admin/assets' && response.request().method() === 'POST') responses.push(response)
+  })
+  const upload = page.getByRole('region', { name: '批量上传素材', exact: true })
+  await upload.locator('input[type=file]').setInputFiles(filenames.map(name => ({ name, mimeType: 'image/png', buffer: png })))
+  await expect(upload.getByRole('list', { name: '上传队列' }).getByRole('listitem')).toHaveCount(2)
+  await upload.getByRole('button', { name: '开始上传', exact: true }).click()
+  await expect(upload.getByRole('status')).toContainText('成功 2 / 2 个', { timeout: 20_000 })
+  expect(responses).toHaveLength(2)
+  const receipts = await Promise.all(responses.map(async response => {
+    expect(response.status()).toBe(201)
+    return (await response.json()).data as { assetId: string; originalName: string }
+  }))
+  expect(new Set(receipts.map(row => row.assetId)).size).toBe(2)
+  const chosen = receipts.find(row => row.originalName === filenames[0])!
+  expect(chosen).toBeTruthy()
+
+  const csrf = (await page.context().cookies()).find(cookie => cookie.name === 'csrftoken')?.value
+  expect(csrf).toBeTruthy()
+  const headers = { 'X-CSRFToken': csrf!, Origin: new URL(page.url()).origin }
+  async function created(response: APIResponse) {
+    // Diagnostics intentionally contain no login request or credential values.
+    expect(response.status()).toBe(201)
+    return (await response.json()).data
+  }
+  const parent = await created(await page.request.post('/api/v1/admin/categories', { headers,
+    data: { parentId: null, name: `图文集成 ${unique}`, status: 'ACTIVE', sortOrder: 1 } }))
+  const leaf = await created(await page.request.post('/api/v1/admin/categories', { headers,
+    data: { parentId: parent.id, name: '描述图片', status: 'ACTIVE', sortOrder: 1 } }))
+  const code = `DESC_${unique}`
+  const product = await created(await page.request.post('/api/v1/admin/products', { headers, data: {
+    productNo: code, name: `图文草稿 ${unique}`, categoryId: leaf.id, fulfillmentKind: 'SHIP',
+    descriptionHtml: '', specAxes: [], skus: [{ skuCode: `${code}_SKU`, specOptionKeys: [], listPriceFen: 100,
+      saleStatus: 'OFF_SALE', gradePrices: [], unit: { baseUnit: '件', saleUnit: '件', ratio: 1 } }],
+  } }))
+  const initialRead = await page.request.get(`/api/v1/admin/products/${product.productId}`)
+  expect(initialRead.status()).toBe(200)
+  expect((await initialRead.json()).data).toMatchObject({ status: 'DRAFT', productRevision: product.productRevision })
+  await page.goto('/catalog')
+  await page.getByPlaceholder('名称或编号').fill(code)
+  await page.getByPlaceholder('名称或编号').press('Enter')
+  await page.getByRole('row').filter({ hasText: code }).getByRole('button', { name: '编辑商品', exact: true }).click()
+  const editor = page.getByRole('region', { name: '商品描述', exact: true })
+  await editor.getByRole('textbox', { name: '商品描述', exact: true }).fill('真实隔离数据库图文验收')
+  await editor.getByRole('textbox', { name: '商品描述', exact: true }).press('End')
+  await editor.getByRole('button', { name: '从素材中心选择', exact: true }).click()
+  const picker = page.getByRole('dialog', { name: '选择素材', exact: true })
+  await picker.locator('.asset-item').filter({ hasText: filenames[0] }).getByRole('button', { name: '选择素材', exact: true }).click()
+  await editor.getByLabel('图片 1 说明', { exact: true }).fill('已持久化的描述素材')
+  const savedEvent = page.waitForResponse(response => new URL(response.url()).pathname === `/api/v1/admin/products/${product.productId}` && response.request().method() === 'PATCH')
+  await page.getByRole('button', { name: '保存商品资料', exact: true }).click()
+  const saved = await savedEvent
+  expect(saved.status()).toBe(200)
+  expect(saved.request().postDataJSON().expectedRevision).toBe(product.productRevision)
+  await expect(page.getByText('商品资料已保存', { exact: true })).toBeVisible()
+
+  const reread = await page.request.get(`/api/v1/admin/products/${product.productId}`)
+  expect(reread.status()).toBe(200)
+  const persisted = (await reread.json()).data
+  expect(persisted.productRevision).toBe(product.productRevision + 1)
+  expect(persisted.descriptionHtml).toContain('真实隔离数据库图文验收')
+  expect(persisted.descriptionHtml).toContain(`data-asset-id="${chosen.assetId}"`)
+  expect(persisted.descriptionHtml).toContain(`src="/api/v1/admin/assets/${chosen.assetId}/file"`)
+  const references = await page.request.get(`/api/v1/admin/assets/${chosen.assetId}/references?page=1&pageSize=20`)
+  expect(references.status()).toBe(200)
+  expect((await references.json()).data.items).toEqual(expect.arrayContaining([
+    expect.objectContaining({ domain: 'CATALOG', objectId: product.productId, role: 'DESCRIPTION_IMAGE', state: 'BOUND' }),
+  ]))
+  await page.reload()
+  await page.getByRole('row').filter({ hasText: code }).getByRole('button', { name: '编辑商品', exact: true }).click()
+  await expect(editor.getByRole('textbox', { name: '商品描述', exact: true })).toContainText('真实隔离数据库图文验收')
+  await expect(editor.getByLabel('图片 1 说明', { exact: true })).toHaveValue('已持久化的描述素材')
+  await screenshot(page, testInfo, 'real-database-description-reference')
 })

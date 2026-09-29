@@ -7,7 +7,7 @@ from django.db.models import Count, Q, Sum
 
 from common.http import offset_response, method
 from accounts.security import error, parse_json, require, response
-from catalog.inventory_access import stock_skus
+from .selection import selection_page
 
 from .models import InboundDocument, InventoryBalance, InventoryLedger, OutboundDocument, StocktakeDocument, Warehouse
 from .outbound_service import confirm_outbound, create_outbound, outbound_data
@@ -77,14 +77,8 @@ def skus_view(request):
         keyword = request.GET.get("keyword", "").strip()
         if len(keyword) > 120:
             raise InventoryError("搜索词过长。")
-        rows = stock_skus(keyword)
-        total = rows.count()
-        rows = rows.order_by("sku_code", "id")[(page - 1) * size:page * size]
-        items = [{"skuId": str(row.id), "skuCode": row.sku_code,
-                  "productName": row.product.name, "baseUnit": row.current_unit.base_unit,
-                  "saleUnit": row.current_unit.sale_unit, "ratio": row.current_unit.ratio,
-                  "unitVersionId": str(row.current_unit_id)} for row in rows]
-        return offset_response(request, {"items": items, "page": page, "pageSize": size, "total": total})
+        return offset_response(request, selection_page(
+            keyword, page, size, request.GET.get("warehouseId")))
     except InventoryError as exc:
         return failure(request, exc)
 

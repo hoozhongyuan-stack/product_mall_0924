@@ -116,6 +116,9 @@ jobs:
           python -m coverage report --include='common/http.py' --fail-under=90
           python -m coverage report --include='aftersales/task_reads.py' --fail-under=80
           python -m coverage report --include='fulfillment/task_reads.py' --fail-under=80
+          for module in catalog/description.py catalog/inventory_access.py inventory/selection.py inventory/catalog_media.py; do
+            python -m coverage report --include="$module" --fail-under=80
+          done
           for module in wechat_integration/*.py; do
             python -m coverage report --include="$module" --fail-under=80
           done

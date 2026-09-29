@@ -3,6 +3,7 @@ import { csvTable } from '../../shared/csv.mjs'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import ProductMediaEditor from './ProductMediaEditor.vue'
+import ProductDescriptionEditor from './ProductDescriptionEditor.vue'
 import { ApiError, api, type Account } from '../../api'
 import ProductCreateForm from './ProductCreateForm.vue'
 import ProductSpecEditor from './ProductSpecEditor.vue'
@@ -587,7 +588,7 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
       <ProductMediaEditor v-model:main-image="productMainImage" v-model:gallery-images="productGalleryImages" v-model:video="productVideo"
         :target-key="JSON.stringify([account.accountId, editingProduct.productId])" :can-upload="canUpload" :disabled="saving || !canWrite"
         @busy-change="productMediaBusy = $event" />
-      <label>商品描述（HTML，服务端会过滤）<textarea v-model="productDescription" rows="4" /></label>
+      <ProductDescriptionEditor v-model="productDescription" :target-key="JSON.stringify([account.accountId, editingProduct.productId])" :disabled="saving || !canWrite" />
       <p class="help-text">SKU 上架后商品可在小程序展示；是否可购买仍由当前库存与报价决定。规格与 SKU 修改在下方独立核对并保存。</p>
       <button class="primary-button" type="submit" :disabled="saving || productMediaBusy || !canWrite">{{ saving ? '保存中…' : '保存商品资料' }}</button>
     </form>

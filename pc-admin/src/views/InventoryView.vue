@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { api, ApiError, type Account } from '../api'
 import StockDocumentForm, { type StockDraftPayload } from './inventory/StockDocumentForm.vue'
 import StocktakePanel from './inventory/StocktakePanel.vue'
@@ -11,7 +11,8 @@ import './inventory/inventory.css'
 
 const props = defineProps<{ account: Account }>()
 type Tab = 'balances' | 'warehouses' | 'inbounds' | 'outbounds' | 'stocktakes' | 'ledgers'
-const tab = ref<Tab>('balances')
+const route = useRoute()
+const tab = computed(() => (route.meta.inventoryTab || 'balances') as Tab)
 const canManage = computed(() => props.account.permissionCodes.includes('inventory.manage'))
 const canReview = computed(() => props.account.permissionCodes.includes('inventory.review'))
 const warehouses = ref<Warehouse[]>([])
@@ -56,6 +57,9 @@ const outboundFormError = ref('')
 const outboundDraftSaving = ref(false)
 const outboundConfirmSaving = ref(false)
 const stocktakeDirty = ref(false)
+const stocktakeBusy = ref(false)
+const confirmationPending = ref(false)
+let detailGeneration = 0
 let balanceLoadSequence = 0
 let inboundLoadSequence = 0
 let outboundLoadSequence = 0
@@ -199,21 +203,26 @@ async function createOutbound(payload: StockDraftPayload, key: string) {
   finally { outboundDraftSaving.value = false }
 }
 async function openInboundDetail(id: string) {
+  const generation = ++detailGeneration
   detailLoading.value = true
   inboundError.value = ''
   selectedInbound.value = null
-  try { selectedInbound.value = await api<InboundDetail>(`/inventory/inbounds/${encodeURIComponent(id)}`) }
-  catch (reason) { inboundError.value = readableError(reason) }
-  finally { detailLoading.value = false }
+  try {
+    const detail = await api<InboundDetail>(`/inventory/inbounds/${encodeURIComponent(id)}`)
+    if (generation === detailGeneration) selectedInbound.value = detail
+  } catch (reason) { if (generation === detailGeneration) inboundError.value = readableError(reason) }
+  finally { if (generation === detailGeneration) detailLoading.value = false }
 }
 async function confirmInbound() {
   const detail = selectedInbound.value
-  if (!canManage.value || !detail || detail.status !== 'DRAFT' || confirmSaving.value) return
+  if (!canManage.value || !detail || detail.status !== 'DRAFT' || confirmSaving.value || confirmationPending.value) return
+  confirmationPending.value = true
   try {
     await ElMessageBox.confirm(`确认 ${detail.documentNo} 入库？将增加账面库存并生成不可直接改写的流水。`, '确认入库', {
       confirmButtonText: '确认入库', cancelButtonText: '返回核对', type: 'warning',
     })
   } catch { return }
+  finally { confirmationPending.value = false }
   confirmSaving.value = true
   inboundError.value = ''
   const key = confirmationKeys.get(detail.inboundId) || crypto.randomUUID()
@@ -230,21 +239,26 @@ async function confirmInbound() {
   finally { confirmSaving.value = false }
 }
 async function openOutboundDetail(id: string) {
+  const generation = ++detailGeneration
   outboundDetailLoading.value = true
   outboundError.value = ''
   selectedOutbound.value = null
-  try { selectedOutbound.value = await api<OutboundDetail>(`/inventory/outbounds/${encodeURIComponent(id)}`) }
-  catch (reason) { outboundError.value = readableError(reason) }
-  finally { outboundDetailLoading.value = false }
+  try {
+    const detail = await api<OutboundDetail>(`/inventory/outbounds/${encodeURIComponent(id)}`)
+    if (generation === detailGeneration) selectedOutbound.value = detail
+  } catch (reason) { if (generation === detailGeneration) outboundError.value = readableError(reason) }
+  finally { if (generation === detailGeneration) outboundDetailLoading.value = false }
 }
 async function confirmOutbound() {
   const detail = selectedOutbound.value
-  if (!canManage.value || !detail || detail.status !== 'DRAFT' || outboundConfirmSaving.value) return
+  if (!canManage.value || !detail || detail.status !== 'DRAFT' || outboundConfirmSaving.value || confirmationPending.value) return
+  confirmationPending.value = true
   try {
     await ElMessageBox.confirm(`确认 ${detail.documentNo} 人工出库？服务端将核对最新可售库存，确认后扣减库存并生成不可改写的流水。`, '确认出库', {
       confirmButtonText: '确认出库', cancelButtonText: '返回核对', type: 'warning',
     })
   } catch { return }
+  finally { confirmationPending.value = false }
   outboundConfirmSaving.value = true
   outboundError.value = ''
   const key = confirmationKeys.get(detail.outboundId) || crypto.randomUUID()
@@ -261,12 +275,15 @@ async function confirmOutbound() {
   finally { outboundConfirmSaving.value = false }
 }
 async function openLedgerDetail(id: string) {
+  const generation = ++detailGeneration
   ledgerDetailLoading.value = true
   ledgerError.value = ''
   selectedLedger.value = null
-  try { selectedLedger.value = await api<InventoryLedger>(`/inventory/ledgers/${encodeURIComponent(id)}`) }
-  catch (reason) { ledgerError.value = readableError(reason) }
-  finally { ledgerDetailLoading.value = false }
+  try {
+    const detail = await api<InventoryLedger>(`/inventory/ledgers/${encodeURIComponent(id)}`)
+    if (generation === detailGeneration) selectedLedger.value = detail
+  } catch (reason) { if (generation === detailGeneration) ledgerError.value = readableError(reason) }
+  finally { if (generation === detailGeneration) ledgerDetailLoading.value = false }
 }
 function reasonLabel(reason: string) {
   return ({ DAMAGE: '报损', SAMPLE: '样品领用', INTERNAL: '内部使用', OTHER: '其他' } as Record<string, string>)[reason] || reason
@@ -293,17 +310,10 @@ function exportCurrentLedgerPage() {
   link.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
-function switchTab(next: Tab) {
-  if (next === tab.value || draftSaving.value || outboundDraftSaving.value || !confirmDiscard()) return
-  discardForms()
-  tab.value = next
-  if (next === 'inbounds') void loadInbounds(1)
-  if (next === 'outbounds') void loadOutbounds(1)
-  if (next === 'ledgers') void loadLedgers(1)
-}
 function confirmDiscard() { return !dirty.value || window.confirm('当前表单尚未保存，离开后已填写的内容会丢失。确定继续吗？') }
 function discardForms() {
   stocktakeDirty.value = false
+  stocktakeBusy.value = false
   createWarehouseOpen.value = false
   warehouseCode.value = ''
   warehouseName.value = ''
@@ -315,24 +325,37 @@ function discardForms() {
   outboundDirty.value = false
   outboundFormError.value = ''
 }
-function closeWarehouse() { if (confirmDiscard()) discardForms() }
+function closeWarehouse() { if (!warehouseSaving.value && confirmDiscard()) discardForms() }
 function closeInbound() { if (!draftSaving.value && confirmDiscard()) discardForms() }
 function closeOutbound() { if (!outboundDraftSaving.value && confirmDiscard()) discardForms() }
-function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value) { event.preventDefault(); event.returnValue = '' } }
-onBeforeRouteLeave(() => !draftSaving.value && !outboundDraftSaving.value && confirmDiscard())
-onMounted(() => { void Promise.all([loadWarehouses(), loadBalances(1)]); window.addEventListener('beforeunload', beforeUnload) })
-onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
+function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || writeBusy.value) { event.preventDefault(); event.returnValue = '' } }
+const writeBusy = computed(() => warehouseSaving.value || draftSaving.value || outboundDraftSaving.value
+  || confirmSaving.value || outboundConfirmSaving.value || stocktakeBusy.value || confirmationPending.value)
+function canNavigate() { return !writeBusy.value && confirmDiscard() }
+onBeforeRouteLeave(canNavigate)
+onBeforeRouteUpdate((to, from) => to.path === from.path || canNavigate())
+watch(tab, (next) => {
+  detailGeneration++
+  detailLoading.value = false
+  outboundDetailLoading.value = false
+  ledgerDetailLoading.value = false
+  selectedInbound.value = null
+  selectedOutbound.value = null
+  selectedLedger.value = null
+  discardForms()
+  if (next === 'balances') void loadBalances(1)
+  if (next === 'inbounds') void loadInbounds(1)
+  if (next === 'outbounds') void loadOutbounds(1)
+  if (next === 'ledgers') void loadLedgers(1)
+}, { immediate: true })
+onMounted(() => { void loadWarehouses(); window.addEventListener('beforeunload', beforeUnload) })
+onUnmounted(() => { detailGeneration++; window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 
 <template>
   <section class="page-content inventory-page">
-    <div class="page-heading"><div><h1>库存管理</h1><p>按 SKU 与仓库记录库存；入库、人工出库和审核通过的盘点差异均通过流水改变账面。</p></div></div>
-    <div class="inventory-tabs" role="tablist" aria-label="库存管理内容">
-      <button v-for="item in ([['balances', '库存查询'], ['warehouses', '仓库管理'], ['inbounds', '入库单'], ['outbounds', '出库单'], ['stocktakes', '盘点单'], ['ledgers', '库存流水']] as const)" :key="item[0]" type="button" role="tab" :aria-selected="tab === item[0]" :class="{ active: tab === item[0] }" @click="switchTab(item[0])">{{ item[1] }}</button>
-    </div>
-
-    <div v-if="tab === 'balances'" role="tabpanel" class="inventory-section">
-      <div class="page-heading"><div><h2>库存查询</h2><p>账面 − 锁定 = 可售；以下汇总仅统计当前页。</p></div></div>
+    <div v-if="tab === 'balances'" class="inventory-section">
+      <div class="page-heading"><div><h1>库存查询</h1><p>账面 − 锁定 = 可售；以下汇总仅统计当前页。</p></div></div>
       <form class="inventory-filters" @submit.prevent="loadBalances(1)">
         <label>SKU 编码或商品名称<el-input v-model="balanceKeyword" clearable placeholder="输入关键词" /></label>
         <label>仓库<el-select v-model="balanceWarehouseId" placeholder="全部仓库"><el-option label="全部仓库" value="" /><el-option v-for="row in warehouses" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label>
@@ -350,15 +373,15 @@ onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
       <div v-if="balances.total > balances.pageSize" class="inventory-pagination"><span>共 {{ balances.total }} 条</span><el-pagination :current-page="balances.page" :page-size="balances.pageSize" :total="balances.total" layout="prev, pager, next" @current-change="loadBalances" /></div>
     </div>
 
-    <div v-else-if="tab === 'warehouses'" role="tabpanel" class="inventory-section">
-      <div class="page-heading"><div><h2>仓库管理</h2><p>默认仓用于后续新订单，已形成的库存按原仓库独立记录。</p></div><el-button v-if="canManage" type="primary" @click="createWarehouseOpen ? closeWarehouse() : createWarehouseOpen = true">{{ createWarehouseOpen ? '关闭表单' : '新建仓库' }}</el-button></div>
+    <div v-else-if="tab === 'warehouses'" class="inventory-section">
+      <div class="page-heading"><div><h1>仓库管理</h1><p>默认仓用于后续新订单，已形成的库存按原仓库独立记录。</p></div><el-button v-if="canManage" type="primary" :disabled="warehouseSaving" @click="createWarehouseOpen ? closeWarehouse() : createWarehouseOpen = true">{{ createWarehouseOpen ? '关闭表单' : '新建仓库' }}</el-button></div>
       <p v-if="warehouseError" class="notice" role="alert">{{ warehouseError }} <el-button link type="primary" @click="loadWarehouses">重试</el-button></p>
       <div class="panel table-wrap" v-loading="warehouseLoading"><table><thead><tr><th>仓库名称</th><th>仓库编号</th><th>默认发货仓</th><th>状态</th></tr></thead><tbody><tr v-for="row in warehouses" :key="row.warehouseId"><td><strong>{{ row.name }}</strong></td><td class="code">{{ row.code }}</td><td>{{ row.isDefault ? '默认仓' : '—' }}</td><td><span :class="row.enabled ? 'badge badge-good' : 'badge badge-muted'">{{ row.enabled ? '启用' : '停用' }}</span></td></tr></tbody></table><p v-if="!warehouseLoading && !warehouseError && !warehouses.length" class="inventory-empty">尚无仓库。请先创建一个默认仓库。</p></div>
-      <form v-if="createWarehouseOpen && canManage" class="panel inventory-form" @submit.prevent="createWarehouse"><h3>新建仓库</h3><div class="inventory-form-grid"><label>仓库编号 <span class="required">*</span><el-input v-model="warehouseCode" maxlength="32" placeholder="例如 WH-001" /></label><label>仓库名称 <span class="required">*</span><el-input v-model="warehouseName" maxlength="100" placeholder="例如 上海中心仓" /></label></div><p class="help-text">{{ warehouses.length ? '当前默认仓保持不变；此仓库创建为非默认仓。默认仓切换将在订单锁库规则接入时单独实现。' : '首个仓库将自动设为默认发货仓。' }}</p><p v-if="warehouseFormError" class="error" role="alert">{{ warehouseFormError }}</p><div class="inventory-actions"><el-button @click="closeWarehouse">取消</el-button><el-button type="primary" native-type="submit" :loading="warehouseSaving">保存仓库</el-button></div></form>
+      <form v-if="createWarehouseOpen && canManage" class="panel inventory-form" @submit.prevent="createWarehouse"><h3>新建仓库</h3><div class="inventory-form-grid"><label>仓库编号 <span class="required">*</span><el-input :disabled="warehouseSaving" v-model="warehouseCode" maxlength="32" placeholder="例如 WH-001" /></label><label>仓库名称 <span class="required">*</span><el-input :disabled="warehouseSaving" v-model="warehouseName" maxlength="100" placeholder="例如 上海中心仓" /></label></div><p class="help-text">{{ warehouses.length ? '当前默认仓保持不变；此仓库创建为非默认仓。默认仓切换将在订单锁库规则接入时单独实现。' : '首个仓库将自动设为默认发货仓。' }}</p><p v-if="warehouseFormError" class="error" role="alert">{{ warehouseFormError }}</p><div class="inventory-actions"><el-button :disabled="warehouseSaving" @click="closeWarehouse">取消</el-button><el-button type="primary" native-type="submit" :loading="warehouseSaving">保存仓库</el-button></div></form>
     </div>
 
-    <div v-else-if="tab === 'inbounds'" role="tabpanel" class="inventory-section">
-      <div class="page-heading"><div><h2>入库单</h2><p>先保存草稿，核对 SKU、单位换算及数量，再确认入库。</p></div><el-button v-if="canManage" type="primary" :disabled="!canCreateDraft" @click="inboundOpen ? closeInbound() : openInbound()">{{ inboundOpen ? '关闭表单' : '创建入库单' }}</el-button></div>
+    <div v-else-if="tab === 'inbounds'" class="inventory-section">
+      <div class="page-heading"><div><h1>入库单</h1><p>先保存草稿，核对 SKU、单位换算及数量，再确认入库。</p></div><el-button v-if="canManage" type="primary" :disabled="!canCreateDraft" @click="inboundOpen ? closeInbound() : openInbound()">{{ inboundOpen ? '关闭表单' : '创建入库单' }}</el-button></div>
       <p v-if="!canCreateDraft && canManage" class="hint">请先创建并启用仓库，才能创建入库单。</p>
       <p v-if="inboundError" class="notice" role="alert">{{ inboundError }} <el-button link type="primary" @click="loadInbounds(inbounds.page)">刷新列表</el-button></p>
       <div class="panel table-wrap" v-loading="inboundLoading"><table><thead><tr><th>入库单号</th><th>仓库</th><th>SKU 数</th><th>基础数量</th><th>来源 / 原因</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody><tr v-for="row in inbounds.items" :key="row.inboundId"><td class="code">{{ row.documentNo }}</td><td>{{ row.warehouseName || warehouseLabel(row.warehouseId) }}</td><td>{{ row.itemCount }}</td><td class="inventory-number">{{ row.totalBaseUnits }}</td><td>{{ row.reason }}</td><td><span :class="row.status === 'CONFIRMED' ? 'badge badge-good' : 'badge badge-muted'">{{ row.status === 'CONFIRMED' ? '已确认' : '草稿' }}</span></td><td>{{ formatTime(row.createdAt) }}</td><td><el-button link type="primary" :loading="detailLoading" @click="openInboundDetail(row.inboundId)">查看详情</el-button></td></tr></tbody></table><p v-if="!inboundLoading && !inboundError && !inbounds.items.length" class="inventory-empty">暂无入库单。创建草稿后可在这里重新打开并确认。</p></div>
@@ -370,8 +393,8 @@ onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
       <div v-if="selectedInbound" class="panel inventory-detail" aria-live="polite"><div class="page-heading"><div><h3>入库单明细 · {{ selectedInbound.documentNo }}</h3><p>{{ selectedInbound.status === 'DRAFT' ? '草稿尚未改变账面库存。' : '已确认；库存流水已生成。' }}</p></div><span :class="selectedInbound.status === 'CONFIRMED' ? 'badge badge-good' : 'badge badge-muted'">{{ selectedInbound.status === 'CONFIRMED' ? '已确认' : '草稿' }}</span></div><p>仓库：{{ selectedInbound.warehouseName || warehouseLabel(selectedInbound.warehouseId) }}　·　原因：{{ selectedInbound.reason }}</p><div class="table-wrap"><table><thead><tr><th>商品 / SKU</th><th>操作单位</th><th>录入数量</th><th>换算关系</th><th>基础数量</th></tr></thead><tbody><tr v-for="row in selectedInbound.items" :key="row.skuId"><td><strong>{{ row.productName }}</strong><small class="inventory-subline code">{{ row.skuCode }}</small></td><td>{{ row.operationUnit }}</td><td class="inventory-number">{{ row.quantity }}</td><td>1 {{ row.operationUnit }} = {{ row.ratio }} {{ row.baseUnit }}</td><td class="inventory-number">{{ row.baseQuantity }} {{ row.baseUnit }}</td></tr></tbody></table></div><div v-if="selectedInbound.status === 'DRAFT' && canManage" class="inventory-actions"><el-button type="primary" :loading="confirmSaving" @click="confirmInbound">确认入库</el-button></div></div>
     </div>
 
-    <div v-else-if="tab === 'outbounds'" role="tabpanel" class="inventory-section">
-      <div class="page-heading"><div><h2>人工出库</h2><p>登记报损、样品领用等非销售用途；确认时按最新可售量校验，不允许负库存。</p></div><el-button v-if="canManage" type="primary" :disabled="!canCreateDraft" @click="outboundOpen ? closeOutbound() : openOutbound()">{{ outboundOpen ? '关闭表单' : '＋ 新建出库单' }}</el-button></div>
+    <div v-else-if="tab === 'outbounds'" class="inventory-section">
+      <div class="page-heading"><div><h1>人工出库</h1><p>登记报损、样品领用等非销售用途；确认时按最新可售量校验，不允许负库存。</p></div><el-button v-if="canManage" type="primary" :disabled="!canCreateDraft" @click="outboundOpen ? closeOutbound() : openOutbound()">{{ outboundOpen ? '关闭表单' : '＋ 新建出库单' }}</el-button></div>
       <p v-if="!canCreateDraft && canManage" class="hint">请先创建并启用仓库，才能创建出库单。</p>
       <p v-if="outboundError" class="notice" role="alert">{{ outboundError }} <el-button link type="primary" @click="loadOutbounds(outbounds.page)">刷新列表</el-button></p>
       <div class="panel table-wrap" v-loading="outboundLoading"><table><thead><tr><th>出库单号</th><th>仓库</th><th>SKU 数</th><th>基础数量</th><th>出库原因</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody><tr v-for="row in outbounds.items" :key="row.outboundId"><td class="code">{{ row.documentNo }}</td><td>{{ row.warehouseName || warehouseLabel(row.warehouseId) }}</td><td>{{ row.itemCount }}</td><td class="inventory-number">{{ row.totalBaseUnits }}</td><td>{{ reasonLabel(row.reason) }}</td><td><span :class="row.status === 'CONFIRMED' ? 'badge badge-good' : 'badge badge-muted'">{{ row.status === 'CONFIRMED' ? '已确认' : '草稿' }}</span></td><td>{{ formatTime(row.createdAt) }}</td><td><el-button link type="primary" :loading="outboundDetailLoading" @click="openOutboundDetail(row.outboundId)">查看详情</el-button></td></tr></tbody></table><p v-if="!outboundLoading && !outboundError && !outbounds.items.length" class="inventory-empty">暂无人工出库单。可先保存草稿，核对后再确认。</p></div>
@@ -387,10 +410,10 @@ onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
       </div>
     </div>
 
-    <StocktakePanel v-else-if="tab === 'stocktakes'" role="tabpanel" :warehouses="warehouses" :can-manage="canManage" :can-review="canReview" @dirty="stocktakeDirty = $event" @approved="loadBalances(1); loadLedgers(1)" />
+    <StocktakePanel v-else-if="tab === 'stocktakes'" :warehouses="warehouses" :can-manage="canManage" :can-review="canReview" @dirty="stocktakeDirty = $event" @busy="stocktakeBusy = $event" @approved="loadBalances(1); loadLedgers(1)" />
 
-    <div v-else role="tabpanel" class="inventory-section">
-      <div class="page-heading"><div><h2>库存流水</h2><p>按仓库、SKU 和单据追溯每一次已确认的库存变动。</p></div><el-button :disabled="!ledgers.items.length" @click="exportCurrentLedgerPage">导出当前页 CSV</el-button></div>
+    <div v-else class="inventory-section">
+      <div class="page-heading"><div><h1>库存流水</h1><p>按仓库、SKU 和单据追溯每一次已确认的库存变动。</p></div><el-button :disabled="!ledgers.items.length" @click="exportCurrentLedgerPage">导出当前页 CSV</el-button></div>
       <form class="inventory-filters" @submit.prevent="loadLedgers(1)"><label>商品、SKU 或单据号<el-input v-model="ledgerKeyword" maxlength="120" clearable placeholder="输入商品名称 / SKU 编码 / 单据号" /></label><label>仓库<el-select v-model="ledgerWarehouseId" placeholder="全部仓库"><el-option label="全部仓库" value="" /><el-option v-for="row in warehouses" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label><label>变动类型<el-select v-model="ledgerMovementType" placeholder="全部类型"><el-option label="全部类型" value="" /><el-option label="入库" value="INBOUND" /><el-option label="人工出库" value="OUTBOUND" /><el-option label="盘点调整" value="ADJUSTMENT" /><el-option label="订单销售" value="SALE" /></el-select></label><el-button type="primary" native-type="submit" :loading="ledgerLoading">查询</el-button><el-button @click="ledgerKeyword = ''; ledgerWarehouseId = ''; ledgerMovementType = ''; loadLedgers(1)">重置</el-button></form>
       <p v-if="ledgerError" class="notice" role="alert">{{ ledgerError }} <el-button link type="primary" @click="loadLedgers(ledgers.page)">重试</el-button></p>
       <div class="panel table-wrap" v-loading="ledgerLoading"><table><thead><tr><th>时间</th><th>单据 / 关联对象</th><th>商品 / SKU</th><th>仓库</th><th>变动类型</th><th>数量（基础单位）</th><th>操作人</th><th>操作</th></tr></thead><tbody><tr v-for="row in ledgers.items" :key="row.ledgerId"><td>{{ formatTime(row.occurredAt) }}</td><td class="code">{{ row.documentNo }}</td><td><strong>{{ row.productName }}</strong><small class="inventory-subline code">{{ row.skuCode }}</small></td><td>{{ row.warehouseName }}</td><td>{{ movementLabel(row.movementType) }}</td><td class="inventory-number" :class="{ 'inventory-available': row.deltaBaseUnits > 0 }">{{ signedQuantity(row.deltaBaseUnits) }} {{ row.baseUnit }}</td><td>{{ row.actorName }}</td><td><el-button link type="primary" :loading="ledgerDetailLoading" @click="openLedgerDetail(row.ledgerId)">详情</el-button></td></tr></tbody></table><p v-if="!ledgerLoading && !ledgerError && !ledgers.items.length" class="inventory-empty">暂无匹配流水。入库、人工出库、盘点调整及订单销售会在此追溯。</p></div>

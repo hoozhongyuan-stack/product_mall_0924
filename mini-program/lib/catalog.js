@@ -9,6 +9,19 @@ function mediaUrl(baseUrl, path) {
   return `${baseUrl.replace(/\/$/, '')}${path}`
 }
 
+// Input is the server's sanitized HTML. Adapt only its canonical asset URLs;
+// this is deliberately not another HTML editor or client-side sanitizer.
+function descriptionMedia(value, baseUrl) {
+  if (typeof value !== 'string') return ''
+  return value.replace(/<img\b[^>]*>/g, (tag) => tag.replace(
+    /src="(\/api\/v1\/app\/assets\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/file)"/g,
+    (_attribute, path) => {
+      const source = mediaUrl(baseUrl, path).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+      return `src="${source}" style="max-width:100%;height:auto;display:block;"`
+    },
+  ))
+}
+
 function categoryTree(items) {
   const active = (Array.isArray(items) ? items : []).filter((item) => item.status === 'ACTIVE')
   return active.filter((item) => !item.parentId).map((parent) => ({
@@ -55,7 +68,7 @@ function productDetail(item, baseUrl) {
     fulfillmentKind: item.fulfillmentKind,
     fulfillment: item.fulfillmentKind === 'REDEEM' ? '到店核销' : '快递发货',
     redeemValidUntil: item.fulfillmentKind === 'REDEEM' && typeof item.redeemValidUntil === 'string' ? item.redeemValidUntil : '',
-    descriptionHtml: item.descriptionHtml || '',
+    descriptionHtml: descriptionMedia(item.descriptionHtml, baseUrl),
     images,
     videoUrl: mediaUrl(baseUrl, item.videoUrl),
     skus,

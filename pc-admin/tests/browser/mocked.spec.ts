@@ -261,7 +261,7 @@ test('mock HTTP: member and inventory pages preserve readable empty and retry st
   await screenshot(page, testInfo, 'site-members-empty')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await openSection(page, '库存')
-  await expect(page.getByRole('heading', { name: '库存管理' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '库存查询' })).toBeVisible()
   await expect(page.getByRole('button', { name: '创建仓库' })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await screenshot(page, testInfo, 'site-inventory-empty')
@@ -417,5 +417,53 @@ test('mock HTTP: WeChat read-only and forbidden pages cannot trigger credentials
   await page.reload()
   await expect(page.getByRole('alert')).toContainText('没有此页面的读取权限')
   expect(reads).toBe(1)
+  verify()
+})
+
+test('mock HTTP: product rich description uses shared assets and preserves revision conflict edits', async ({ page }, testInfo) => {
+  let writes = 0
+  let submitted: Record<string, unknown> = {}
+  const product = { productId: 'product-a', productNo: 'BROWSER_PRODUCT', name: '经典干红葡萄酒 750ml', categoryId: 'leaf',
+    fulfillmentKind: 'SHIP', redeemValidUntil: null, status: 'DRAFT', descriptionHtml: '', productRevision: 4,
+    mainImage: null, galleryImages: [], video: null, specAxes: [], skus: [{ ...sku, specOptionIds: [] }] }
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path === '/api/v1/admin/assets') {
+      await ok(route, { items: [{ ...asset, assetId: ids.a, adminUrl: `/api/v1/admin/assets/${ids.a}/file`,
+        originalName: '产地介绍.png', createdAt: '2026-09-29T01:00:00Z', availability: 'READY', bindingStatus: 'UNBOUND', sha256: 'synthetic' }], total: 1, page: 1, pageSize: 20 }); return true
+    }
+    if (path !== '/api/v1/admin/products/product-a') return false
+    if (route.request().method() === 'PATCH') {
+      submitted = route.request().postDataJSON(); writes++
+      if (writes === 1) await route.fulfill({ status: 409, json: { success: false, error: { code: 'REVISION_CONFLICT', message: '配置已变化' } } })
+      else await ok(route, { ...product, descriptionHtml: submitted.descriptionHtml, productRevision: 5 })
+    } else await ok(route, product)
+    return true
+  })
+  await page.goto('/catalog')
+  await page.getByRole('button', { name: '编辑商品', exact: true }).click()
+  const description = page.getByRole('region', { name: '商品描述', exact: true })
+  const textbox = description.getByRole('textbox', { name: '商品描述', exact: true })
+  await textbox.fill('产地与酿造工艺')
+  await textbox.press('ControlOrMeta+A')
+  await description.getByRole('button', { name: '二级标题', exact: true }).click()
+  await expect(textbox.locator('h2')).toHaveText('产地与酿造工艺')
+  await textbox.press('ArrowRight')
+  await description.getByRole('button', { name: '从素材中心选择', exact: true }).click()
+  await page.getByRole('dialog', { name: '选择素材', exact: true }).getByRole('button', { name: '选择素材', exact: true }).click()
+  await description.getByLabel('图片 1 说明', { exact: true }).fill('商品产地示意')
+  await description.getByRole('button', { name: '手机预览', exact: true }).click()
+  await expect(description.getByLabel('手机宽度预览').getByAltText('商品产地示意')).toBeVisible()
+  await page.getByRole('button', { name: '保存商品资料', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('已保留当前表单')
+  await expect(textbox).toContainText('产地与酿造工艺')
+  expect(submitted.expectedRevision).toBe(4)
+  expect(String(submitted.descriptionHtml)).toContain(`data-asset-id="${ids.a}"`)
+  expect(String(submitted.descriptionHtml)).not.toContain('src=')
+  page.once('dialog', dialog => dialog.dismiss())
+  await page.getByRole('button', { name: '返回商品列表', exact: true }).click()
+  await expect(textbox).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.evaluate(() => { (document.activeElement as HTMLElement)?.blur(); window.scrollTo(0, 0) })
+  await screenshot(page, testInfo, 'product-description-editor')
   verify()
 })

@@ -2,6 +2,7 @@ from django.db.models import Prefetch
 
 from payments.availability import enabled_payment_methods
 
+from .description import present_description
 from .models import Product, SkuGradePrice, SkuSpecSelection
 
 
@@ -62,7 +63,7 @@ def product_data(product):
         "productNo": product.product_no, "name": product.name,
         "categoryId": str(product.category_id), "fulfillmentKind": product.fulfillment_kind,
         "redeemValidUntil": product.redeem_valid_until.isoformat() if product.redeem_valid_until else None,
-        "status": product.status, "descriptionHtml": product.description_html,
+        "status": product.status, "descriptionHtml": present_description(product.description_html),
         "mainImage": asset_data(product.main_image) if product.main_image_id else None,
         "galleryImages": [asset_data(row.asset) for row in product.gallery_images.select_related("asset").order_by("position")],
         "video": asset_data(product.video) if product.video_id else None,
@@ -105,7 +106,7 @@ def public_product_data(product, member=None):
     has_stock = any(row["cartEligible"] for row in skus)
     return {"productId": str(product.id), "productNo": product.product_no,
             "name": product.name, "categoryId": str(product.category_id),
-            "fulfillmentKind": product.fulfillment_kind, "descriptionHtml": product.description_html,
+            "fulfillmentKind": product.fulfillment_kind, "descriptionHtml": present_description(product.description_html, public=True),
             "redeemValidUntil": product.redeem_valid_until.isoformat() if product.redeem_valid_until else None,
             "mainImageUrl": public_asset_url(product.main_image),
             "galleryImageUrls": [public_asset_url(row.asset) for row in

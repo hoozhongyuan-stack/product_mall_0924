@@ -2,10 +2,11 @@ from django.db import IntegrityError, transaction
 
 from accounts.security import audit
 
+from .description import parse_description, set_description_images
 from .media import resolve_media, set_gallery
 from .models import (Category, MemberGrade, Product, Sku, SkuGradePrice, SkuSpecSelection,
                      SkuUnitVersion, SpecAxis, SpecOption)
-from .validation import (CatalogError, code_field, description, list_field, number_field,
+from .validation import (CatalogError, code_field, list_field, number_field,
                          object_field, redeem_valid_until, text_field, uuid_field)
 
 
@@ -129,19 +130,20 @@ def create_product(request, actor, body):
     valid_until = redeem_valid_until(body.get("redeemValidUntil"), fulfillment)
     if body.get("status", "DRAFT") != "DRAFT":
         raise CatalogError("新商品必须先保存为草稿。")
-    sanitized = description(body.get("descriptionHtml", ""))
+    document = parse_description(body.get("descriptionHtml", ""))
     axes, option_by_key = parse_axes(body.get("specAxes", []))
     skus = parse_skus(body.get("skus"), axes, option_by_key)
     if any(item["status"] == Sku.SaleStatus.ON_SALE for item in skus):
         raise CatalogError("新商品须先保存为草稿，再从 SKU 列表上架。")
     with transaction.atomic():
         category = active_leaf(body.get("categoryId"))
-        main_image, gallery, video = resolve_media(body)
+        main_image, gallery, video = resolve_media(body, description_ids=document.asset_ids)
         from .asset_access import authorize_asset_binding
         from .media import revalidate_asset_actor
         for code in ("catalog.write", "sku.price.write", "sku.status.write", "sku.unit.write"):
             actor = revalidate_asset_actor(request, code, actor)
-        authorize_asset_binding(actor, [asset.id for asset in [main_image, *gallery, video] if asset])
+        authorize_asset_binding(actor, [*document.asset_ids,
+                *[asset.id for asset in [main_image, *gallery, video] if asset]])
         if Product.objects.filter(product_no__iexact=product_no).exists():
             raise CatalogError("商品编号已存在。", "PRODUCT_NO_DUPLICATE", 409)
         if Sku.objects.filter(sku_code__in=[item["code"] for item in skus]).exists() or any(
@@ -150,9 +152,10 @@ def create_product(request, actor, body):
             raise CatalogError("SKU 编码已存在。", "SKU_CODE_DUPLICATE", 409)
         try:
             product = Product.objects.create(product_no=product_no, name=name, category=category,
-                fulfillment_kind=fulfillment, redeem_valid_until=valid_until, description_html=sanitized,
+                fulfillment_kind=fulfillment, redeem_valid_until=valid_until, description_html=document.html,
                 main_image=main_image, video=video)
             set_gallery(product, gallery)
+            set_description_images(product, document.asset_ids)
             options = {}
             for key, axis_name, order, option_rows in axes:
                 axis = SpecAxis.objects.create(product=product, name=axis_name, sort_order=order)
@@ -179,6 +182,7 @@ def create_product(request, actor, body):
                   after={"productNo": product_no, "skuIds": [str(item.id) for item in created_skus],
                          "mainImageAssetId": str(main_image.id) if main_image else None,
                          "galleryAssetIds": [str(asset.id) for asset in gallery],
+                         "descriptionImageAssetIds": [str(identifier) for identifier in document.asset_ids],
                          "videoAssetId": str(video.id) if video else None})
         except IntegrityError as exc:
             raise CatalogError("商品编号或 SKU 编码已存在。", "CATALOG_CONFLICT", 409) from exc

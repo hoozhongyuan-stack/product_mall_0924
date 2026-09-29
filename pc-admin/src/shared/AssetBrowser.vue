@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 import { api, type Account } from '../api'
-import { assetQuery, selectionError, validateAssetFile, type AssetKind, type AssetPage, type LibraryAsset } from './media-library'
+import { assetQuery, selectionError, type AssetKind, type AssetPage, type LibraryAsset } from './media-library'
 import './assets.css'
+import AssetUploadQueue from './AssetUploadQueue.vue'
 const props = defineProps<{ canRead: boolean; canUpload: boolean; kind?: AssetKind; square?: boolean; excludedIds?: string[]; selecting?: boolean }>()
 const account = inject<Ref<Account | null>>('admin-account')
 const canDelete = computed(() => !!account?.value?.permissionCodes.includes('asset.delete'))
 const deleting = ref(false)
 const deleteAsset = ref<LibraryAsset | null>(null)
 const deleteError = ref('')
-const emit = defineEmits<{ select: [asset: LibraryAsset] }>()
+const emit = defineEmits<{ select: [asset: LibraryAsset]; pending: [value: boolean] }>()
 const kindFilter = ref<AssetKind | ''>(props.kind || '')
 const q = ref('')
 const binding = ref('')
@@ -20,7 +21,6 @@ const uploading = ref(false)
 const error = ref('')
 const notice = ref('')
 const broken = ref<string[]>([])
-const uploadKind = ref<AssetKind>(props.kind || 'IMAGE')
 const references = ref<{ domain: string; objectId: string; label: string; role: string; version?: number; state: string }[]>([])
 const referenceAsset = ref<LibraryAsset | null>(null)
 const referenceLoading = ref(false)
@@ -44,25 +44,7 @@ async function load(reset = false) {
   } catch (reason) { if (alive && current === generation) error.value = reason instanceof Error ? reason.message : '素材读取失败，请重试。' }
   finally { if (alive && current === generation) loading.value = false }
 }
-async function upload(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file || uploading.value || !props.canUpload) return
-  const problem = validateAssetFile(file, uploadKind.value)
-  if (problem) { error.value = problem; return }
-  uploading.value = true
-  error.value = ''
-  notice.value = ''
-  try {
-    const body = new FormData()
-    body.append('file', file)
-    body.append('kind', uploadKind.value)
-    await api('/assets', { method: 'POST', body })
-    if (alive) { notice.value = '素材已上传，可从列表选择。'; await load(true) }
-  } catch (reason) { if (alive) error.value = reason instanceof Error ? reason.message : '上传失败，请重新选择文件重试。' }
-  finally { if (alive) uploading.value = false }
-}
+function uploadPending(value: boolean) { uploading.value = value; emit('pending', value) }
 async function removeAsset() {
   const asset = deleteAsset.value
   if (!asset || !canDelete.value || deleting.value) return
@@ -103,11 +85,7 @@ onBeforeUnmount(() => { alive = false; generation++; referenceGeneration++ })
         <label v-if="canRead">引用状态<el-select v-model="binding" placeholder="全部状态"><el-option label="全部状态" value="" /><el-option label="已引用" value="BOUND" /><el-option label="未引用" value="UNBOUND" /></el-select></label>
         <el-button native-type="submit" :loading="loading">查询</el-button>
       </form>
-      <div v-if="canUpload" class="asset-upload-row">
-        <label v-if="!kind">上传类型<el-select v-model="uploadKind" :disabled="uploading"><el-option label="图片" value="IMAGE" /><el-option label="视频" value="VIDEO" /><el-option label="GIF" value="GIF" /></el-select></label>
-        <label class="secondary-button asset-upload">{{ uploading ? '上传中…' : '上传素材' }}<input type="file" :accept="uploadKind === 'VIDEO' ? 'video/mp4' : uploadKind === 'GIF' ? 'image/gif' : 'image/jpeg,image/png'" :disabled="uploading" @change="upload" /></label>
-        <small>{{ uploadKind === 'VIDEO' ? 'MP4 · 最多 50 MiB' : uploadKind === 'GIF' ? 'GIF · 最多 10 MiB' : 'JPG / PNG · 最多 10 MiB' }}</small>
-      </div>
+      <AssetUploadQueue v-if="canUpload" :can-upload="canUpload" :kind="kind" @pending="uploadPending" @refresh="load(true)" />
       <p v-if="notice" role="status">{{ notice }}</p>
       <p v-if="error" class="error" role="alert">{{ error }} <el-button text @click="load()">重新读取</el-button></p>
       <p v-if="loading" role="status">正在读取素材…</p>
@@ -133,7 +111,7 @@ onBeforeUnmount(() => { alive = false; generation++; referenceGeneration++ })
       <p>{{ referenceAsset?.originalName }}</p>
       <small class="asset-checksum">SHA-256：{{ referenceAsset?.sha256 }}</small>
       <p v-if="referenceLoading" role="status">正在读取引用…</p><p v-else-if="referenceError" class="error" role="alert">{{ referenceError }} <el-button text @click="referenceAsset && loadReferences(referenceAsset, false)">重试</el-button></p><p v-else-if="!references.length">当前未被引用。</p>
-      <ul v-else class="asset-reference-list"><li v-for="(item,index) in references" :key="index"><strong>{{ item.label }}</strong><span>{{ item.domain }} · {{ item.role }} · {{ ({ DRAFT: '草稿', CURRENT: '当前线上', HISTORY: '历史版本', BOUND: '已绑定' } as Record<string,string>)[item.state] || item.state }}{{ item.version !== undefined ? ` · 版本 ${item.version}` : '' }}</span><small>{{ item.objectId }}</small></li></ul>
+      <ul v-else class="asset-reference-list"><li v-for="(item,index) in references" :key="index"><strong>{{ item.label }}</strong><span>{{ item.domain }} · {{ item.role === 'DESCRIPTION_IMAGE' ? '商品详情图片' : item.role }} · {{ ({ DRAFT: '草稿', CURRENT: '当前线上', HISTORY: '历史版本', BOUND: '已绑定' } as Record<string,string>)[item.state] || item.state }}{{ item.version !== undefined ? ` · 版本 ${item.version}` : '' }}</span><small>{{ item.objectId }}</small></li></ul>
       <el-pagination v-if="referenceTotal > 20" layout="prev, pager, next" :total="referenceTotal" :page-size="20" :current-page="referencePage" :disabled="referenceLoading" @current-change="(value: number) => { referencePage = value; if (referenceAsset) loadReferences(referenceAsset, false) }" />
     </el-dialog>
   </div>

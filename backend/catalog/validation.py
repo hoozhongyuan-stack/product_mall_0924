@@ -36,8 +36,10 @@ def redeem_valid_until(value, fulfillment_kind):
 
 
 class DescriptionSanitizer(HTMLParser):
-    def __init__(self):
+    def __init__(self, image_url=None):
         super().__init__(convert_charrefs=True)
+        self.image_url = image_url
+        self.image_ids = []
         self.parts = []
         self.open_tags = []
         self.skip_depth = 0
@@ -45,12 +47,37 @@ class DescriptionSanitizer(HTMLParser):
     def handle_starttag(self, tag, attrs):
         if tag in {"script", "style", "iframe", "object", "svg", "math"}:
             self.skip_depth += 1
+        elif not self.skip_depth and tag == "img":
+            self.handle_image(attrs)
         elif not self.skip_depth and tag in ALLOWED_TAGS:
             self.parts.append(f"<{tag}>")
             if tag != "br":
                 self.open_tags.append(tag)
 
+    def handle_image(self, attrs):
+        identifiers = [value for key, value in attrs if key == "data-asset-id"]
+        alts = [value for key, value in attrs if key == "alt"]
+        if len(identifiers) != 1 or not identifiers[0]:
+            raise CatalogError("详情图片必须绑定有效素材。", "MEDIA_INVALID")
+        try:
+            identifier = uuid.UUID(identifiers[0])
+        except ValueError:
+            raise CatalogError("详情图片素材 ID 无效。", "MEDIA_INVALID") from None
+        if len(alts) > 1 or alts and (alts[0] is None or len(alts[0]) > 200):
+            raise CatalogError("图片说明不能超过 200 字符且不能重复。")
+        if len(self.image_ids) >= 20:
+            raise CatalogError("详情图片不能超过 20 张。")
+        self.image_ids.append(identifier)
+        attributes = f' data-asset-id="{identifier}"'
+        if alts:
+            attributes += f' alt="{html.escape(alts[0], quote=True)}"'
+        if self.image_url:
+            attributes += f' src="{html.escape(self.image_url(identifier), quote=True)}"'
+        self.parts.append(f"<img{attributes}>")
+
     def handle_startendtag(self, tag, attrs):
+        if not self.skip_depth and tag == "img":
+            self.handle_image(attrs)
         if not self.skip_depth and tag == "br":
             self.parts.append("<br>")
 
@@ -69,18 +96,23 @@ class DescriptionSanitizer(HTMLParser):
             self.parts.append(html.escape(data, quote=True))
 
     def value(self):
-        for tag in reversed(self.open_tags):
-            self.parts.append(f"</{tag}>")
-        return "".join(self.parts)
+        return "".join([*self.parts, *(f"</{tag}>" for tag in reversed(self.open_tags))])
 
 
-def description(value):
-    if not isinstance(value, str) or len(value) > 20000:
-        raise CatalogError("详情内容不能超过 20000 字符。")
+def description_parser(value):
+    # HTTP has a 256 KiB body limit; direct service calls must also remain bounded.
+    if not isinstance(value, str) or len(value) > 262144:
+        raise CatalogError("详情内容过长或格式无效。")
     parser = DescriptionSanitizer()
     parser.feed(value)
     parser.close()
-    return parser.value()
+    if len(parser.value()) > 20000:
+        raise CatalogError("详情内容不能超过 20000 字符。")
+    return parser
+
+
+def description(value):
+    return description_parser(value).value()
 
 
 def text_field(value, label, maximum):
