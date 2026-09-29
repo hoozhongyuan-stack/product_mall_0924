@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import InventorySkuPicker from './InventorySkuPicker.vue'
 import { api } from '../../api'
 import { parsePositiveQuantity } from './quantity.mjs'
 import type { InventoryBalance, InventorySku, OutboundReason, Page, Warehouse } from './types'
@@ -11,6 +12,8 @@ type Line = {
   sku: InventorySku | null
   quantity: string
   unit: 'BASE' | 'SALE'
+  onHand: number | null
+  reserved: number | null
   available: number | null
   balanceLoading: boolean
   balanceError: string
@@ -34,17 +37,14 @@ const inboundReason = ref('')
 const outboundReason = ref<OutboundReason>('DAMAGE')
 const note = ref('')
 const lines = ref<Line[]>([newLine()])
-const skuChoices = ref<InventorySku[]>([])
-const skuLoading = ref(false)
 const localError = ref('')
 const requestKey = ref(crypto.randomUUID())
 const touched = ref(false)
-let searchSequence = 0
 const balanceLoadTokens = new Map<string, number>()
 
 function newLine(): Line {
   return { key: crypto.randomUUID(), skuId: '', sku: null, quantity: '', unit: 'BASE',
-    available: null, balanceLoading: false, balanceError: '' }
+    onHand: null, reserved: null, available: null, balanceLoading: false, balanceError: '' }
 }
 const dirty = computed(() => touched.value)
 watch(dirty, (value) => emit('dirty', value), { immediate: true })
@@ -57,7 +57,7 @@ function setWarehouse(value: string) {
   if (props.saving) return
   warehouseId.value = value
   changed()
-  if (props.kind === 'outbound') lines.value.forEach((line) => { if (line.skuId) void loadAvailable(line.key, line.skuId, value) })
+  lines.value.forEach((line) => { if (line.skuId) void loadAvailable(line.key, line.skuId, value) })
 }
 function setLine(key: string, patch: Partial<Line>) {
   if (props.saving) return
@@ -75,39 +75,23 @@ function removeLine(key: string) {
   lines.value = lines.value.filter((line) => line.key !== key)
   changed()
 }
-async function searchSkus(keyword: string) {
-  const sequence = ++searchSequence
-  skuLoading.value = true
-  try {
-    const query = new URLSearchParams({ page: '1', pageSize: '30' })
-    if (keyword.trim()) query.set('keyword', keyword.trim())
-    const result = await api<Page<InventorySku>>(`/inventory/skus?${query}`)
-    if (sequence === searchSequence) skuChoices.value = result.items
-  } catch (reason) {
-    if (sequence === searchSequence) localError.value = reason instanceof Error ? reason.message : 'SKU 查询失败。'
-  } finally { if (sequence === searchSequence) skuLoading.value = false }
-}
-function skuOptions(line: Line) {
-  return line.sku && !skuChoices.value.some((item) => item.skuId === line.skuId)
-    ? [line.sku, ...skuChoices.value] : skuChoices.value
-}
-function chooseSku(line: Line, skuId: string) {
+function chooseSku(line: Line, sku: InventorySku) {
   if (props.saving) return
-  const sku = skuChoices.value.find((item) => item.skuId === skuId) || (line.sku?.skuId === skuId ? line.sku : null)
-  setLine(line.key, { skuId, sku, unit: 'BASE', available: null, balanceError: '' })
-  if (props.kind === 'outbound' && skuId && warehouseId.value) void loadAvailable(line.key, skuId, warehouseId.value)
+  setLine(line.key, { skuId: sku.skuId, sku, unit: 'BASE', available: null, balanceError: '' })
+  if (warehouseId.value) void loadAvailable(line.key, sku.skuId, warehouseId.value)
 }
 async function loadAvailable(key: string, skuId: string, selectedWarehouseId: string) {
   const token = (balanceLoadTokens.get(key) || 0) + 1
   balanceLoadTokens.set(key, token)
-  lines.value = lines.value.map((line) => line.key === key ? { ...line, available: null, balanceLoading: true, balanceError: '' } : line)
+  lines.value = lines.value.map((line) => line.key === key ? { ...line, onHand: null, reserved: null, available: null, balanceLoading: true, balanceError: '' } : line)
   try {
     const query = new URLSearchParams({ page: '1', pageSize: '1', warehouseId: selectedWarehouseId, skuId })
     const page = await api<Page<InventoryBalance>>(`/inventory/balances?${query}`)
-    const available = page.items[0]?.availableBaseUnits ?? 0
+    const balance = page.items[0]
+    const available = balance?.availableBaseUnits ?? 0
     if (balanceLoadTokens.get(key) === token && warehouseId.value === selectedWarehouseId) {
       lines.value = lines.value.map((line) => line.key === key && line.skuId === skuId
-        ? { ...line, available, balanceLoading: false } : line)
+        ? { ...line, available, onHand: balance?.onHandBaseUnits ?? 0, reserved: balance?.reservedBaseUnits ?? 0, balanceLoading: false } : line)
     }
   } catch (reason) {
     if (balanceLoadTokens.get(key) === token) {
@@ -145,22 +129,22 @@ function submit() {
     ...(props.kind === 'outbound' ? { note: note.value.trim() } : {}),
     items: lines.value.map((line) => ({ skuId: line.skuId, quantity: parsePositiveQuantity(line.quantity)!, unit: line.unit })) }, requestKey.value)
 }
-onMounted(() => { void searchSkus('') })
+onBeforeUnmount(() => balanceLoadTokens.clear())
 </script>
 
 <template>
   <form class="panel inventory-form stock-document-form" @submit.prevent="submit">
     <h3>新建{{ kind === 'inbound' ? '入库' : '人工出库' }}草稿</h3>
     <div class="inventory-form-grid">
-      <label>{{ kind === 'inbound' ? '入库' : '出库' }}仓库 <span class="required">*</span>
+      <label><span>{{ kind === 'inbound' ? '入库' : '出库' }}仓库 <span class="required">*</span></span>
         <el-select :model-value="warehouseId" :disabled="saving" placeholder="选择仓库" @update:model-value="setWarehouse">
           <el-option v-for="row in warehouses.filter((item) => item.enabled)" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" />
         </el-select>
       </label>
-      <label v-if="kind === 'inbound'">来源 / 原因 <span class="required">*</span>
+      <label v-if="kind === 'inbound'"><span>来源 / 原因 <span class="required">*</span></span>
         <el-input :model-value="inboundReason" :disabled="saving" maxlength="200" placeholder="例如 采购入库" @update:model-value="(value: string) => { inboundReason = value; changed() }" />
       </label>
-      <label v-else>出库原因 <span class="required">*</span>
+      <label v-else><span>出库原因 <span class="required">*</span></span>
         <el-select :model-value="outboundReason" :disabled="saving" @update:model-value="(value: OutboundReason) => { outboundReason = value; changed() }">
           <el-option label="报损" value="DAMAGE" /><el-option label="样品领用" value="SAMPLE" />
           <el-option label="内部使用" value="INTERNAL" /><el-option label="其他" value="OTHER" />
@@ -174,19 +158,18 @@ onMounted(() => { void searchSkus('') })
     <div v-for="(line, index) in lines" :key="line.key" class="stock-line">
       <div class="stock-line-title"><strong>商品 {{ index + 1 }}</strong><el-button v-if="lines.length > 1" link type="danger" :disabled="saving" :aria-label="`移除第 ${index + 1} 行`" @click="removeLine(line.key)">移除</el-button></div>
       <div class="stock-line-fields">
-        <label>SKU <span class="required">*</span>
-          <el-select :model-value="line.skuId" :disabled="saving" filterable remote reserve-keyword :remote-method="searchSkus" :loading="skuLoading" placeholder="输入 SKU 编码或商品名称" @update:model-value="(value: string) => chooseSku(line, value)">
-            <el-option v-for="sku in skuOptions(line)" :key="sku.skuId" :label="`${sku.skuCode} · ${sku.productName}`" :value="sku.skuId" />
-          </el-select>
-        </label>
-        <label>操作单位 <span class="required">*</span>
+        <div class="stock-sku-selection"><span class="stock-field-label">商品 / SKU <span class="required">*</span></span>
+          <InventorySkuPicker :model-value="line.sku" :warehouse-id="warehouseId" :disabled="saving" :excluded-ids="lines.filter(other => other.key !== line.key).map(other => other.skuId).filter(Boolean)" @select="sku => chooseSku(line, sku)" />
+        </div>
+        <label><span>操作单位 <span class="required">*</span></span>
           <el-select :model-value="line.unit" :disabled="saving || !line.sku" @update:model-value="(value: 'BASE' | 'SALE') => setLine(line.key, { unit: value })">
             <el-option :label="line.sku ? `基础单位：${line.sku.baseUnit}` : '基础单位'" value="BASE" />
             <el-option v-if="line.sku && line.sku.saleUnit !== line.sku.baseUnit" :label="`销售单位：${line.sku.saleUnit}`" value="SALE" />
           </el-select>
         </label>
-        <label>录入数量 <span class="required">*</span><el-input :model-value="line.quantity" :disabled="saving" inputmode="numeric" placeholder="正整数" @update:model-value="(value: string) => setLine(line.key, { quantity: value })" /></label>
+        <label><span>录入数量 <span class="required">*</span></span><el-input :model-value="line.quantity" :disabled="saving" inputmode="numeric" placeholder="正整数" @update:model-value="(value: string) => setLine(line.key, { quantity: value })" /></label>
       </div>
+      <p v-if="line.sku" class="inventory-line-stock" aria-live="polite">所选仓库：<span v-if="line.balanceLoading">库存读取中…</span><span v-else-if="line.balanceError">库存暂不可用</span><template v-else>账面 {{ line.onHand ?? '—' }} {{ line.sku.baseUnit }} · 锁定 {{ line.reserved ?? '—' }} {{ line.sku.baseUnit }} · 可售 <strong>{{ line.available ?? '—' }} {{ line.sku.baseUnit }}</strong></template></p>
       <p v-if="line.sku" class="inventory-conversion">1 {{ line.unit === 'SALE' ? line.sku.saleUnit : line.sku.baseUnit }} = {{ line.unit === 'SALE' ? line.sku.ratio : 1 }} {{ line.sku.baseUnit }}；本行基础数量：<strong>{{ baseQuantity(line) ?? '—' }} {{ line.sku.baseUnit }}</strong><template v-if="kind === 'outbound'">；当前可售：<strong>{{ line.balanceLoading ? '读取中' : line.available ?? '—' }} {{ line.sku.baseUnit }}</strong><template v-if="insufficient(line)">；<strong class="stock-shortfall" role="alert">库存不足，请调整数量</strong></template><template v-else-if="line.available !== null && baseQuantity(line) !== null">；出库后可售约 <strong>{{ line.available - baseQuantity(line)! }} {{ line.sku.baseUnit }}</strong></template></template></p>
       <p v-if="line.balanceError" class="error" role="alert">{{ line.balanceError }} <el-button link type="primary" @click="loadAvailable(line.key, line.skuId, warehouseId)">重试</el-button></p>
     </div>

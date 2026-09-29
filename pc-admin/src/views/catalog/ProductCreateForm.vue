@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, ref, watch, type Ref } from 'vue'
 import ProductMediaEditor from './ProductMediaEditor.vue'
+import ProductDescriptionEditor from './ProductDescriptionEditor.vue'
 import { api, type Account } from '../../api'
 import type { Asset, Category, SpecAxis } from './types'
 import { yuanToFen } from './types'
@@ -157,7 +158,7 @@ async function save() {
         </div>
       </div>
     </div>
-    <section class="catalog-description-section"><h4>商品详情</h4><label>商品描述（允许基础 HTML，服务端会过滤）<textarea v-model="description" rows="4" placeholder="可留空，后续编辑商品资料" /></label></section>
+    <ProductDescriptionEditor v-model="description" :target-key="JSON.stringify([account?.accountId, 'new'])" :disabled="saving || !canEdit" />
     <p class="help-text">保存后为下架草稿。库存通过库存单据管理；上架前请核对主图、价格与可售库存。</p>
     <button class="primary-button" type="submit" :disabled="saving || mediaBusy || !canEdit || !skus.length">{{ saving ? '保存中…' : '保存商品草稿' }}</button>
   </form>

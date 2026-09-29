@@ -16,6 +16,19 @@
     "test:integration": "python3 scripts/run-browser-integration.py"
   },
   "dependencies": {
+    "@tiptap/core": "3.31.3",
+    "@tiptap/extension-bold": "3.31.3",
+    "@tiptap/extension-document": "3.31.3",
+    "@tiptap/extension-hard-break": "3.31.3",
+    "@tiptap/extension-heading": "3.31.3",
+    "@tiptap/extension-image": "3.31.3",
+    "@tiptap/extension-italic": "3.31.3",
+    "@tiptap/extension-list": "3.31.3",
+    "@tiptap/extension-paragraph": "3.31.3",
+    "@tiptap/extension-text": "3.31.3",
+    "@tiptap/extensions": "3.31.3",
+    "@tiptap/pm": "3.31.3",
+    "@tiptap/vue-3": "3.31.3",
     "element-plus": "2.14.6",
     "vue": "3.5.43",
     "vue-router": "5.3.1"

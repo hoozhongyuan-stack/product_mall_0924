@@ -7,7 +7,7 @@ import type { InventorySku, Page, StocktakeDetail, StocktakeStatus, StocktakeSum
 
 type CountInput = { count: string; reason: string }
 const props = defineProps<{ warehouses: Warehouse[]; canManage: boolean; canReview: boolean }>()
-const emit = defineEmits<{ dirty: [value: boolean]; approved: [] }>()
+const emit = defineEmits<{ dirty: [value: boolean]; busy: [value: boolean]; approved: [] }>()
 const tasks = ref<Page<StocktakeSummary>>({ items: [], page: 1, pageSize: 20, total: 0 })
 const listLoading = ref(false)
 const listError = ref('')
@@ -31,6 +31,7 @@ const countTouched = ref(false)
 const submitKey = ref(crypto.randomUUID())
 const actionKeys = new Map<string, string>()
 const actionSaving = ref(false)
+const confirmationPending = ref(false)
 let listSequence = 0
 let detailSequence = 0
 let skuSequence = 0
@@ -39,6 +40,7 @@ const hasDirtyCreate = computed(() => creating.value && createTouched.value)
 const hasDirtyCount = computed(() => selected.value?.status === 'COUNTING' && countTouched.value)
 const hasBookChanged = computed(() => selected.value?.status === 'PENDING_REVIEW'
   && selected.value.items.some((item) => item.bookChanged))
+watch(() => createSaving.value || actionSaving.value || confirmationPending.value, value => emit('busy', value), { immediate: true })
 watch(() => hasDirtyCreate.value || hasDirtyCount.value, (value) => emit('dirty', value), { immediate: true })
 watch(() => props.warehouses, (rows) => {
   if (!createWarehouse.value) createWarehouse.value = rows.find((row) => row.enabled && row.isDefault)?.warehouseId
@@ -147,15 +149,17 @@ async function createTask() {
 }
 async function submitCount() {
   const detail = selected.value
-  if (!props.canManage || !detail || detail.status !== 'COUNTING' || actionSaving.value) return
+  if (!props.canManage || !detail || detail.status !== 'COUNTING' || actionSaving.value || confirmationPending.value) return
   let items: ReturnType<typeof buildStocktakeSubmission>
   try { items = buildStocktakeSubmission(detail.items, counts.value) }
   catch (reason) { detailError.value = failure(reason); return }
+  confirmationPending.value = true
   try {
     await ElMessageBox.confirm('提交后服务端将重新读取最新账面并计算差异，盘点单进入审核，不能继续编辑。', '提交实盘', {
       confirmButtonText: '提交审核', cancelButtonText: '返回核对', type: 'warning',
     })
   } catch { return }
+  finally { confirmationPending.value = false }
   actionSaving.value = true
   detailError.value = ''
   try {
@@ -180,12 +184,14 @@ async function handleActionFailure(reason: unknown, id: string) {
 }
 async function approve() {
   const detail = selected.value
-  if (!props.canReview || !detail || detail.status !== 'PENDING_REVIEW' || actionSaving.value || hasBookChanged.value) return
+  if (!props.canReview || !detail || detail.status !== 'PENDING_REVIEW' || actionSaving.value || confirmationPending.value || hasBookChanged.value) return
+  confirmationPending.value = true
   try {
     await ElMessageBox.confirm(`审核 ${detail.documentNo}？通过后将按所列差异改变账面并生成不可改写的调整流水。`, '审核盘点差异', {
       confirmButtonText: '审核并生成调整流水', cancelButtonText: '返回核对', type: 'warning',
     })
   } catch { return }
+  finally { confirmationPending.value = false }
   actionSaving.value = true
   detailError.value = ''
   const actionId = `approve:${detail.stocktakeId}:${detail.revision}`
@@ -204,8 +210,9 @@ async function approve() {
 }
 async function returnForCorrection() {
   const detail = selected.value
-  if (!props.canReview || !detail || detail.status !== 'PENDING_REVIEW' || actionSaving.value) return
+  if (!props.canReview || !detail || detail.status !== 'PENDING_REVIEW' || actionSaving.value || confirmationPending.value) return
   let reason: string
+  confirmationPending.value = true
   try {
     const answer = await ElMessageBox.prompt('请填写退回原因。退回后盘点人可补充实盘数量并重新提交。', '退回补充', {
       confirmButtonText: '确认退回', cancelButtonText: '取消', inputType: 'textarea',
@@ -213,6 +220,7 @@ async function returnForCorrection() {
     })
     reason = answer.value.trim()
   } catch { return }
+  finally { confirmationPending.value = false }
   actionSaving.value = true
   detailError.value = ''
   const actionId = `return:${detail.stocktakeId}:${detail.revision}:${reason}`
@@ -234,7 +242,7 @@ onMounted(() => { void loadList(1) })
 
 <template>
   <div class="inventory-section stocktake-section">
-    <div class="page-heading"><div><h2>盘点单</h2><p>按仓库与指定 SKU 发起盘点，实盘提交后审核差异；审核通过才调整账面。</p></div><el-button v-if="canManage" type="primary" @click="toggleCreate">{{ creating ? '关闭表单' : '＋ 创建盘点任务' }}</el-button></div>
+    <div class="page-heading"><div><h1>盘点单</h1><p>按仓库与指定 SKU 发起盘点，实盘提交后审核差异；审核通过才调整账面。</p></div><el-button v-if="canManage" type="primary" @click="toggleCreate">{{ creating ? '关闭表单' : '＋ 创建盘点任务' }}</el-button></div>
     <p v-if="!canManage && !canReview" class="hint">当前账号可查看盘点记录。创建和提交需要库存管理权限，审核需要库存审核权限。</p>
     <form class="inventory-filters" @submit.prevent="loadList(1)"><label>仓库<el-select v-model="filterWarehouse" placeholder="全部仓库"><el-option label="全部仓库" value="" /><el-option v-for="row in warehouses" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label><label>状态<el-select v-model="filterStatus" placeholder="全部状态"><el-option label="全部状态" value="" /><el-option label="盘点中" value="COUNTING" /><el-option label="待审核" value="PENDING_REVIEW" /><el-option label="已通过" value="APPROVED" /></el-select></label><el-button type="primary" native-type="submit" :loading="listLoading">查询</el-button><el-button @click="filterWarehouse = ''; filterStatus = ''; loadList(1)">重置</el-button></form>
     <p v-if="listError" class="notice" role="alert">{{ listError }} <el-button link type="primary" @click="loadList(tasks.page)">重试</el-button></p>

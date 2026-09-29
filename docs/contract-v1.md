@@ -98,6 +98,12 @@
 
 当前已实现的创建接口返回商品和 SKU ID/修订号；规格稳定 ID 可从商品详情读取。商品 PATCH 支持名称、分类、履约类型、净化后的描述及 `mainImageAssetId`、`galleryAssetIds`、`videoAssetId`，拒绝独立修改 `status`；素材字段可传 `null` 或空数组移除。已有草稿商品的完整规格矩阵与 SKU 通过 `/specs/preview` 和 `/specs` 原子修改；草稿规格保存不直接上架 SKU。
 
+商品 `descriptionHtml` 沿用正文标签 `p/br/strong/em/ul/ol/li/h2/h3` 白名单，并支持最多 20 个 `img` 节点（可重复展示同一素材；不计入主图与附图的 9 张上限）。每个图片必须包含唯一的 `data-asset-id="UUID"`，可选 `alt` 最多 200 字符。`src` 仅是客户端预览输入，服务端不请求、不信任、不保存；事件、样式、`srcset` 等属性不保留。没有素材绑定的图片、外链图片、无效 ID、非 IMAGE 素材及缺失／过期文件返回 `MEDIA_INVALID`（400），节点或说明超限返回 `VALIDATION_FAILED`（400），绑定越权返回 `PERMISSION_DENIED`（403）；不会静默丢掉图片后报告保存成功。
+
+描述长度按净化后、去除 `src` 的 canonical HTML 计算，最多 20000 字符；原始 HTTP JSON 仍受 256 KiB 请求体上限约束，直接业务调用的原始字符串另限 262144 字符。存储格式例如 `<p>说明</p><img data-asset-id="UUID" alt="示例">`。后台商品详情投影 `src="/api/v1/admin/assets/UUID/file"`，公开商品详情投影 `src="/api/v1/app/assets/UUID/file"`，保留安全的素材 ID 与说明；客户端按自身 API origin 解析相对路径。GET 的 HTML 可原样 PATCH，不因服务端生成的 URL 占用 canonical 字符预算。旧无图正文保持兼容。
+
+详情图片通过 `ProductDescriptionImage` 外键引用与商品正文、修订号在同一事务保存；资产与其他商品媒体按同一排序锁定。新增绑定复用 `asset.read` 或“本人上传且尚未绑定”的 `asset.upload` 授权；已有本商品媒体可保留，无需新增素材读取权限。删除、孤儿清理、素材库绑定状态和引用分页都识别详情图片，引用角色为 `CATALOG / DESCRIPTION_IMAGE`，重复节点只有一条引用。`catalog.read` 仅允许读取已绑定于当前商品的素材，不授予整个素材库权限；公开图片沿用在售商品、有效分类和在售 SKU 的可见性条件。
+
 ### 3.2 页面配置结构与发布
 
 `page_config_version.config_json` 建议包含 `schemaVersion: 1`、`pageType: HOME/MICRO`、`theme`、`components[]`。首页 `theme` 包含 `pageBackgroundColor`、`headerBackgroundColor`、`brandTextColor`；颜色按实际对比度和目标设备验证。每个组件有稳定 `componentId`、`type`、`sortOrder`、`visible`、对应 `props`；同页面排序不得重复。
@@ -171,7 +177,7 @@ B1 的数据由 `inventory` 模块负责。仓库编码大小写唯一，首个�
 | 接口 | 输入及结果 | 权限与事务 |
 |---|---|---|
 | `GET/POST /api/v1/admin/warehouses` | GET 返回 `{items:[{warehouseId,code,name,isDefault,enabled,revision}]}`；POST `{code,name,isDefault}` 创建仓库。 | `inventory.read` / `inventory.manage`；编码和唯一默认仓由数据库兜底。 |
-| `GET /api/v1/admin/inventory/skus` | `keyword/page/pageSize`；只返回 SKU ID、编码、商品名、当前基本/销售单位、比例及单位版本，不返回价格。 | `inventory.read`；分页上限 100。 |
+| `GET /api/v1/admin/inventory/skus` | `keyword/page/pageSize/warehouseId?`；保留原字段及分页，追加 `productNo`、有序 `specs[{name,value}]`、`mainImage{assetId,adminUrl}|null`、`warehouseStock{warehouseId,onHandBaseUnits,reservedBaseUnits,availableBaseUnits}|null`。未传仓库时库存为 null，指定仓库但无余额时为 0；仓库参数无效 400、不存在 404。关键词匹配商品名、商品编号、SKU 编码及规格值，允许选择下架 SKU，不返回价格。 | `inventory.read`；分页上限 100。 |
 | `GET /api/v1/admin/inventory/balances` | 可按 `warehouseId/keyword` 筛选；分页返回仓库、SKU、基本单位、账面、锁定、可售数量。仅列已有余额行，未入库的 SKU 不伪装为可售。 | `inventory.read`；可售量由服务端以账面减锁定计算。 |
 | `GET/POST /api/v1/admin/inventory/inbounds`、`GET /inbounds/{id}` | POST `{warehouseId,reason,items:[{skuId,quantity,unit:BASE\|SALE}]}` 与 UUID `Idempotency-Key` 保存 1—50 行草稿；明细返回每行操作单位、版本、比例及基本单位换算快照。列表和详情可重新打开。 | 读需 `inventory.read`，创建需 `inventory.manage`；`(actor,key)` 唯一，同键同内容返回同一草稿、不同内容冲突；草稿不改余额。 |
 | `POST /api/v1/admin/inventory/inbounds/{id}/confirm` | `{expectedRevision}` 和 UUID `Idempotency-Key`；同一确认键由原操作人重试返回同一结果，不同键重复确认或过期修订返回冲突。 | `inventory.manage`；锁定入库单和有序 SKU，重查仓库及当前单位版本，全部余额、流水、单据状态和审计在同一事务提交。 |

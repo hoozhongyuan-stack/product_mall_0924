@@ -30,7 +30,11 @@ export const router = createRouter({
     { path: '/redemptions', component: () => import('./views/RedemptionView.vue'), meta: { title: '到店核销', permission: 'fulfillment.redeem' } },
     { path: '/fulfillment/settings', component: () => import('./views/FulfillmentSettingsView.vue'), meta: { title: '履约设置', permission: 'fulfillment.settings.manage' } },
     { path: '/store/payments', component: () => import('./views/PaymentSettingsView.vue'), meta: { title: '付款配置', permission: 'payment.settings.manage' } },
-    { path: '/inventory', component: () => import('./views/InventoryView.vue'), meta: { title: '库存管理', permission: 'inventory.read' } },
+    { path: '/inventory', component: () => import('./views/InventoryView.vue'), meta: { title: '库存查询', permission: 'inventory.read', inventoryTab: 'balances' } },
+    ...([['warehouses', '仓库管理'], ['inbounds', '入库单'], ['outbounds', '出库单'], ['stocktakes', '盘点单'], ['ledgers', '库存流水']] as const).map(([tab, title]) => ({
+      path: `/inventory/${tab}`, component: () => import('./views/InventoryView.vue'),
+      meta: { title, permission: 'inventory.read', inventoryTab: tab },
+    })),
     { path: '/pages/home', component: () => import('./views/HomePageView.vue'), meta: { title: '首页装修', permission: 'page.read' } },
     { path: '/pages/micro', component: () => import('./views/MicroPageView.vue'), meta: { title: '独立微页面', permission: 'page.read' } },
     { path: '/store/info', component: () => import('./views/StoreInfoView.vue'), meta: { title: '店铺信息', permission: 'startup.read' } },

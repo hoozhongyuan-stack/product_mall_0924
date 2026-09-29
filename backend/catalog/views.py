@@ -10,13 +10,14 @@ from django.utils import timezone
 from common.http import offset_response, parse_json_object, method
 from accounts.security import audit, error, permissions, require, response
 
+from .description import parse_description, set_description_images
 from .media import resolve_media, set_gallery
 from .models import BatchCategoryRequest, Category, MemberGrade, Product, Sku, SkuGradePrice, SkuSpecSelection, SkuUnitVersion
 from .presentation import category_data, grade_data, product_data, public_product_data, sku_data
 from .sale_state import change_sku_sale_status
 from .service import active_leaf, create_product, parse_prices, parse_unit
 from .spec_edit import preview_specs, save_specs
-from .validation import CatalogError, description, list_field, number_field, object_field, redeem_valid_until, text_field, uuid_field
+from .validation import CatalogError, list_field, number_field, object_field, redeem_valid_until, text_field, uuid_field
 from inventory.sku_guards import referenced_sku_ids
 from payments.availability import enabled_payment_methods
 
@@ -402,33 +403,39 @@ def product_detail_view(request, product_id):
                     (valid_until is None or valid_until < timezone.localdate())):
                 raise CatalogError("在售核销商品须有尚未到期的核销截止日期。", "REDEEM_VALIDITY_REQUIRED")
             category = active_leaf(values.get("categoryId", str(item.category_id)))
-            sanitized = description(values.get("descriptionHtml", item.description_html))
-            main_image, gallery, video = resolve_media(values, item)
+            document = parse_description(values.get("descriptionHtml", item.description_html))
+            main_image, gallery, video = resolve_media(values, item, description_ids=document.asset_ids)
             from .asset_access import authorize_asset_binding
             from .media import revalidate_asset_actor
             actor = revalidate_asset_actor(request, "catalog.write", actor)
-            authorize_asset_binding(actor, [asset.id for asset in [main_image, *gallery, video] if asset],
+            authorize_asset_binding(actor, [*document.asset_ids,
+                *[asset.id for asset in [main_image, *gallery, video] if asset]],
                 [value for value in [item.main_image_id, item.video_id,
-                    *item.gallery_images.values_list("asset_id", flat=True)] if value])
+                    *item.gallery_images.values_list("asset_id", flat=True),
+                    *item.description_images.values_list("asset_id", flat=True)] if value])
             if item.status == Product.Status.ON_SALE and main_image is None:
                 raise CatalogError("上架商品须先设置主图。", "MEDIA_REQUIRED")
             before = {"name": item.name, "categoryId": str(item.category_id), "status": item.status,
                       "mainImageAssetId": str(item.main_image_id) if item.main_image_id else None,
                       "galleryAssetIds": [str(row.asset_id) for row in item.gallery_images.order_by("position")],
+                      "descriptionImageAssetIds": [str(identifier) for identifier in
+                          item.description_images.values_list("asset_id", flat=True)],
                       "videoAssetId": str(item.video_id) if item.video_id else None}
             item.name, item.category, item.fulfillment_kind = name, category, fulfillment
             item.redeem_valid_until = valid_until
-            item.description_html = sanitized
+            item.description_html = document.html
             item.main_image, item.video = main_image, video
             item.revision += 1
             item.save(update_fields=["name", "category", "fulfillment_kind", "redeem_valid_until",
                                      "description_html", "main_image", "video", "revision", "updated_at"])
+            set_description_images(item, document.asset_ids)
             if "galleryAssetIds" in values:
                 set_gallery(item, gallery)
             audit(request, "product.update", "product", item.id, actor, before=before,
                   after={"name": name, "categoryId": str(category.id), "status": item.status,
                          "mainImageAssetId": str(main_image.id) if main_image else None,
                          "galleryAssetIds": [str(asset.id) for asset in gallery],
+                         "descriptionImageAssetIds": [str(identifier) for identifier in document.asset_ids],
                          "videoAssetId": str(video.id) if video else None})
         return response(request, product_data(item))
     except CatalogError as exc:

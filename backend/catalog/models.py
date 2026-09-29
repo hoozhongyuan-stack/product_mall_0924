@@ -222,3 +222,13 @@ class ProductGalleryImage(models.Model):
             models.UniqueConstraint(fields=["product", "position"], name="unique_product_gallery_position"),
             models.UniqueConstraint(fields=["product", "asset"], name="unique_product_gallery_asset"),
         ]
+
+
+class ProductDescriptionImage(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="description_images")
+    asset = models.ForeignKey(Asset, on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = "product_description_image"
+        constraints = [models.UniqueConstraint(fields=["product", "asset"],
+                                               name="unique_product_description_asset")]

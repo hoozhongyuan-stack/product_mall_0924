@@ -23,6 +23,10 @@ export interface InventoryBalance {
 export interface Page<T> { items: T[]; page: number; pageSize: number; total: number }
 
 export interface InventorySku {
+  productNo: string
+  specs: { name: string; value: string }[]
+  mainImage: { assetId: string; adminUrl: string } | null
+  warehouseStock: { warehouseId: string; onHandBaseUnits: number; reservedBaseUnits: number; availableBaseUnits: number } | null
   skuId: string
   skuCode: string
   productName: string

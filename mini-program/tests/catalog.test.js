@@ -6,6 +6,25 @@ const api = require('../lib/api')
 const base = 'http://127.0.0.1:8000'
 global.getApp = () => ({ globalData: { apiBaseUrl: base } })
 
+test('description images use the configured API origin and fit the detail width', () => {
+  const id = '10000000-0000-4000-8000-000000000001'
+  const path = `/api/v1/app/assets/${id}/file`
+  const html = `<h2>商品特点</h2><p>说明 &amp; 保养</p><img data-asset-id="${id}" alt="图 &quot;一&quot;" src="${path}">`
+  const product = catalog.productDetail({ descriptionHtml: html }, 'https://uat.example.test/')
+  assert.ok(product.descriptionHtml.includes(`src="https://uat.example.test${path}"`))
+  assert.ok(product.descriptionHtml.includes('max-width:100%'))
+  assert.ok(product.descriptionHtml.includes('alt="图 &quot;一&quot;"'))
+  assert.ok(product.descriptionHtml.startsWith('<h2>商品特点</h2><p>说明 &amp; 保养</p>'))
+  assert.equal(catalog.productDetail({ descriptionHtml: '<p>旧文本详情</p>' }, base).descriptionHtml, '<p>旧文本详情</p>')
+  assert.equal(catalog.productDetail({ descriptionHtml: null }, base).descriptionHtml, '')
+  assert.equal(catalog.productDetail({ descriptionHtml: 42 }, base).descriptionHtml, '')
+})
+
+test('description URL adaptation only rewrites canonical public asset paths on image nodes', () => {
+  const html = '<p>src="/api/v1/app/assets/text/file"</p><img src="/api/v1/admin/assets/a/file"><img src="https://other.test/a.png">'
+  assert.equal(catalog.productDetail({ descriptionHtml: html }, base).descriptionHtml, html)
+})
+
 test('category tree excludes inactive items and keeps the two levels', () => {
   const tree = catalog.categoryTree([
     { id: 'root', parentId: null, status: 'ACTIVE', name: '酒类', sortOrder: 1 },

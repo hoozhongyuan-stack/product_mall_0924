@@ -110,10 +110,16 @@ def admin_asset_file_view(request, asset_id):
         startup_reference = "startup.read" in granted and asset_is_available_to_startup_reader(asset_id)
         storefront_reference = any(f"{domain}.read" in granted for domain in
                                    storefront_readable_domains(asset_id))
+        catalog_reference = "catalog.read" in granted and Product.objects.filter(
+            Q(main_image_id=asset_id) | Q(video_id=asset_id) | Q(gallery_images__asset_id=asset_id) |
+            Q(description_images__asset_id=asset_id)).exists()
+        from inventory.catalog_media import asset_is_available_to_inventory_reader
+        inventory_reference = "inventory.read" in granted and asset_is_available_to_inventory_reader(asset_id)
         own_unbound_upload = "asset.upload" in granted and (
             orphan_assets().filter(id=asset_id, created_by=actor).exists()
         )
-        if not page_reference and not startup_reference and not storefront_reference and not own_unbound_upload:
+        if not any((page_reference, startup_reference, storefront_reference, catalog_reference,
+                    inventory_reference, own_unbound_upload)):
             audit(request, "permission.denied", "asset", asset_id, actor, result="DENIED")
             return error(request, 403, "PERMISSION_DENIED", "当前账号没有此素材读取权限。")
     asset = Asset.objects.filter(id=asset_id).first()
@@ -131,7 +137,7 @@ def public_asset_file_view(request, asset_id):
         category__parent__status=Category.Status.ACTIVE,
         skus__sale_status=Sku.SaleStatus.ON_SALE,
     ).filter(Q(main_image_id=asset_id) | Q(video_id=asset_id) |
-             Q(gallery_images__asset_id=asset_id)).exists()
+             Q(gallery_images__asset_id=asset_id) | Q(description_images__asset_id=asset_id)).exists()
     published_page = asset_is_in_current_visible_publication(asset_id)
     published_startup = asset_is_in_current_startup_publication(asset_id)
     published_storefront = asset_is_in_current_storefront_publication(asset_id)

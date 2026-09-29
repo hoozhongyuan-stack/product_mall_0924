@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
+import { EditorContent } from '@tiptap/vue-3'
 import ProductManagement from '../../src/views/catalog/ProductManagement.vue'
 import { api, type Account } from '../../src/api'
 
@@ -31,6 +32,18 @@ async function setup() {
 const button = (wrapper: ReturnType<typeof mount>, text: string) => wrapper.findAll('button').find(b => b.text() === text)!
 
 describe('focused product workspace', () => {
+  it('keeps rich description changes under the existing dirty and product revision boundary', async () => {
+    const wrapper = await setup()
+    await button(wrapper, '编辑商品').trigger('click'); await flushPromises()
+    const editor = wrapper.getComponent(EditorContent).props('editor')!
+    editor.commands.insertContent('<h2>新图文说明</h2><p>商品特点</p>'); await flushPromises()
+    await button(wrapper, '返回商品列表').trigger('click')
+    expect(window.confirm).toHaveBeenCalled()
+    expect(wrapper.get('[aria-label="商品编辑工作区"]').isVisible()).toBe(true)
+    await wrapper.get('form.catalog-editor').trigger('submit'); await flushPromises()
+    const sent = vi.mocked(api).mock.calls.find(([path, init]) => path === '/products/p1' && init?.method === 'PATCH')!
+    expect(JSON.parse(sent[1]!.body as string)).toMatchObject({ expectedRevision: 4, descriptionHtml: '<h2>新图文说明</h2><p>商品特点</p>' })
+  })
   it('releases creation busy state after success so another product can be opened', async () => {
     const previous = vi.mocked(api).getMockImplementation()!
     let complete!: (value: unknown) => void

@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from accounts.security import audit, permissions, require_live
 
-from .models import Asset, ProductGalleryImage
+from .models import Asset, ProductDescriptionImage, ProductGalleryImage
 from .storage import LocalStorage, lock_storage, recover_media_storage, storage_unavailable
 from .validation import CatalogError, list_field, uuid_field
 
@@ -177,7 +177,8 @@ def orphan_assets():
     from pages.asset_references import retained_asset_id_queries
     unbound = Asset.objects.exclude(id__in=Product.objects.filter(main_image__isnull=False).values("main_image_id"))\
         .exclude(id__in=Product.objects.filter(video__isnull=False).values("video_id"))\
-        .exclude(id__in=ProductGalleryImage.objects.values("asset_id"))
+        .exclude(id__in=ProductGalleryImage.objects.values("asset_id"))\
+        .exclude(id__in=ProductDescriptionImage.objects.values("asset_id"))
     for query in retained_asset_id_queries():
         unbound = unbound.exclude(id__in=query)
     return unbound
@@ -366,7 +367,7 @@ def _store_asset_checked(uploaded, kind, actor, maximum):
             pass
 
 
-def resolve_media(values, product=None):
+def resolve_media(values, product=None, *, description_ids=()):
     main_id = values.get("mainImageAssetId", str(product.main_image_id) if product and product.main_image_id else None)
     video_id = values.get("videoAssetId", str(product.video_id) if product and product.video_id else None)
     gallery_ids = values.get("galleryAssetIds", [str(row.asset_id) for row in
@@ -375,7 +376,10 @@ def resolve_media(values, product=None):
     identifiers = [uuid_field(value, "素材 ID") for value in [main_id, video_id, *gallery_ids] if value is not None]
     if len(identifiers) != len(set(identifiers)):
         raise CatalogError("同一素材不能重复绑定。", "MEDIA_INVALID")
-    found = lock_available_assets(identifiers)
+    # One sorted lock set prevents role-dependent lock inversions across products.
+    found = lock_available_assets([*identifiers, *description_ids])
+    if any(found[identifier].kind != Asset.Kind.IMAGE for identifier in description_ids):
+        raise CatalogError("详情图片须为静态图片。", "MEDIA_INVALID")
     main = found.get(uuid_field(main_id, "主图 ID")) if main_id is not None else None
     video = found.get(uuid_field(video_id, "视频 ID")) if video_id is not None else None
     gallery = [found[uuid_field(value, "附图 ID")] for value in gallery_ids]

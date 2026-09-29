@@ -6,7 +6,7 @@ from django.utils import timezone
 from pages.asset_references import reference_queries, reference_query
 
 from .media import asset_path, orphan_assets
-from .models import Asset, Product, ProductGalleryImage
+from .models import Asset, Product, ProductDescriptionImage, ProductGalleryImage
 from .presentation import asset_data
 from .validation import CatalogError
 
@@ -75,6 +75,9 @@ def references_page(request, asset_id, granted):
             object_id="id", label="name", role=role, version="revision", state="BOUND"))
     queries.append(reference_query(ProductGalleryImage.objects.filter(asset_id=asset_id), domain="CATALOG",
         object_id="product_id", label="product__name", role="GALLERY", version="product__revision", state="BOUND"))
+    queries.append(reference_query(ProductDescriptionImage.objects.filter(asset_id=asset_id), domain="CATALOG",
+        object_id="product_id", label="product__name", role="DESCRIPTION_IMAGE",
+        version="product__revision", state="BOUND"))
     query = queries[0].union(*queries[1:], all=True).order_by("domain", "object_id", "ref_version", "role")
     total = query.count()
     items = []
