@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import CodeVersionsView from '../../src/views/CodeVersionsView.vue'
+import ReleaseWorkflowPanel from '../../src/views/ReleaseWorkflowPanel.vue'
 import { api, type Account } from '../../src/api'
 
 vi.mock('../../src/api', async original => ({ ...await original<typeof import('../../src/api')>(), api: vi.fn() }))
@@ -11,6 +12,7 @@ const account: Account = {
 }
 const readiness = {
   appId: 'wx0123456789abcdef', versionId: '11111111-1111-4111-8111-111111111111',
+  egressIp: null,
   uploadKey: { configured: false, revision: 0, appId: null },
   checks: [
     { code: 'APP_ID', status: 'PASS', title: '小程序 AppID', detail: '已配置，与登录凭据一致。' },
@@ -44,6 +46,9 @@ async function setup(value = account) {
 describe('code release readiness', () => {
   it('shows passed, blocked, and unverified checks without claiming WeChat approval', async () => {
     const wrapper = await setup()
+    expect(wrapper.text()).toContain('直传开发版本准备')
+    expect(wrapper.text()).toContain('自动提审与发布准备')
+    expect(wrapper.text()).toContain('AppSecret 不参与代码上传')
     expect(wrapper.text()).toContain('已满足')
     expect(wrapper.text()).toContain('未满足')
     expect(wrapper.text()).toContain('无法验证')
@@ -79,5 +84,20 @@ describe('code release readiness', () => {
     const wrapper = await setup({ ...account, permissionCodes: ['code.version.read'] })
     expect(wrapper.find('input[type="file"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="begin-key-upload"]').exists()).toBe(false)
+  })
+
+  it('clears stale release conditions when a refresh fails', async () => {
+    const wrapper = await setup()
+    expect(wrapper.getComponent(ReleaseWorkflowPanel).props('readiness')).toEqual(readiness)
+    vi.mocked(api).mockImplementation(async path => {
+      if (path === '/code-release/readiness') throw new Error('network unavailable')
+      if (path === '/code-versions' || path === '/code-sync-jobs') return { items: [], nextCursor: null } as never
+      throw new Error(`Unexpected path: ${path}`)
+    })
+    await wrapper.get('.page-heading button').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('发布条件读取失败')
+    expect(wrapper.getComponent(ReleaseWorkflowPanel).props('readiness')).toBeNull()
+    expect(wrapper.get('[data-test="ci-direct-upload-form"] button[type="submit"]').attributes('disabled')).toBeDefined()
   })
 })

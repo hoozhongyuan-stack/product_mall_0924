@@ -368,6 +368,46 @@ test('mock HTTP: code release checks and key confirmation stay clear on desktop 
   verify()
 })
 
+test('mock HTTP: direct code upload remains available without third-party authorization', async ({ page }, testInfo) => {
+  const appId = 'wx0123456789abcdef'
+  const versionId = '11111111-1111-4111-8111-111111111111'
+  let submitted = false
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path.endsWith('/me')) { await ok(route, { ...account, permissionCodes: ['code.version.read', 'code.release.manage'] }); return true }
+    if (path.endsWith('/code-versions')) { await ok(route, { items: [{ versionId, versionLabel: 'source-1', sourceRevision: 'a'.repeat(40), sourceDigest: 'b'.repeat(64), packageSha256: 'c'.repeat(64), packageBytes: 1024, fileCount: 3, storageStatus: 'READY', platformStatus: 'NOT_CONFIGURED', createdAt: '2026-09-29T00:00:00Z', completedAt: '2026-09-29T00:00:00Z', failureCode: '' }], nextCursor: null }); return true }
+    if (path.endsWith('/code-sync-jobs') || path.endsWith('/code-release/reviews')) { await ok(route, { items: [], nextCursor: null }); return true }
+    if (path.endsWith('/code-release/uploads')) {
+      if (route.request().method() === 'POST') {
+        expect(route.request().postDataJSON()).toMatchObject({ versionId, channel: 'CI_DIRECT', version: '1.0.1' })
+        expect(route.request().headers()['idempotency-key']).toBeTruthy()
+        submitted = true
+        await ok(route, { taskId: '22222222-2222-4222-8222-222222222222', versionId, version: '1.0.1', channel: 'CI_DIRECT', status: 'PENDING', failureCode: '', resolutionNote: '', reviewAvailable: false, createdAt: '2026-09-29T00:00:00Z' }); return true
+      }
+      await ok(route, { items: submitted ? [{ taskId: '22222222-2222-4222-8222-222222222222', versionId, version: '1.0.1', channel: 'CI_DIRECT', status: 'PENDING', failureCode: '', resolutionNote: '', reviewAvailable: false, createdAt: '2026-09-29T00:00:00Z' }] : [], nextCursor: null }); return true
+    }
+    if (path.endsWith('/code-release/readiness')) { await ok(route, { appId, versionId, egressIp: '8.152.204.21', uploadKey: { configured: true, revision: 2, appId }, developerAppId: null, developerUploadKey: { configured: false, revision: 0, appId: null }, checks: [
+      { code: 'APP_ID', status: 'PASS', title: 'AppID', detail: '已配置' },
+      { code: 'SOURCE_PACKAGE', status: 'PASS', title: '代码包', detail: '已准备' },
+      { code: 'RELEASE_CONFIG', status: 'PASS', title: '发布配置', detail: '已准备' },
+      { code: 'UPLOAD_KEY', status: 'PASS', title: '代码上传密钥', detail: '已保存' },
+      { code: 'PLATFORM_INTEGRATION', status: 'BLOCKED', title: '第三方平台', detail: '未授权' },
+    ] }); return true }
+    if (path.endsWith('/auth/confirm')) { expect(route.request().postDataJSON()).toMatchObject({ action: 'code.release.upload', objectId: `${appId}:${versionId}`, revision: 2 }); await ok(route, { confirmationToken: 'synthetic-token' }); return true }
+    return false
+  })
+  await page.goto('/store/code-versions')
+  await expect(page.getByText('服务器出口 IP：')).toContainText('8.152.204.21')
+  await expect(page.getByRole('button', { name: '上传到微信开发版本' })).toBeEnabled()
+  await screenshot(page, testInfo, 'direct-code-upload-ready')
+  await page.locator('[data-test="ci-direct-version"]').fill('1.0.1')
+  await page.locator('[data-test="ci-direct-description"]').fill('开发版验证')
+  await page.locator('[data-test="ci-direct-password"]').fill('synthetic-password')
+  await page.getByRole('button', { name: '上传到微信开发版本' }).click()
+  await expect(page.getByText('开发版本上传任务', { exact: false })).toBeVisible()
+  expect(submitted).toBe(true)
+  verify()
+})
+
 test('mock HTTP: WeChat credentials are confirmed, stored without echo, and checked only after save', async ({ page }, testInfo) => {
   let saved: Record<string, unknown> = { ...wechatConfig }
   const writes: { path: string; body: Record<string, unknown> }[] = []

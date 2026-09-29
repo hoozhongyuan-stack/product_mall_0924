@@ -29,7 +29,7 @@ interface SyncJob {
 interface VersionPage { items: CodeVersion[]; nextCursor: string | null }
 interface ReleaseCheck { code: string; status: 'PASS' | 'BLOCKED' | 'UNVERIFIED'; title: string; detail: string }
 interface UploadKeyStatus { configured: boolean; revision: number; appId: string | null }
-interface ReleaseReadiness { appId: string | null; versionId: string | null; checks: ReleaseCheck[];
+interface ReleaseReadiness { appId: string | null; versionId: string | null; egressIp: string | null; checks: ReleaseCheck[];
   uploadKey: UploadKeyStatus; developerAppId: string | null; developerUploadKey: UploadKeyStatus }
 
 const props = defineProps<{ account: Account }>()
@@ -63,6 +63,11 @@ const keyNotice = ref('')
 const keyError = ref('')
 const canManageKey = computed(() => props.account.permissionCodes.includes('code.version.read') && props.account.permissionCodes.includes('code.release.manage'))
 const canManagePlatform = computed(() => props.account.permissionCodes.includes('wechat.integration.read') && props.account.permissionCodes.includes('wechat.integration.manage'))
+const directCheckCodes = new Set(['APP_ID', 'SOURCE_PACKAGE', 'RELEASE_CONFIG', 'UPLOAD_KEY'])
+const directChecks = computed(() => readiness.value?.checks.filter(check => directCheckCodes.has(check.code)) || [])
+const serviceChecks = computed(() => readiness.value?.checks.filter(check => check.code === 'APP_SECRET') || [])
+const reviewChecks = computed(() => readiness.value?.checks.filter(check =>
+  !directCheckCodes.has(check.code) && check.code !== 'APP_SECRET') || [])
 let versionGeneration = 0
 let jobGeneration = 0
 let detailGeneration = 0
@@ -77,6 +82,7 @@ async function loadReadiness() {
   const generation = ++readinessGeneration
   readinessLoading.value = true
   readinessError.value = ''
+  readiness.value = null
   try {
     const value = await api<ReleaseReadiness>('/code-release/readiness')
     if (generation !== readinessGeneration) return
@@ -278,22 +284,27 @@ onUnmounted(() => { ++readinessGeneration; ++keyGeneration; keyPassword.value = 
     </header>
 
     <section class="code-release-readiness" aria-labelledby="code-release-readiness-title">
-      <div class="code-versions-section-heading"><h2 id="code-release-readiness-title">发布条件检查</h2><span>逐项显示已满足、未满足与无法验证</span></div>
-      <p class="code-release-explanation">后台自动读取配置和代码包状态。已保存的凭据不等于微信已验证；上传、提审、发布需分别取得微信平台结果。</p>
+      <div class="code-versions-section-heading"><h2 id="code-release-readiness-title">发布条件检查</h2><span>按操作分别检查</span></div>
+      <p class="code-release-explanation">后台会检查当前配置与最新代码包。上传、提审和发布各有独立的平台结果；保存凭据不代表微信已接受。</p>
       <p v-if="readinessLoading" role="status">正在检查发布条件…</p>
       <p v-if="readinessError" class="notice" role="alert">{{ readinessError }} <button class="text-button" type="button" @click="loadReadiness">重试</button></p>
-      <ul v-if="readiness && !readinessLoading && !readinessError" class="code-release-checks">
-        <li v-for="check in readiness.checks" :key="check.code" :class="`is-${check.status.toLowerCase()}`">
-          <div><h3>{{ check.title }}</h3><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div>
-          <p>{{ check.detail }}</p>
-        </li>
-      </ul>
-      <p v-if="readiness && !readinessLoading && !readinessError" class="code-release-summary" role="status">{{ readiness.checks.filter(check => check.status === 'PASS').length }} 项已满足，{{ readiness.checks.filter(check => check.status === 'BLOCKED').length }} 项待处理，{{ readiness.checks.filter(check => check.status === 'UNVERIFIED').length }} 项无法验证。</p>
+      <template v-if="readiness && !readinessLoading && !readinessError">
+        <div class="code-release-check-group"><h3>直传开发版本准备</h3><p>代码包检查针对最新版本；选择其他版本时，服务器会在提交时重新核对。AppSecret 不参与代码上传鉴权。</p>
+          <ul class="code-release-checks"><li v-for="check in directChecks" :key="check.code" :class="`is-${check.status.toLowerCase()}`"><div><h4>{{ check.title }}</h4><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div><p>{{ check.detail }}</p></li></ul>
+        </div>
+        <div v-if="serviceChecks.length" class="code-release-check-group"><h3>小程序服务端接口</h3><p>AppSecret 用于服务端接口调用，其检测状态不影响代码直传。</p>
+          <ul class="code-release-checks"><li v-for="check in serviceChecks" :key="check.code" :class="`is-${check.status.toLowerCase()}`"><div><h4>{{ check.title }}</h4><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div><p>{{ check.detail }}</p></li></ul>
+        </div>
+        <div v-if="reviewChecks.length" class="code-release-check-group"><h3>自动提审与发布准备</h3><p>以下条件只影响第三方平台代开发流程，不阻止目标小程序直传开发版本。</p>
+          <ul class="code-release-checks"><li v-for="check in reviewChecks" :key="check.code" :class="`is-${check.status.toLowerCase()}`"><div><h4>{{ check.title }}</h4><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div><p>{{ check.detail }}</p></li></ul>
+        </div>
+        <p class="code-release-summary" role="status">直传检查：{{ directChecks.filter(check => check.status === 'PASS').length }} 项已满足；自动提审发布检查：{{ reviewChecks.filter(check => check.status === 'PASS').length }} 项已满足。密钥与 IP 白名单是否可用，以微信实际上传结果为准。</p>
+      </template>
     </section>
 
     <section v-if="canManageKey" class="code-release-key panel" aria-labelledby="code-release-key-title">
       <div class="code-versions-section-heading"><h2 id="code-release-key-title">目标小程序直传密钥</h2><span>{{ readiness?.uploadKey.configured ? '已配置，可替换' : '尚未配置' }}</span></div>
-      <p>此密钥仅用于向目标小程序上传体验版。完整提审和发布链路使用下方独立的开发小程序密钥。</p>
+      <p>此密钥用于从服务器直接上传当前小程序的开发版本。请同时在微信公众平台为服务器出口 IP 配置代码上传白名单；第三方平台流程使用独立密钥。</p>
       <label for="code-upload-key-file">选择密钥文件</label>
       <input id="code-upload-key-file" ref="keyInput" type="file" accept=".key,text/plain" :disabled="keyBusy || keyNeedsRead || keyConfirming" @change="chooseKey">
       <p v-if="keyError" class="notice" role="alert">{{ keyError }}</p>
@@ -306,7 +317,7 @@ onUnmounted(() => { ++readinessGeneration; ++keyGeneration; keyPassword.value = 
       </form>
     </section>
 
-    <ReleaseWorkflowPanel :readiness="readiness" :versions="versions" :can-manage="canManageKey" :can-manage-platform="canManagePlatform" @refresh="refresh" />
+    <ReleaseWorkflowPanel :readiness="readinessLoading || readinessError ? null : readiness" :versions="versions" :can-manage="canManageKey" :can-manage-platform="canManagePlatform" @refresh="refresh" />
 
     <section class="code-versions-section" aria-labelledby="code-versions-title">
       <div class="code-versions-section-heading"><h2 id="code-versions-title">不可变版本</h2><span>最近构建优先</span></div>

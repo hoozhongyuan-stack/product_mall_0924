@@ -96,7 +96,8 @@ class ReleaseUploadTests(TestCase):
 
     def test_create_and_idempotent_replay_do_not_claim_review_or_release(self):
         key = str(uuid.uuid4())
-        first = self.submit(key)
+        with patch('code_versions.upload_views.authorization_status', side_effect=AssertionError('third-party check is not allowed')):
+            first = self.submit(key)
         self.assertEqual(first.status_code, 202, first.content)
         body = first.json()['data']
         self.assertEqual((body['status'], body['channel'], body['reviewAvailable']),

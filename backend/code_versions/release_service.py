@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from cryptography.fernet import InvalidToken
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from django.conf import settings
 from django.utils import timezone
 
 from wechat_integration.credentials import (CredentialsUnavailable, cipher, effective_credentials,
@@ -91,6 +92,14 @@ def upload_key_data(row):
 
 def check(code, status, title, detail):
     return {'code': code, 'status': status, 'title': title, 'detail': detail}
+
+
+def configured_egress_ip():
+    try:
+        address = ipaddress.ip_address(settings.WECHAT_CODE_UPLOAD_EGRESS_IP)
+        return str(address) if address.is_global else None
+    except (ValueError, TypeError):
+        return None
 
 
 def _package_config(version, app_id):
@@ -223,5 +232,6 @@ def readiness_data():
     checks = [app_check, secret_check, *_package_config(version, app_id), key_check,
               platform_check, developer_check, auth_check]
     return {'appId': app_id, 'versionId': str(version.pk) if version else None,
+            'egressIp': configured_egress_ip(),
             'checks': checks, 'uploadKey': upload_key_data(key_row),
             'developerAppId': developer_id, 'developerUploadKey': upload_key_data(developer_row)}

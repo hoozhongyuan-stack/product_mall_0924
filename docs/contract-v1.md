@@ -586,9 +586,11 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 #### 发布条件检查与代码上传密钥配置
 
-后台代码版本页增加只读发布条件检查。`GET /api/v1/admin/code-release/readiness` 需要 `code.version.read`，逐项返回 `code/status/title/detail`；`status` 仅为 `PASS/BLOCKED/UNVERIFIED`，分别表示本地证据已满足、明确不满足、当前无法验证。检查包括 AppID、AppSecret 当前快照的最近微信检测结果、最新不可变代码包及摘要、包内 AppID 和 API 地址、代码上传私钥配置、后台是否接入微信第三方平台，以及小程序授权与代码管理权限。AppSecret 检测结果只在当前凭据快照及最近 24 小时内有效；过期或时钟异常显示 `UNVERIFIED` 并提示上次检测时间。HTTPS 地址检查排除本机及常见本地域名，只验证包内静态配置，不证明微信合法域名或真机连通。第三方平台未配置或未收到验证票据时，平台接入及授权检查显示 `BLOCKED`；已具备查询条件但微信暂不可达时，授权检查显示 `UNVERIFIED`。页面始终显示各项结果和下一步提示；读取失败时不得显示旧结果为当前结果。
+后台代码版本页增加只读发布条件检查。`GET /api/v1/admin/code-release/readiness` 需要 `code.version.read`，逐项返回 `code/status/title/detail`，并返回运维配置且经公网 IP 格式校验的 `egressIp`，未配置时为 `null`；`status` 仅为 `PASS/BLOCKED/UNVERIFIED`，分别表示本地证据已满足、明确不满足、当前无法验证。页面把目标小程序直传开发版本与第三方平台自动提审发布分别展示。直传不依赖第三方平台授权，也不以 AppSecret 的最近探测结果作为上传闸门；AppSecret 是独立的小程序服务端凭据。检查还包括最新不可变代码包及摘要、包内 AppID 和 API 地址、目标代码上传私钥、第三方平台接入与代码管理授权。AppSecret 检测结果只在当前凭据快照及最近 24 小时内有效；过期或时钟异常显示 `UNVERIFIED` 并提示上次检测时间。HTTPS 地址检查排除本机及常见本地域名，只验证包内静态配置，不证明微信合法域名或真机连通。`egressIp` 仅帮助管理员配置微信代码上传 IP 白名单，不证明当前出口或白名单已获微信接受；该结论只能由真实上传结果支持。第三方平台未配置或未收到验证票据时，平台接入及授权检查显示 `BLOCKED`，但不阻止直传；微信暂不可达时显示 `UNVERIFIED`。页面始终显示各项结果和下一步提示；读取失败时不得显示旧结果为当前结果。
 
 `GET /PUT /api/v1/admin/code-release/upload-key` 需要 `code.version.read` 与 `code.release.manage`。GET 仅返回 `{configured,revision,appId}`；PUT 严格接受 `{appId,key,expectedRevision}`，其中 `key` 是不超过 16 KiB 的 PEM RSA 代码上传私钥，须匹配当前小程序 AppID、配置修订及当前密码的 `code.release.upload_key` 动作确认。私钥按独立用途及 AppID 绑定加密保存，仅回显配置状态，不返回原文；保存和轮换写审计。部署密钥缺失或无法解密时，条件检查显示阻断，部署恢复闸门同时报错。代码上传私钥与 AppSecret 是不同凭据，保存成功不证明微信接受，也不触发上传、提审或发布。
+
+管理台优先提供 `CI_DIRECT` 直传操作：选择已同步到后台的不可变代码版本、微信版本号及说明，凭目标小程序上传私钥和密码确认创建 `POST /api/v1/admin/code-release/uploads` 任务。服务器对所选版本重新核对摘要、AppID、HTTPS API 地址与密钥修订，再由隔离 worker 调用 `miniprogram-ci`；最新版本的只读条件检查不阻止选择其他已就绪版本，所选版本以服务端提交校验为准。直传成功仅表示微信接收开发版本，`reviewAvailable=false`，不得据此开放本系统的第三方平台提审按钮。未知结果禁止自动重试，须核查微信后台后处理。
 
 #### E3.2 第三方平台代码发布链路
 

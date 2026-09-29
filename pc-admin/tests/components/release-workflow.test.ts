@@ -9,9 +9,10 @@ const appId = 'wx0123456789abcdef'
 const versionId = '11111111-1111-4111-8111-111111111111'
 const category = { first_class: '工具', second_class: '效率', first_id: 1, second_id: 2 }
 const readiness = {
-  appId, versionId, developerAppId: 'wxabcdef0123456789',
+  appId, versionId, egressIp: '8.152.204.21', developerAppId: 'wxabcdef0123456789',
+  uploadKey: { configured: true, revision: 2, appId },
   developerUploadKey: { configured: true, revision: 3, appId: 'wxabcdef0123456789' },
-  checks: ['APP_ID', 'SOURCE_PACKAGE', 'RELEASE_CONFIG', 'PLATFORM_INTEGRATION',
+  checks: ['APP_ID', 'SOURCE_PACKAGE', 'RELEASE_CONFIG', 'UPLOAD_KEY', 'PLATFORM_INTEGRATION',
     'DEVELOPER_UPLOAD_KEY', 'THIRD_PARTY_AUTH'].map(code => ({ code, status: 'PASS' as const })),
 }
 const upload = { taskId: '22222222-2222-4222-8222-222222222222', versionId, version: '1.0.0',
@@ -41,8 +42,12 @@ beforeEach(() => {
     if (path === '/code-release/categories') return { items: [category] } as never
     throw Error(`Unexpected path ${path}`)
   })
-  vi.mocked(confirmedWrite).mockImplementation(async action => {
-    if (action === 'code.release.upload') { uploads = [upload]; return upload as never }
+  vi.mocked(confirmedWrite).mockImplementation(async (action, _password, _path, _method, body) => {
+    if (action === 'code.release.upload') {
+      const result = body.channel === 'CI_DIRECT' ? { ...upload, channel: 'CI_DIRECT', reviewAvailable: false } : upload
+      uploads = [result]
+      return result as never
+    }
     if (action === 'code.release.review') { reviews = [review]; return review as never }
     if (action === 'code.release.publish') return { ...review, status: 'RELEASE_REQUESTED' } as never
     throw Error(`Unexpected action ${action}`)
@@ -52,6 +57,85 @@ beforeEach(() => {
 afterEach(() => wrappers.splice(0).forEach(wrapper => wrapper.unmount()))
 
 describe('third-party mini-program release workflow', () => {
+  it('allows direct upload with no third-party authorization and keeps review unavailable', async () => {
+    const directReadiness = { ...readiness, checks: readiness.checks.map(check =>
+      ['PLATFORM_INTEGRATION', 'DEVELOPER_UPLOAD_KEY', 'THIRD_PARTY_AUTH'].includes(check.code)
+        ? { ...check, status: 'BLOCKED' as const } : check) }
+    const wrapper = mount(ReleaseWorkflowPanel, {
+      props: { readiness: directReadiness,
+        versions: [{ versionId, versionLabel: 'source-1', storageStatus: 'READY' }],
+        canManage: true, canManagePlatform: false }, attachTo: document.body,
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.text()).toContain('8.152.204.21')
+    expect(wrapper.get('[data-test="ci-direct-upload-form"] button[type="submit"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-test="ci-direct-version"]').setValue('1.0.1')
+    await wrapper.get('[data-test="ci-direct-description"]').setValue('开发版验证')
+    await wrapper.get('[data-test="ci-direct-password"]').setValue('synthetic-password')
+    await wrapper.get('[data-test="ci-direct-upload-form"]').trigger('submit')
+    await flushPromises()
+    expect(confirmedWrite).toHaveBeenCalledWith('code.release.upload', 'synthetic-password',
+      '/code-release/uploads', 'POST', { versionId, version: '1.0.1',
+        description: '开发版验证', channel: 'CI_DIRECT' }, `${appId}:${versionId}`, 2,
+      expect.objectContaining({ 'Idempotency-Key': expect.any(String) }))
+    expect(wrapper.text()).toContain('开发版本')
+    expect(wrapper.get('[data-test="review-upload"]').findAll('option')).toHaveLength(1)
+  })
+
+  it('blocks direct upload when the target key is unavailable', async () => {
+    const blocked = { ...readiness, checks: readiness.checks.map(check =>
+      check.code === 'UPLOAD_KEY' ? { ...check, status: 'BLOCKED' as const } : check) }
+    const wrapper = mount(ReleaseWorkflowPanel, {
+      props: { readiness: blocked,
+        versions: [{ versionId, versionLabel: 'source-1', storageStatus: 'READY' }],
+        canManage: true, canManagePlatform: false }, attachTo: document.body,
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.get('[data-test="ci-direct-upload-form"] button[type="submit"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps the created task visible when records fail to refresh and prevents a repeat', async () => {
+    const wrapper = mount(ReleaseWorkflowPanel, {
+      props: { readiness, versions: [{ versionId, versionLabel: 'source-1', storageStatus: 'READY' }],
+        canManage: true, canManagePlatform: false }, attachTo: document.body,
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+    vi.mocked(api).mockImplementation(async path => {
+      if (path === '/code-release/uploads') throw new Error('records unavailable')
+      if (path === '/code-release/reviews') return { items: [] } as never
+      throw new Error(`Unexpected path ${path}`)
+    })
+    await wrapper.get('[data-test="ci-direct-version"]').setValue('1.0.2')
+    await wrapper.get('[data-test="ci-direct-description"]').setValue('后台直传')
+    await wrapper.get('[data-test="ci-direct-password"]').setValue('synthetic-password')
+    await wrapper.get('[data-test="ci-direct-upload-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain(upload.taskId)
+    expect(wrapper.text()).toContain('记录刷新失败')
+    expect(wrapper.get('[data-test="ci-direct-upload-form"] button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(confirmedWrite).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets the backend check an older selected version when the latest package is blocked', async () => {
+    const olderId = '44444444-4444-4444-8444-444444444444'
+    const latestBlocked = { ...readiness, checks: readiness.checks.map(check =>
+      check.code === 'RELEASE_CONFIG' ? { ...check, status: 'BLOCKED' as const } : check) }
+    const wrapper = mount(ReleaseWorkflowPanel, {
+      props: { readiness: latestBlocked, versions: [
+        { versionId, versionLabel: 'latest', storageStatus: 'READY' },
+        { versionId: olderId, versionLabel: 'older', storageStatus: 'READY' },
+      ], canManage: true, canManagePlatform: false }, attachTo: document.body,
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.get('[data-test="ci-direct-upload-form"] button[type="submit"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-test="ci-direct-version-id"]').setValue(olderId)
+    expect(wrapper.get('[data-test="ci-direct-upload-form"] button[type="submit"]').attributes('disabled')).toBeUndefined()
+  })
+
   it('binds upload, review and release to the chosen immutable version and audit id', async () => {
     const wrapper = mount(ReleaseWorkflowPanel, {
       props: { readiness, versions: [{ versionId, versionLabel: 'source-1', storageStatus: 'READY' }],

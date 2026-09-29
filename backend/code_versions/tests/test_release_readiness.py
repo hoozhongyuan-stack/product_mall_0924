@@ -70,7 +70,8 @@ class ReadinessTests(TestCase):
 
     def test_readiness_reports_distinct_checks_without_claiming_platform_authorization(self):
         self.package()
-        result = self.client.get(BASE + '/readiness')
+        with override_settings(WECHAT_CODE_UPLOAD_EGRESS_IP='8.152.204.21'):
+            result = self.client.get(BASE + '/readiness')
         self.assertEqual(result.status_code, 200, result.content)
         data = result.json()['data']
         checks = {item['code']: item['status'] for item in data['checks']}
@@ -82,6 +83,7 @@ class ReadinessTests(TestCase):
         self.assertEqual(checks['PLATFORM_INTEGRATION'], 'BLOCKED')
         self.assertEqual(checks['THIRD_PARTY_AUTH'], 'BLOCKED')
         self.assertFalse(data['uploadKey']['configured'])
+        self.assertEqual(data['egressIp'], '8.152.204.21')
         self.assertNotIn('test-secret', result.content.decode())
 
     def test_upload_key_encrypted_revisioned_and_no_plaintext_output(self):
