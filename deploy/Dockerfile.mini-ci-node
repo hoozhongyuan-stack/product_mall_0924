@@ -1,0 +1,19 @@
+FROM node:22.16.0-bookworm-slim@sha256:048ed02c5fd52e86fda6fbd2f6a76cf0d4492fd6c6fee9e2c463ed5108da0e34 AS node-deps
+WORKDIR /mini-ci-worker
+COPY mini-ci-worker/package.json mini-ci-worker/pnpm-lock.yaml mini-ci-worker/pnpm-workspace.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile --prod
+
+FROM node:22.16.0-bookworm-slim@sha256:048ed02c5fd52e86fda6fbd2f6a76cf0d4492fd6c6fee9e2c463ed5108da0e34
+ENV NODE_ENV=production \
+    MINI_CI_ALLOWED_ROOT=/var/lib/mini-ci-stage
+RUN groupadd --gid 10001 mall && useradd --uid 10001 --gid 10001 --create-home mall \
+    && mkdir -p /opt/mini-ci-worker /var/lib/mini-ci-stage \
+    && chown -R 10001:10001 /opt/mini-ci-worker /var/lib/mini-ci-stage
+WORKDIR /opt/mini-ci-worker
+COPY --from=node-deps /mini-ci-worker/node_modules ./node_modules
+COPY --chown=10001:10001 mini-ci-worker/upload.js mini-ci-worker/server.js mini-ci-worker/healthcheck.js ./
+USER 10001:10001
+ARG MALL_BUILD_REVISION
+RUN test "${#MALL_BUILD_REVISION}" -eq 40
+LABEL org.opencontainers.image.revision=${MALL_BUILD_REVISION}
+CMD ["node", "/opt/mini-ci-worker/server.js"]

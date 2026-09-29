@@ -113,6 +113,56 @@ services:
     restart: unless-stopped
     stop_grace_period: 60s
 
+  code-upload-worker:
+    <<: *backend-service
+    profiles: [code-release]
+    command: ["python", "/app/backend/manage.py", "run_code_upload_jobs", "--watch", "--interval", "5"]
+    environment:
+      <<: *backend-env
+      MINI_CI_ALLOWED_ROOT: /var/lib/mini-ci-stage
+      MINI_CI_ADAPTER_URL: http://mini-ci-adapter:8787/upload
+      MINI_CI_DISPATCH_TOKEN_FILE: /run/secrets/mini_ci_dispatch_token
+    secrets: [postgres_password, django_secret_key, wechat_credential_key, mini_ci_dispatch_token]
+    volumes:
+      - media:/var/lib/product-mall/files:ro
+      - ci-staging:/var/lib/mini-ci-stage
+    networks: [private, egress, ci-link]
+    depends_on:
+      release: {condition: service_completed_successfully}
+      mini-ci-adapter: {condition: service_healthy}
+    restart: unless-stopped
+    stop_grace_period: 90s
+
+  mini-ci-adapter:
+    image: product-mall-mini-ci:${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.mini-ci-node
+      args:
+        MALL_BUILD_REVISION: ${MALL_RELEASE_REVISION:?Set the full release commit SHA}
+    profiles: [code-release]
+    environment:
+      NODE_ENV: production
+      MINI_CI_ALLOWED_ROOT: /var/lib/mini-ci-stage
+      MINI_CI_DISPATCH_TOKEN_FILE: /run/secrets/mini_ci_dispatch_token
+    secrets: [mini_ci_dispatch_token]
+    volumes: [ci-staging:/var/lib/mini-ci-stage:ro]
+    networks: [ci-link, egress]
+    user: "10001:10001"
+    read_only: true
+    init: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=134217728
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    healthcheck:
+      test: ["CMD", "node", "/opt/mini-ci-worker/healthcheck.js"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
   scheduler:
     <<: *backend-service
     command: ["sh", "/app/scripts/e5-scheduler-loop.sh"]
@@ -202,13 +252,23 @@ secrets:
     file: ${E5_DJANGO_SECRET_KEY_FILE:-./secrets/django_secret_key}
   wechat_credential_key:
     file: ${E5_WECHAT_CREDENTIAL_KEY_FILE:?Set the persistent WeChat encryption key file}
+  mini_ci_dispatch_token:
+    file: ${E5_MINI_CI_DISPATCH_TOKEN_FILE:-./secrets/mini_ci_dispatch_token}
 
 networks:
   private:
     internal: true
   ingress: {}
   egress: {}
+  ci-link:
+    internal: true
 
 volumes:
   pgdata:
   media:
+  ci-staging:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=536870912,uid=10001,gid=10001,mode=0700

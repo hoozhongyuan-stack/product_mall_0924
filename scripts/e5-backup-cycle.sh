@@ -47,7 +47,7 @@ mkdir -m 700 "$operation_lock" 2>/dev/null || {
 paused=0
 resume_writers() {
     if [ "$paused" = 1 ]; then
-        compose up --wait -d web export-worker scheduler admin
+        compose up --wait -d web export-worker $e5_code_release_services scheduler admin
         paused=0
     fi
 }
@@ -67,7 +67,7 @@ trap 'exit 143' TERM
 . "$root/scripts/e5-preflight.sh"
 e5_preflight compose
 paused=1
-compose stop admin web export-worker scheduler
+compose stop admin web export-worker $e5_code_release_services scheduler
 compose --profile ops run --rm --no-deps -e E5_WRITERS_PAUSED=1 backup
 resume_writers
 echo "Quiesced backup completed for $MALL_RELEASE_REVISION."

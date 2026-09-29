@@ -2,6 +2,7 @@
 
 import uuid
 
+from django.conf import settings
 from django.db import models
 from django.db.models import Q
 
@@ -72,3 +73,107 @@ class CodeSourceProvenance(models.Model):
         ordering = ["-verified_at", "-id"]
         indexes = [models.Index(fields=["version", "-verified_at", "-id"],
                                 name="mini_code_prov_latest_idx")]
+
+
+class CodeUploadKey(models.Model):
+    """Encrypted CI signing key, bound to one Mini Program AppID."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    app_id = models.CharField(max_length=18, blank=True)
+    encrypted_payload = models.TextField(blank=True)
+    revision = models.PositiveIntegerField(default=0)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True,
+                                   on_delete=models.SET_NULL)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "mini_code_upload_key"
+        constraints = [models.CheckConstraint(condition=Q(pk=1), name="mini_code_upload_key_singleton")]
+
+
+class DeveloperUploadKey(models.Model):
+    """Separate credential for the component's development Mini Program."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    app_id = models.CharField(max_length=18, blank=True)
+    encrypted_payload = models.TextField(blank=True)
+    revision = models.PositiveIntegerField(default=0)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "mini_developer_upload_key"
+        constraints = [models.CheckConstraint(condition=Q(pk=1), name="mini_developer_key_singleton")]
+
+
+class ReleaseUploadJob(models.Model):
+    """A direct CI developer-version upload, never a review/release claim."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    version = models.ForeignKey(CodeVersion, on_delete=models.PROTECT, related_name="upload_jobs")
+    app_id = models.CharField(max_length=18)
+    developer_app_id = models.CharField(max_length=18)
+    channel = models.CharField(max_length=16, default="CI_DIRECT")
+    package_sha256 = models.CharField(max_length=64)
+    staged_digest = models.CharField(max_length=64, blank=True)
+    key_revision = models.PositiveIntegerField()
+    upload_version = models.CharField(max_length=40)
+    description = models.CharField(max_length=100, blank=True)
+    request_key = models.UUIDField(unique=True)
+    request_hash = models.CharField(max_length=64)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    status = models.CharField(max_length=10, default="PENDING")
+    failure_code = models.CharField(max_length=40, blank=True)
+    resolution_note = models.CharField(max_length=500, blank=True)
+    lease_token = models.UUIDField(null=True, blank=True)
+    lease_until = models.DateTimeField(null=True, blank=True)
+    call_started_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "mini_code_upload_job"
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(status__in=["PENDING", "RUNNING", "SUCCEEDED",
+                                                            "FAILED", "UNKNOWN", "RESOLVED"]),
+                                   name="mini_code_upload_status_valid"),
+            models.CheckConstraint(condition=Q(channel__in=["CI_DIRECT", "DIRECT_COMMIT"]),
+                                   name="mini_code_upload_channel_valid"),
+            models.UniqueConstraint(fields=["app_id"], condition=Q(status__in=["PENDING", "RUNNING", "UNKNOWN"]),
+                                    name="mini_code_one_active_upload"),
+        ]
+
+
+class ReleaseReviewJob(models.Model):
+    """Durable attempts for audit and release; UNKNOWN is never retried automatically."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    upload = models.ForeignKey(ReleaseUploadJob, on_delete=models.PROTECT, related_name='review_jobs')
+    app_id = models.CharField(max_length=18)
+    user_version = models.CharField(max_length=40)
+    item_list = models.JSONField()
+    version_desc = models.CharField(max_length=200)
+    request_key = models.UUIDField(unique=True)
+    request_hash = models.CharField(max_length=64)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
+    audit_id = models.PositiveBigIntegerField(null=True, blank=True)
+    status = models.CharField(max_length=20, default='SUBMITTING')
+    failure_code = models.CharField(max_length=40, blank=True)
+    reason = models.CharField(max_length=500, blank=True)
+    resolution_note = models.CharField(max_length=500, blank=True)
+    release_requested_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'mini_code_review_job'
+        ordering = ['-created_at', '-id']
+        constraints = [
+            models.CheckConstraint(condition=Q(status__in=['SUBMITTING', 'SUBMITTED', 'REVIEWING',
+                'APPROVED', 'REJECTED', 'FAILED', 'UNKNOWN', 'RELEASING', 'RELEASE_UNKNOWN',
+                'RELEASE_REQUESTED', 'CLOSED_UNVERIFIED']), name='mini_code_review_status_valid'),
+            models.UniqueConstraint(fields=['app_id'], condition=Q(status__in=['SUBMITTING',
+                'SUBMITTED', 'REVIEWING', 'APPROVED', 'UNKNOWN', 'RELEASING',
+                'RELEASE_UNKNOWN', 'RELEASE_REQUESTED']), name='mini_code_one_active_review'),
+        ]

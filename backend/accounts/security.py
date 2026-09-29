@@ -29,7 +29,7 @@ PERMISSION_CODES = frozenset({
     "coupon.read", "coupon.manage", "coupon.publish", "coupon.issue", "coupon.issue.repeat",
     "exchange.read", "exchange.manage", "exchange.publish",
     "notification.read", "notification.manage", "notification.recover",
-    "code.version.read", "business.report.read", "business.report.export", "audit.export",
+    "code.version.read", "code.release.manage", "business.report.read", "business.report.export", "audit.export",
     "wechat.integration.read", "wechat.integration.manage",
 })
 

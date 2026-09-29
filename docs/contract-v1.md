@@ -582,7 +582,21 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 | `GET /api/v1/admin/code-versions/{versionId}` | 需 `code.version.read`；返回该版本的非敏感元数据，无代码包下载或物理路径。 |
 | `GET /api/v1/admin/code-sync-jobs` | 需 `code.version.read`；同样分页，返回最近构建任务及 `STARTED/SUCCEEDED/FAILED` 与安全失败代码。 |
 
-版本 DTO 为 `versionId/versionLabel/sourceRevision/sourceDigest/packageSha256/packageBytes/fileCount/storageStatus/platformStatus/createdAt/completedAt/failureCode`；`sourceRevision` 在没有可验证提交来源时为 `null`，`platformStatus` 本片固定 `NOT_CONFIGURED`。任务 DTO 为 `taskId/versionId/status/failureCode/createdAt/completedAt`。管理台仅查询版本与任务，不提供浏览器上传、构建、预览、提审或发布按钮。接口使用当前后台会话与独立只读权限、私有响应禁止缓存；不返回本地路径、密钥、原始异常或包内容。平台凭据、真实构建／自动上传能力、预览／提审／发布及可信平台回执在后续 E3 切片和真实主体环境分别验收，任何本地 `READY` 都不可作为可提审或已发布状态。
+版本 DTO 为 `versionId/versionLabel/sourceRevision/sourceDigest/packageSha256/packageBytes/fileCount/storageStatus/platformStatus/createdAt/completedAt/failureCode`；`sourceRevision` 在没有可验证提交来源时为 `null`，`platformStatus` 本片固定 `NOT_CONFIGURED`。任务 DTO 为 `taskId/versionId/status/failureCode/createdAt/completedAt`。E3.0 管理台仅查询版本与任务，不提供浏览器代码包上传、构建、预览、提审或发布按钮。接口使用当前后台会话与独立只读权限、私有响应禁止缓存；不返回本地路径、密钥、原始异常或包内容。第三方平台授权、真实自动上传能力、预览／提审／发布及可信平台回执仍需在后续 E3 切片和真实主体环境分别验收，任何本地 `READY` 都不可作为可提审或已发布状态。
+
+#### 发布条件检查与代码上传密钥配置
+
+后台代码版本页增加只读发布条件检查。`GET /api/v1/admin/code-release/readiness` 需要 `code.version.read`，逐项返回 `code/status/title/detail`；`status` 仅为 `PASS/BLOCKED/UNVERIFIED`，分别表示本地证据已满足、明确不满足、当前无法验证。检查包括 AppID、AppSecret 当前快照的最近微信检测结果、最新不可变代码包及摘要、包内 AppID 和 API 地址、代码上传私钥配置、后台是否接入微信第三方平台，以及小程序授权与代码管理权限。AppSecret 检测结果只在当前凭据快照及最近 24 小时内有效；过期或时钟异常显示 `UNVERIFIED` 并提示上次检测时间。HTTPS 地址检查排除本机及常见本地域名，只验证包内静态配置，不证明微信合法域名或真机连通。第三方平台未配置或未收到验证票据时，平台接入及授权检查显示 `BLOCKED`；已具备查询条件但微信暂不可达时，授权检查显示 `UNVERIFIED`。页面始终显示各项结果和下一步提示；读取失败时不得显示旧结果为当前结果。
+
+`GET /PUT /api/v1/admin/code-release/upload-key` 需要 `code.version.read` 与 `code.release.manage`。GET 仅返回 `{configured,revision,appId}`；PUT 严格接受 `{appId,key,expectedRevision}`，其中 `key` 是不超过 16 KiB 的 PEM RSA 代码上传私钥，须匹配当前小程序 AppID、配置修订及当前密码的 `code.release.upload_key` 动作确认。私钥按独立用途及 AppID 绑定加密保存，仅回显配置状态，不返回原文；保存和轮换写审计。部署密钥缺失或无法解密时，条件检查显示阻断，部署恢复闸门同时报错。代码上传私钥与 AppSecret 是不同凭据，保存成功不证明微信接受，也不触发上传、提审或发布。
+
+#### E3.2 第三方平台代码发布链路
+
+第三方平台组件与开发小程序分别配置。`GET/PUT /api/v1/admin/integrations/wechat-open-platform` 管理组件 AppID、开发小程序 AppID、固定 HTTPS 授权回调地址及加密保存的组件 AppSecret、消息 Token 和 EncodingAESKey；写操作需要微信集成管理权限和密码确认，不回显原文。`POST .../authorize` 生成目标小程序管理员授权链接；微信票据和授权回调经签名、AES、组件 AppID、时效与一次性 state 校验。授权状态向微信实时查询，必须确认目标 AppID、小程序类型、正常账号状态及代码管理权限集 18；网络或平台异常显示 `UNVERIFIED`，不得据已保存令牌显示 `PASS`。
+
+`GET/PUT /api/v1/admin/code-release/developer-upload-key` 独立保存开发小程序的 PEM RSA 上传私钥，不复用目标小程序直传私钥。`POST /api/v1/admin/code-release/uploads` 选择不可变版本、版本号、说明与 `DIRECT_COMMIT` 渠道，需 UUID 幂等键、管理权限和密码确认；调度在专用临时卷重验包摘要、AppID、实时授权与密钥修订，临时覆盖 `project.config.json` 并添加 `ext.json`，交由隔离 Node 容器运行 `miniprogram-ci`。成功仅表示微信接收该待审核版本。超时与不明错误记录 `UNKNOWN`，禁止自动重试；管理员核查后可带说明关闭未知任务，但关闭不标记成功。
+
+仅成功的 `DIRECT_COMMIT` 上传可进入审核。`GET /api/v1/admin/code-release/categories` 读取微信类目；`POST .../reviews` 在外部调用前持久化审核尝试，检查授权和类目、UUID 幂等键、密码确认，成功记录微信 `auditid`。`POST .../reviews/{id}/refresh` 查询审核单，明确审核通过后才允许 `POST .../reviews/{id}/release`。发布前再次核对具体审核单已通过且为微信最新通过版本；平台发布接口不接受审核单号，故仍需排除平台侧并发改版风险。网络结果未知时不自动重复提审或发布，只能人工核查并以说明关闭，不把关闭当作成功。后台 `RELEASE_REQUESTED` 只证明微信接受发布请求，正式线上版本仍需微信后台及真机验收。上述能力在 Compose 中默认关闭上传 worker，真实账号、IP 白名单、合法域名和平台回执未在本地测试中证明。
 
 ### 5.28 E3.1：可信 Git 来源与部署自动同步
 

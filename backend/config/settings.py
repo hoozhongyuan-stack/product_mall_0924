@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "inventory",
     "customers",
     "wechat_integration",
+    "wechat_open_platform",
     "checkout",
     "orders",
     "fulfillment",

@@ -1,0 +1,12 @@
+{
+  "name": "product-mall-mini-ci-worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "miniprogram-ci": "2.1.47"
+  },
+  "packageManager": "pnpm@11.15.1"
+}
