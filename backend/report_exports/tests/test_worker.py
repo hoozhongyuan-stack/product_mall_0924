@@ -9,6 +9,7 @@ from threading import Event
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.db import connections
 from django.test import SimpleTestCase, TransactionTestCase
 from django.core.management import call_command
 from django.utils import timezone
@@ -254,10 +255,16 @@ class ExportWorkerTests(TransactionTestCase):
             self.assertTrue(release.wait(10))
             return real_render(*args)
 
+        def run_with_closed_connection():
+            try:
+                return run_next()
+            finally:
+                connections.close_all()
+
         with patch.object(worker, "_render", hold_render), ThreadPoolExecutor(max_workers=2) as pool:
-            first = pool.submit(run_next)
+            first = pool.submit(run_with_closed_connection)
             self.assertTrue(entered.wait(10))
-            self.assertIsNone(pool.submit(run_next).result(timeout=10))
+            self.assertIsNone(pool.submit(run_with_closed_connection).result(timeout=10))
             release.set()
             self.assertEqual(first.result(timeout=10), task.pk)
         task.refresh_from_db()

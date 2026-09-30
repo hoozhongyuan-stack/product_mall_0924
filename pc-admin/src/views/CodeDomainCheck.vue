@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from 'vue'
 import { api } from '../api'
-type Result = { status: 'PASS' | 'BLOCKED' | 'UNVERIFIED'; detail: string;
+type Result = { code?: string; status: 'PASS' | 'BLOCKED' | 'UNVERIFIED'; detail: string;
   checkedAt: string; missingRequestDomains: string[] }
 const props = defineProps<{ appId: string; versionId: string; credentialCheck?: { status: 'PASS' | 'BLOCKED' | 'UNVERIFIED'; detail?: string } }>()
 const result = ref<Result | null>(null)
@@ -32,7 +32,8 @@ async function check() {
       <span v-if="!loading && !error" class="code-release-check-status" :class="`is-${result?.status.toLowerCase() || 'unverified'}`">{{ result ? ({ PASS: '已满足', BLOCKED: '未满足', UNVERIFIED: '无法验证' })[result.status] : '尚未检查' }}</span>
       <button class="secondary-button" type="button" :disabled="loading || !appId || !versionId" @click="check">{{ loading ? '正在检查…' : '检查所选代码包的域名' }}</button>
     </div>
-    <p v-if="credentialCheck">服务端凭据 AppSecret：{{ ({ PASS: '已满足', BLOCKED: '未满足', UNVERIFIED: '无法验证' })[credentialCheck.status] }}。{{ credentialCheck.detail }}</p>
+    <p v-if="result && ['OK', 'REQUEST_DOMAIN_MISSING'].includes(result.code || '')">服务端凭据 AppSecret：本次微信查询鉴权已通过。</p>
+    <p v-else-if="credentialCheck">服务端凭据 AppSecret：{{ ({ PASS: '已满足', BLOCKED: '未满足', UNVERIFIED: '无法验证' })[credentialCheck.status] }}。{{ credentialCheck.detail }}</p>
     <p>使用已配置的 AppSecret 查询微信域名。代码上传 IP 白名单由微信在实际上传时验证。</p>
     <div aria-live="polite" aria-atomic="true">
       <p v-if="error" role="alert">{{ error }}</p>
