@@ -91,7 +91,7 @@ test('worker subprocess is killed on deadline and returns unknown outcome', asyn
   fs.writeFileSync(workerPath, 'process.stdin.resume(); setInterval(() => {}, 1000)')
   const started = Date.now()
   const result = await runWorker({ privateKey: 'SECRET' }, root, { workerPath, timeoutMs: 50 })
-  assert.deepEqual(result, { ok: false, code: 'UPLOAD_UNKNOWN' })
+  assert.deepEqual(result, { ok: false, code: 'UPLOAD_UNKNOWN', failureStage: 'RESPONSE' })
   assert.ok(Date.now() - started < 2000)
 })
 
@@ -104,5 +104,101 @@ test('worker subprocess result excludes arbitrary fields, invalid output becomes
     { ok: false, code: 'UPLOAD_FAILED', platformErrorCode: 85001 })
   fs.writeFileSync(workerPath, 'process.stdout.write("SECRET"); process.exit(1)')
   assert.deepEqual(await runWorker({ privateKey: 'SECRET' }, root, { workerPath, timeoutMs: 1000 }),
-    { ok: false, code: 'UPLOAD_UNKNOWN' })
+    { ok: false, code: 'UPLOAD_UNKNOWN', failureStage: 'RESPONSE' })
+})
+
+test('each worker gets a private writable cwd, HOME and TMPDIR removed after completion', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mini-ci-isolation-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const tempRoot = path.join(root, 'runtime')
+  fs.mkdirSync(tempRoot)
+  const marker = path.join(root, 'observed.json')
+  const workerPath = path.join(root, 'inspect.js')
+  fs.writeFileSync(workerPath, `const fs = require('node:fs'); const path = require('node:path');
+    const cwd = process.cwd(); fs.writeFileSync(path.join(cwd, 'compiler-cache'), 'cache');
+    fs.writeFileSync(${JSON.stringify(marker)}, JSON.stringify({cwd, home:process.env.HOME,
+      tmp:process.env.TMPDIR, mode:fs.statSync(cwd).mode & 0o777}));
+    process.stdout.write(JSON.stringify({ok:true,code:'UPLOADED'}));`)
+  assert.deepEqual(await runWorker({}, root, { workerPath, tempRoot }), { ok: true, code: 'UPLOADED' })
+  const first = JSON.parse(fs.readFileSync(marker, 'utf8'))
+  assert.equal(path.dirname(first.cwd), fs.realpathSync(tempRoot))
+  assert.equal(first.mode, 0o700)
+  assert.equal(first.home, first.cwd)
+  assert.equal(first.tmp, first.cwd)
+  assert.equal(fs.existsSync(first.cwd), false)
+  assert.deepEqual(await runWorker({}, root, { workerPath, tempRoot }), { ok: true, code: 'UPLOADED' })
+  assert.notEqual(JSON.parse(fs.readFileSync(marker, 'utf8')).cwd, first.cwd)
+  assert.deepEqual(fs.readdirSync(tempRoot), [])
+})
+
+test('private worker directory is cleaned after timeout, bad output and spawn failures', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mini-ci-cleanup-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const tempRoot = path.join(root, 'runtime')
+  fs.mkdirSync(tempRoot)
+  const workerPath = path.join(root, 'hang.js')
+  fs.writeFileSync(workerPath, 'setInterval(() => {}, 1000)')
+  await runWorker({}, root, { workerPath, tempRoot, timeoutMs: 50 })
+  assert.deepEqual(fs.readdirSync(tempRoot), [])
+  fs.writeFileSync(workerPath, 'process.stdout.write("not-json")')
+  await runWorker({}, root, { workerPath, tempRoot })
+  assert.deepEqual(fs.readdirSync(tempRoot), [])
+  const spawnProcess = () => { throw Object.assign(new Error('sensitive'), { code: 'EACCES' }) }
+  assert.deepEqual(await runWorker({}, root, { workerPath, tempRoot, spawnProcess }),
+    { ok: false, code: 'ENVIRONMENT_FAILED', failureStage: 'ENVIRONMENT', sdkCode: 'EACCES' })
+  assert.deepEqual(fs.readdirSync(tempRoot), [])
+})
+
+test('only safe structured diagnostics survive the HTTP boundary, including signed platform codes', async (t) => {
+  const { port } = await fixture(t, async () => ({ ok: false, code: 'WECHAT_REJECTED',
+    failureStage: 'UPLOAD', sdkCode: '20003', platformErrorCode: -10002,
+    message: 'PRIVATE KEY and request URL', privateKey: 'secret' }))
+  assert.deepEqual((await send(port, {})).body, { ok: false, code: 'WECHAT_REJECTED',
+    failureStage: 'UPLOAD', sdkCode: '20003', platformErrorCode: -10002 })
+})
+
+test('worker spawn error event is a definite local failure and cleans its directory', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mini-ci-spawn-error-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const spawnProcess = (_, args, options) => require('node:child_process').spawn(
+    path.join(root, 'nonexistent-executable'), args, options,
+  )
+  assert.deepEqual(await runWorker({}, root, { tempRoot: root, spawnProcess }),
+    { ok: false, code: 'ENVIRONMENT_FAILED', failureStage: 'ENVIRONMENT', sdkCode: 'ENOENT' })
+  assert.deepEqual(fs.readdirSync(root), [])
+})
+
+test('real upload entrypoint rejects invalid input without requiring the SDK', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mini-ci-invalid-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  assert.deepEqual(await runWorker({}, root, { tempRoot: root }),
+    { ok: false, code: 'INPUT_INVALID', failureStage: 'VALIDATION' })
+  assert.deepEqual(fs.readdirSync(root), [])
+})
+
+test('unknown diagnostic stages and secret-like codes do not cross the HTTP boundary', async (t) => {
+  const { port } = await fixture(t, async () => ({ ok: false, code: 'UPLOAD_UNKNOWN',
+    failureStage: 'https://secret', sdkCode: 'PRIVATE KEY\nsecret', platformErrorCode: 0 }))
+  assert.deepEqual((await send(port, {})).body, { ok: false, code: 'UPLOAD_UNKNOWN' })
+})
+
+test('an error after the spawn event stays unknown and cannot be retried as a local failure', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mini-ci-post-spawn-error-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const { EventEmitter } = require('node:events')
+  const { PassThrough } = require('node:stream')
+  const spawnProcess = () => {
+    const child = new EventEmitter()
+    child.stdin = new PassThrough()
+    child.stdout = new PassThrough()
+    queueMicrotask(() => {
+      child.emit('spawn')
+      child.emit('error', Object.assign(new Error('sensitive kill failure'), { code: 'EPERM' }))
+      child.emit('close', 1)
+    })
+    return child
+  }
+  assert.deepEqual(await runWorker({}, root, { tempRoot: root, spawnProcess }),
+    { ok: false, code: 'UPLOAD_UNKNOWN', failureStage: 'RESPONSE', sdkCode: 'EPERM' })
+  assert.deepEqual(fs.readdirSync(root), [])
 })

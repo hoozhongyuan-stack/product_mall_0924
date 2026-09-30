@@ -17,6 +17,7 @@ from wechat_open_platform.service import PlatformStateError, authorization_statu
 from .models import CodeUploadKey, CodeVersion, DeveloperUploadKey, ReleaseReviewJob, ReleaseUploadJob
 from .release_service import (APP_ID, UploadKeyUnavailable, _package_config,
                               decrypt_developer_upload_key, decrypt_upload_key)
+from .upload_diagnostics import public_diagnostic
 from .views import _page
 
 
@@ -24,12 +25,16 @@ UPLOAD_VERSION = re.compile(r'[0-9A-Za-z][0-9A-Za-z._-]{0,39}\Z')
 
 
 def _dto(job):
+    failure_message, next_action = public_diagnostic(job)
     return {'taskId': str(job.pk), 'versionId': str(job.version_id), 'appId': job.app_id,
             'version': job.upload_version, 'description': job.description,
             'channel': job.channel, 'developerAppId': job.developer_app_id,
             'packageSha256': job.package_sha256, 'stagedDigest': job.staged_digest or None,
             'reviewAvailable': job.channel == 'DIRECT_COMMIT' and job.status == 'SUCCEEDED',
             'status': job.status, 'failureCode': job.failure_code,
+            'failureStage': job.failure_stage or None, 'sdkCode': job.sdk_code or None,
+            'platformErrorCode': job.platform_error_code,
+            'failureMessage': failure_message, 'nextAction': next_action,
             'resolutionNote': job.resolution_note,
             'createdAt': job.created_at.isoformat(),
             'completedAt': job.completed_at.isoformat() if job.completed_at else None}

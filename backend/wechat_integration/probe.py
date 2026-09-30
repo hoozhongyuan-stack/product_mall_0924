@@ -1,7 +1,7 @@
 """Credential-only platform check. Never creates identities or persists access tokens."""
 import json
 import ssl
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, ProxyHandler, Request, build_opener
 
@@ -13,6 +13,14 @@ MAX_BYTES = 8192
 class ProbeResult:
     status: str
     code: str
+
+
+@dataclass(frozen=True)
+class AccessTokenResult:
+    status: str
+    code: str
+    token: str = field(default='', repr=False)
+    platform_error_code: int | None = None
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -33,7 +41,8 @@ def _transport(payload):
     return body
 
 
-def check_credentials(snapshot):
+def acquire_access_token(snapshot):
+    """Use a stable token without forcing refresh, persisting it, or exposing it in repr."""
     try:
         raw = _transport({'grant_type': 'client_credential', 'appid': snapshot.app_id,
                           'secret': snapshot.secret, 'force_refresh': False})
@@ -41,23 +50,29 @@ def check_credentials(snapshot):
         if not isinstance(result, dict):
             raise ValueError()
     except (HTTPError, URLError, TimeoutError, OSError, ValueError, UnicodeError):
-        return ProbeResult('UNAVAILABLE', 'PLATFORM_UNAVAILABLE')
+        return AccessTokenResult('UNAVAILABLE', 'PLATFORM_UNAVAILABLE')
     code = result.get('errcode', 0)
     if type(code) is not int:
-        return ProbeResult('UNAVAILABLE', 'PLATFORM_ERROR')
+        return AccessTokenResult('UNAVAILABLE', 'PLATFORM_ERROR')
     if code in {40013, 40125, 40001}:
-        return ProbeResult('FAILED', 'INVALID_CREDENTIALS')
+        return AccessTokenResult('FAILED', 'INVALID_CREDENTIALS', platform_error_code=code)
     if code == 40164:
-        return ProbeResult('FAILED', 'IP_NOT_ALLOWED')
+        return AccessTokenResult('FAILED', 'IP_NOT_ALLOWED', platform_error_code=code)
     if code == 89503:
-        return ProbeResult('FAILED', 'ADMIN_CONFIRMATION_REQUIRED')
+        return AccessTokenResult('FAILED', 'ADMIN_CONFIRMATION_REQUIRED', platform_error_code=code)
     if code in {89506, 89507}:
-        return ProbeResult('FAILED', 'ADMIN_REJECTED')
+        return AccessTokenResult('FAILED', 'ADMIN_REJECTED', platform_error_code=code)
     if code in {45009, 45011}:
-        return ProbeResult('UNAVAILABLE', 'PLATFORM_RATE_LIMITED')
+        return AccessTokenResult('UNAVAILABLE', 'PLATFORM_RATE_LIMITED', platform_error_code=code)
     if code:
-        return ProbeResult('UNAVAILABLE', 'PLATFORM_ERROR')
+        return AccessTokenResult('UNAVAILABLE', 'PLATFORM_ERROR', platform_error_code=code)
     token, expiry = result.get('access_token'), result.get('expires_in')
-    if not isinstance(token, str) or not token or type(expiry) is not int or expiry <= 0:
-        return ProbeResult('UNAVAILABLE', 'PLATFORM_ERROR')
-    return ProbeResult('SUCCESS', 'OK')
+    if (not isinstance(token, str) or not token or len(token) > 2048
+            or type(expiry) is not int or expiry <= 0):
+        return AccessTokenResult('UNAVAILABLE', 'PLATFORM_ERROR')
+    return AccessTokenResult('SUCCESS', 'OK', token)
+
+
+def check_credentials(snapshot):
+    result = acquire_access_token(snapshot)
+    return ProbeResult(result.status, result.code)

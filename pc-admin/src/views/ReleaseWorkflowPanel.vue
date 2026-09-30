@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ApiError, api, confirmedWrite } from '../api'
+import CodeDomainCheck from './CodeDomainCheck.vue'
+import UploadTaskResult from './UploadTaskResult.vue'
 
 type Check = { code: string; status: 'PASS' | 'BLOCKED' | 'UNVERIFIED'; title?: string; detail?: string }
 type KeyStatus = { configured: boolean; revision: number; appId: string | null }
@@ -9,8 +11,10 @@ type Readiness = { appId: string | null; versionId: string | null; egressIp: str
 type Version = { versionId: string; versionLabel: string; storageStatus: string }
 type Platform = { componentAppId: string; developerAppId: string; redirectUri: string;
   configured: boolean; ticketReceived: boolean; revision: number }
-type Upload = { taskId: string; versionId: string; version: string; channel: string; status: string;
-  failureCode: string; resolutionNote: string; reviewAvailable: boolean; createdAt: string }
+type Upload = { appId?: string; taskId: string; versionId: string; version: string; channel: string; status: string;
+  failureCode: string; resolutionNote: string; reviewAvailable: boolean; createdAt: string;
+  failureStage?: string; sdkCode?: string; platformErrorCode?: number | null;
+  failureMessage?: string; nextAction?: string; completedAt?: string | null }
 type Review = { taskId: string; uploadTaskId: string; version: string; auditId: number | null;
   status: string; reason: string; failureCode: string; resolutionNote: string; createdAt: string }
 type Category = { first_class: string; second_class: string; first_id: string | number;
@@ -27,6 +31,7 @@ const developerFile = ref<File | null>(null)
 const developerPassword = ref('')
 const uploads = ref<Upload[]>([])
 const reviews = ref<Review[]>([])
+const recordsReady = ref(false)
 const categories = ref<Category[]>([])
 const selectedVersionId = ref('')
 const directVersion = ref('')
@@ -75,10 +80,8 @@ const directRepeatBlocked = computed(() => {
   return !task || !['FAILED', 'RESOLVED'].includes(task.status)
 })
 
-function uploadStatusLabel(status: string) {
-  return ({ PENDING: '等待上传', RUNNING: '正在上传', SUCCEEDED: '微信已接收',
-    FAILED: '上传失败', UNKNOWN: '结果待核查', RESOLVED: '已人工关闭' } as Record<string, string>)[status] || '状态待核查'
-}
+const activeUpload = computed(() => uploads.value.find(item => (!item.appId || item.appId === targetAppId.value)
+  && ['PENDING', 'RUNNING', 'UNKNOWN'].includes(item.status)))
 
 function reviewStatusLabel(status: string) {
   return ({ SUBMITTING: '正在提审', SUBMITTED: '已提交微信审核', REVIEWING: '微信审核中',
@@ -101,12 +104,14 @@ async function loadPlatform() {
 }
 
 async function loadRecords() {
+  recordsReady.value = false
   const [uploadPage, reviewPage] = await Promise.all([
     api<{ items: Upload[] }>('/code-release/uploads'),
     api<{ items: Review[] }>('/code-release/reviews'),
   ])
   uploads.value = uploadPage.items
   reviews.value = reviewPage.items
+  recordsReady.value = true
 }
 
 async function loadAll() {
@@ -188,7 +193,7 @@ async function submitDirectUpload() {
   const appId = targetAppId.value
   const revision = props.readiness?.uploadKey?.revision
   if (!versionId || !appId || revision === undefined || !directUploadReady.value ||
-      !directPassword.value || directRepeatBlocked.value) return
+      !directPassword.value || directRepeatBlocked.value || activeUpload.value || !recordsReady.value) return
   await execute('direct-upload', async () => {
     const fingerprint = directFingerprint.value
     const previous = directAttempt.value
@@ -311,14 +316,17 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       <h3 id="direct-upload-title" class="sr-only">选择代码包并上传</h3>
       <p v-if="!directUploadReady">请先处理上方未满足的条件，并选择可用代码包。</p>
       <p>服务器出口 IP：<strong>{{ readiness?.egressIp || '尚未配置' }}</strong>。请加入微信公众平台的代码上传 IP 白名单。</p>
+      <p v-if="activeUpload?.status === 'UNKNOWN'" role="status">有上传任务的结果待核查。请先在微信公众平台核对该版本，并在下方记录核查结果后关闭旧任务。</p>
+      <p v-else-if="activeUpload" role="status">已有上传任务正在执行，请等待任务完成。</p>
       <form data-test="ci-direct-upload-form" class="release-form-grid" @submit.prevent="submitDirectUpload">
         <label>代码包<select v-model="selectedVersionId" data-test="ci-direct-version-id" required><option value="">请选择</option><option v-for="version in versions" :key="version.versionId" :value="version.versionId" :disabled="!['READY', 'STORED_UNVERIFIED'].includes(version.storageStatus)">{{ version.versionLabel }}{{ version.versionId === readiness?.versionId ? '（最新）' : '' }}{{ ['READY', 'STORED_UNVERIFIED'].includes(version.storageStatus) ? '' : '（文件不可用）' }}</option></select></label>
         <label>微信版本号<input v-model.trim="directVersion" data-test="ci-direct-version" maxlength="40" pattern="[0-9A-Za-z][0-9A-Za-z._-]*" required></label>
         <label class="wide">上传说明<input v-model.trim="directDescription" data-test="ci-direct-description" maxlength="100" required></label>
         <label>当前管理员密码<input v-model="directPassword" data-test="ci-direct-password" type="password" autocomplete="current-password" required></label>
-        <button class="primary-button" type="submit" :disabled="!!busy || !directUploadReady || directRepeatBlocked">上传到微信开发版本</button>
+        <button class="primary-button" type="submit" :disabled="!!busy || !directUploadReady || directRepeatBlocked || !!activeUpload || !recordsReady">上传到微信开发版本</button>
       </form>
-      <ul class="release-record-list"><li v-for="item in uploads.filter(item => item.channel === 'CI_DIRECT')" :key="item.taskId"><strong>{{ item.version }} · 开发版本</strong><span>{{ uploadStatusLabel(item.status) }}<template v-if="item.failureCode"> · {{ item.failureCode }}</template></span><small>{{ item.taskId }}</small><p v-if="item.resolutionNote">核查记录：{{ item.resolutionNote }}</p><button v-if="item.status === 'UNKNOWN'" class="secondary-button" type="button" @click="resolutionTarget = `upload:${item.taskId}`">核查后关闭未知上传</button><form v-if="resolutionTarget === `upload:${item.taskId}`" class="release-form-grid" @submit.prevent="resolveUnknown('upload', item.taskId)"><label class="wide">微信后台核查说明（至少 20 字）<input v-model="resolutionNote" minlength="20" maxlength="500" required></label><label>当前管理员密码<input v-model="resolutionPassword" type="password" autocomplete="current-password" required></label><button class="secondary-button" type="submit" :disabled="!!busy">关闭未知任务</button></form></li></ul>
+      <CodeDomainCheck :app-id="targetAppId" :version-id="selectedVersionId" :credential-check="readiness?.checks.find(check => check.code === 'APP_SECRET')" />
+      <ul class="release-record-list"><li v-for="item in uploads.filter(item => item.channel === 'CI_DIRECT')" :key="item.taskId"><strong>{{ item.version }} · 开发版本</strong><UploadTaskResult :task="item" /><p v-if="item.resolutionNote">核查记录：{{ item.resolutionNote }}</p><button v-if="item.status === 'UNKNOWN'" class="secondary-button" type="button" @click="resolutionTarget = `upload:${item.taskId}`">核查后关闭未知上传</button><form v-if="resolutionTarget === `upload:${item.taskId}`" class="release-form-grid" @submit.prevent="resolveUnknown('upload', item.taskId)"><label class="wide">微信后台核查说明（至少 20 字）<input v-model="resolutionNote" minlength="20" maxlength="500" required></label><label>当前管理员密码<input v-model="resolutionPassword" type="password" autocomplete="current-password" required></label><button class="secondary-button" type="submit" :disabled="!!busy">关闭未知任务</button></form></li></ul>
     </section>
 
     <details class="code-release-disclosure release-workflow-advanced">
@@ -365,7 +373,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
         <label>当前管理员密码<input v-model="uploadPassword" data-test="upload-password" type="password" autocomplete="current-password" required></label>
         <button class="primary-button" type="submit" :disabled="!!busy || !uploadReady">上传到微信待审核列表</button>
       </form>
-      <ul class="release-record-list"><li v-for="item in uploads.filter(item => item.channel === 'DIRECT_COMMIT')" :key="item.taskId"><strong>{{ item.version }} · 待审核链路</strong><span>{{ uploadStatusLabel(item.status) }}<template v-if="item.failureCode"> · {{ item.failureCode }}</template></span><small>{{ item.taskId }}</small><p v-if="item.resolutionNote">核查记录：{{ item.resolutionNote }}</p><button v-if="item.status === 'UNKNOWN'" class="secondary-button" type="button" @click="resolutionTarget = `upload:${item.taskId}`">核查后关闭未知上传</button><form v-if="resolutionTarget === `upload:${item.taskId}`" class="release-form-grid" @submit.prevent="resolveUnknown('upload', item.taskId)"><label class="wide">微信后台核查说明（至少 20 字）<input v-model="resolutionNote" minlength="20" maxlength="500" required></label><label>当前管理员密码<input v-model="resolutionPassword" type="password" autocomplete="current-password" required></label><button class="secondary-button" type="submit" :disabled="!!busy">关闭未知任务</button></form></li></ul>
+      <ul class="release-record-list"><li v-for="item in uploads.filter(item => item.channel === 'DIRECT_COMMIT')" :key="item.taskId"><strong>{{ item.version }} · 待审核链路</strong><UploadTaskResult :task="item" /><p v-if="item.resolutionNote">核查记录：{{ item.resolutionNote }}</p><button v-if="item.status === 'UNKNOWN'" class="secondary-button" type="button" @click="resolutionTarget = `upload:${item.taskId}`">核查后关闭未知上传</button><form v-if="resolutionTarget === `upload:${item.taskId}`" class="release-form-grid" @submit.prevent="resolveUnknown('upload', item.taskId)"><label class="wide">微信后台核查说明（至少 20 字）<input v-model="resolutionNote" minlength="20" maxlength="500" required></label><label>当前管理员密码<input v-model="resolutionPassword" type="password" autocomplete="current-password" required></label><button class="secondary-button" type="submit" :disabled="!!busy">关闭未知任务</button></form></li></ul>
     </section>
 
     <section v-if="canManage" class="panel release-workflow-card" aria-labelledby="review-title">

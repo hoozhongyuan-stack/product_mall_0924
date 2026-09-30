@@ -2,6 +2,8 @@ const crypto = require('node:crypto')
 const fs = require('node:fs')
 const http = require('node:http')
 const path = require('node:path')
+const os = require('node:os')
+const { safeDiagnostics, failure } = require('./upload')
 const { spawn } = require('node:child_process')
 
 const MAX_REQUEST_BYTES = 32 * 1024
@@ -14,12 +16,7 @@ function normalizeResult(value) {
     || !/^[A-Z][A-Z0-9_]{0,63}$/.test(value.code)) {
     return { ok: false, code: 'UPLOAD_UNKNOWN' }
   }
-  const result = { ok: value.ok, code: value.code }
-  if (Number.isInteger(value.platformErrorCode) && value.platformErrorCode > 0
-    && value.platformErrorCode <= 99999999) {
-    result.platformErrorCode = value.platformErrorCode
-  }
-  return result
+  return { ok: value.ok, code: value.code, ...(!value.ok ? safeDiagnostics(value) : {}) }
 }
 
 function killWorker(child) {
@@ -33,33 +30,48 @@ function killWorker(child) {
 }
 
 function runWorker(input, allowedRoot, { workerPath = path.join(__dirname, 'upload.js'),
-  timeoutMs = WORKER_TIMEOUT_MS } = {}) {
+  timeoutMs = WORKER_TIMEOUT_MS, tempRoot = os.tmpdir(), spawnProcess = spawn } = {}) {
   return new Promise((resolve) => {
     let child
-    try {
-      child = spawn(process.execPath, [workerPath], {
-        stdio: ['pipe', 'pipe', 'ignore'],
-        detached: process.platform !== 'win32',
-        env: { PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
-          NODE_ENV: 'production', MINI_CI_ALLOWED_ROOT: allowedRoot },
-      })
-    } catch {
-      resolve({ ok: false, code: 'UPLOAD_UNKNOWN' })
-      return
-    }
+    let workDirectory
+    let timer
     let finished = false
     let timedOut = false
+    let spawned = false
+    let processError
     let output = Buffer.alloc(0)
     const finish = (result) => {
       if (finished) return
       finished = true
       clearTimeout(timer)
-      resolve(result)
+      try {
+        if (workDirectory) fs.rmSync(workDirectory, { recursive: true, force: true, maxRetries: 2 })
+        resolve(result)
+      } catch (error) {
+        // Cleanup failure must not turn a possibly completed upload into a retryable failure.
+        resolve(failure('UPLOAD_UNKNOWN', 'ENVIRONMENT', error))
+      }
     }
-    const timer = setTimeout(() => {
+    try {
+      workDirectory = fs.mkdtempSync(path.join(fs.realpathSync(tempRoot), 'mini-ci-task-'))
+      fs.chmodSync(workDirectory, 0o700)
+      child = spawnProcess(process.execPath, [workerPath], {
+        cwd: workDirectory,
+        stdio: ['pipe', 'pipe', 'ignore'],
+        detached: process.platform !== 'win32',
+        env: { PATH: process.env.PATH || '/usr/local/bin:/usr/bin:/bin',
+          NODE_ENV: 'production', MINI_CI_ALLOWED_ROOT: allowedRoot,
+          HOME: workDirectory, TMPDIR: workDirectory, TMP: workDirectory, TEMP: workDirectory },
+      })
+    } catch (error) {
+      finish(failure('ENVIRONMENT_FAILED', 'ENVIRONMENT', error))
+      return
+    }
+    timer = setTimeout(() => {
       timedOut = true
       killWorker(child)
     }, timeoutMs)
+    child.on('spawn', () => { spawned = true })
     child.stdin.on('error', () => {})
     child.stdout.on('data', (chunk) => {
       if (output.length + chunk.length > MAX_RESPONSE_BYTES) {
@@ -69,22 +81,29 @@ function runWorker(input, allowedRoot, { workerPath = path.join(__dirname, 'uplo
       }
       output = Buffer.concat([output, chunk])
     })
-    child.on('error', () => {
-      timedOut = true
+    child.on('error', (error) => {
+      if (finished || processError) return
+      // Errors can also follow a successful spawn (for example a failed kill).
+      const executionStarted = spawned || Number.isInteger(child.pid) || timedOut
+      processError = executionStarted
+        ? failure('UPLOAD_UNKNOWN', 'RESPONSE', error)
+        : failure('ENVIRONMENT_FAILED', 'ENVIRONMENT', error)
       killWorker(child)
-      finish({ ok: false, code: 'UPLOAD_UNKNOWN' })
+      finish(processError)
     })
     child.on('close', (code) => {
-      if (timedOut) return finish({ ok: false, code: 'UPLOAD_UNKNOWN' })
+      killWorker(child)
+      if (processError) return finish(processError)
+      if (timedOut) return finish(failure('UPLOAD_UNKNOWN', 'RESPONSE'))
       try {
         const parsed = JSON.parse(output.toString('utf8'))
         const result = normalizeResult(parsed)
         if ((result.ok && code !== 0) || (!result.ok && code === 0)) {
-          return finish({ ok: false, code: 'UPLOAD_UNKNOWN' })
+          return finish(failure('UPLOAD_UNKNOWN', 'RESPONSE'))
         }
         finish(result)
       } catch {
-        finish({ ok: false, code: 'UPLOAD_UNKNOWN' })
+        finish(failure('UPLOAD_UNKNOWN', 'RESPONSE'))
       }
     })
     child.stdin.end(JSON.stringify(input))

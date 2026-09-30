@@ -3,6 +3,7 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import stat
 import tempfile
 import uuid
@@ -32,6 +33,14 @@ MAX_FILES = 10_000
 MAX_RESPONSE = 4096
 LOCAL_FAILURES = {'INPUT_INVALID', 'PROJECT_INVALID', 'PROJECT_APPID_MISMATCH',
                   'TARGET_CONFIG_INVALID', 'WORKER_MISCONFIGURED'}
+EXPLICIT_FAILURE_STAGES = {
+    'ENVIRONMENT_FAILED': 'ENVIRONMENT', 'SIGNATURE_FAILED': 'VALIDATION',
+    'COMPILE_FAILED': 'COMPILE', 'WECHAT_REJECTED': 'UPLOAD',
+    **{code: 'ENVIRONMENT' if code == 'WORKER_MISCONFIGURED' else 'VALIDATION'
+       for code in LOCAL_FAILURES},
+}
+STAGES = frozenset({'ENVIRONMENT', 'VALIDATION', 'COMPILE', 'UPLOAD', 'RESPONSE'})
+SAFE_SDK_CODE = re.compile(r'[A-Za-z0-9_+.-]{1,48}\Z')
 
 
 class UploadFailure(Exception):
@@ -47,10 +56,14 @@ def recover_expired(now=None):
         for job in rows:
             if job.call_started_at:
                 job.status, job.failure_code, job.completed_at = 'UNKNOWN', 'RESULT_UNKNOWN', now
+                job.failure_stage = 'RESPONSE'
             else:
                 job.status, job.failure_code = 'PENDING', ''
+                job.failure_stage = ''
+            job.sdk_code, job.platform_error_code = '', None
             job.lease_token = job.lease_until = None
-            job.save(update_fields=['status', 'failure_code', 'completed_at', 'lease_token', 'lease_until'])
+            job.save(update_fields=['status', 'failure_code', 'failure_stage', 'sdk_code',
+                                    'platform_error_code', 'completed_at', 'lease_token', 'lease_until'])
 
 
 def claim_next(now=None):
@@ -64,14 +77,40 @@ def claim_next(now=None):
         return job
 
 
-def _finish(job, status, code=''):
+def _finish(job, status, code='', *, failure_stage='', sdk_code='', platform_error_code=None):
     with transaction.atomic():
         live = ReleaseUploadJob.objects.select_for_update().get(pk=job.pk)
         if live.status != 'RUNNING' or live.lease_token != job.lease_token:
             return
         live.status, live.failure_code = status, code
+        live.failure_stage, live.sdk_code = failure_stage, sdk_code
+        live.platform_error_code = platform_error_code
         live.lease_token, live.lease_until, live.completed_at = None, None, timezone.now()
-        live.save(update_fields=['status', 'failure_code', 'lease_token', 'lease_until', 'completed_at'])
+        live.save(update_fields=['status', 'failure_code', 'failure_stage', 'sdk_code',
+                                 'platform_error_code', 'lease_token', 'lease_until', 'completed_at'])
+
+
+def _adapter_outcome(result):
+    """Classify only bounded adapter facts, never arbitrary SDK text or codes."""
+    if not isinstance(result, dict):
+        return 'UNKNOWN', 'RESULT_UNKNOWN', 'RESPONSE', '', None
+    sdk_code = result.get('sdkCode')
+    sdk_code = sdk_code if isinstance(sdk_code, str) and SAFE_SDK_CODE.fullmatch(sdk_code) else ''
+    stage = result.get('failureStage')
+    stage = stage if isinstance(stage, str) and stage in STAGES else 'RESPONSE'
+    code = result.get('code')
+    code = code if isinstance(code, str) else ''
+    if result.get('ok') is True and code == 'UPLOADED':
+        return 'SUCCEEDED', '', '', '', None
+    if result.get('ok') is not False:
+        return 'UNKNOWN', 'RESULT_UNKNOWN', 'RESPONSE', sdk_code, None
+    if code == 'WECHAT_REJECTED':
+        platform_code = result.get('platformErrorCode')
+        if type(platform_code) is int and 0 < abs(platform_code) <= 99999999 and stage == 'UPLOAD':
+            return 'FAILED', code, stage, sdk_code, platform_code
+    elif code in EXPLICIT_FAILURE_STAGES and code != 'WECHAT_REJECTED':
+        return 'FAILED', code, EXPLICIT_FAILURE_STAGES[code], sdk_code, None
+    return 'UNKNOWN', 'RESULT_UNKNOWN', stage, sdk_code, None
 
 
 def _mark_call_started(job, staged_digest):
@@ -266,17 +305,15 @@ def run_one(job):
             try:
                 result = _invoke_adapter(job, project_path, private_key)
             except (TimeoutError, OSError, http.client.HTTPException):
-                _finish(job, 'UNKNOWN', 'RESULT_UNKNOWN')
+                _finish(job, 'UNKNOWN', 'RESULT_UNKNOWN', failure_stage='RESPONSE')
                 return
-            if result.get('ok') is True:
-                _finish(job, 'SUCCEEDED')
-            elif result.get('code') == 'UPLOAD_UNKNOWN':
-                _finish(job, 'UNKNOWN', 'RESULT_UNKNOWN')
-            elif result.get('code') in LOCAL_FAILURES:
-                _finish(job, 'FAILED', result['code'])
-            else:
-                _finish(job, 'UNKNOWN', 'RESULT_UNKNOWN')
+            status, code, stage, sdk_code, platform_code = _adapter_outcome(result)
+            _finish(job, status, code, failure_stage=stage, sdk_code=sdk_code,
+                    platform_error_code=platform_code)
     except (UploadFailure, OSError) as exc:
         code = exc.code if isinstance(exc, UploadFailure) else 'STORAGE_UNAVAILABLE'
         state = 'UNKNOWN' if job.call_started_at or code == 'RESULT_UNKNOWN' else 'FAILED'
-        _finish(job, state, code if state == 'FAILED' else 'RESULT_UNKNOWN')
+        stage = 'RESPONSE' if state == 'UNKNOWN' else ('VALIDATION' if code in {
+            'PACKAGE_INVALID', 'PACKAGE_UNAVAILABLE', 'UPLOAD_KEY_CHANGED', 'UPLOAD_KEY_UNAVAILABLE',
+            'APP_ID_CHANGED', 'DEVELOPER_APP_ID_CHANGED', 'AUTHORIZATION_NOT_READY'} else 'ENVIRONMENT')
+        _finish(job, state, code if state == 'FAILED' else 'RESULT_UNKNOWN', failure_stage=stage)

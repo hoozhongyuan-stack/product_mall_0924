@@ -15,7 +15,7 @@ const readiness = {
   checks: ['APP_ID', 'SOURCE_PACKAGE', 'RELEASE_CONFIG', 'UPLOAD_KEY', 'PLATFORM_INTEGRATION',
     'DEVELOPER_UPLOAD_KEY', 'THIRD_PARTY_AUTH'].map(code => ({ code, status: 'PASS' as const })),
 }
-const upload = { taskId: '22222222-2222-4222-8222-222222222222', versionId, version: '1.0.0',
+const upload = { appId, taskId: '22222222-2222-4222-8222-222222222222', versionId, version: '1.0.0',
   channel: 'DIRECT_COMMIT', status: 'SUCCEEDED', failureCode: '', resolutionNote: '',
   reviewAvailable: true, createdAt: '2026-09-29T00:00:00Z' }
 const review = { taskId: '33333333-3333-4333-8333-333333333333', uploadTaskId: upload.taskId,
@@ -81,6 +81,27 @@ describe('third-party mini-program release workflow', () => {
       expect.objectContaining({ 'Idempotency-Key': expect.any(String) }))
     expect(wrapper.text()).toContain('开发版本')
     expect(wrapper.get('[data-test="review-upload"]').findAll('option')).toHaveLength(1)
+  })
+
+  it('blocks a fresh upload after reload while an unknown task needs reconciliation', async () => {
+    uploads = [{ ...upload, channel: 'CI_DIRECT', status: 'UNKNOWN', reviewAvailable: false }]
+    const wrapper = mount(ReleaseWorkflowPanel, { props: { readiness,
+      versions: [{ versionId, versionLabel: 'source-1', storageStatus: 'READY' }],
+      canManage: true, canManagePlatform: false } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.get('[data-test="ci-direct-upload-form"] button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('有上传任务的结果待核查')
+  })
+
+  it('does not block the current app because of an older app unknown task', async () => {
+    uploads = [{ ...upload, appId: 'wx9999999999999999', channel: 'CI_DIRECT', status: 'UNKNOWN' }]
+    const wrapper = mount(ReleaseWorkflowPanel, { props: { readiness,
+      versions: [{ versionId, versionLabel: 'source-1', storageStatus: 'READY' }],
+      canManage: true, canManagePlatform: false } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    expect(wrapper.get('[data-test="ci-direct-upload-form"] button[type="submit"]').attributes('disabled')).toBeUndefined()
   })
 
   it('blocks direct upload when the target key is unavailable', async () => {

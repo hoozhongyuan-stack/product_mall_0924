@@ -392,11 +392,15 @@ test('mock HTTP: direct code upload remains available without third-party author
       { code: 'UPLOAD_KEY', status: 'PASS', title: '代码上传密钥', detail: '已保存' },
       { code: 'PLATFORM_INTEGRATION', status: 'BLOCKED', title: '第三方平台', detail: '未授权' },
     ] }); return true }
+    if (path.endsWith('/code-release/domain-check')) { expect(route.request().postDataJSON()).toEqual({ versionId }); await ok(route, { status: 'BLOCKED', detail: '微信尚未配置所需 request 合法域名。', missingRequestDomains: ['https://api.example.com'], checkedAt: '2026-09-30T00:00:00Z' }); return true }
     if (path.endsWith('/auth/confirm')) { expect(route.request().postDataJSON()).toMatchObject({ action: 'code.release.upload', objectId: `${appId}:${versionId}`, revision: 2 }); await ok(route, { confirmationToken: 'synthetic-token' }); return true }
     return false
   })
   await page.goto('/store/code-versions')
   await expect(page.getByText('服务器出口 IP：')).toContainText('8.152.204.21')
+  await expect(page.getByRole('button', { name: '上传到微信开发版本' })).toBeEnabled()
+  await page.getByRole('button', { name: '检查所选代码包的域名' }).click()
+  await expect(page.getByText('请在微信公众平台添加 request 合法域名：')).toContainText('https://api.example.com')
   await expect(page.getByRole('button', { name: '上传到微信开发版本' })).toBeEnabled()
   await screenshot(page, testInfo, 'direct-code-upload-ready')
   await page.locator('[data-test="ci-direct-version"]').fill('1.0.1')
@@ -405,6 +409,10 @@ test('mock HTTP: direct code upload remains available without third-party author
   await page.getByRole('button', { name: '上传到微信开发版本' }).click()
   await expect(page.getByText('开发版本上传任务', { exact: false })).toBeVisible()
   expect(submitted).toBe(true)
+  await expect(page.getByRole('button', { name: '上传到微信开发版本' })).toBeDisabled()
+  await expect(page.getByText('已有上传任务正在执行')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await screenshot(page, testInfo, 'direct-code-upload-pending')
   verify()
 })
 

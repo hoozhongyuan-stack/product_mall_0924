@@ -73,22 +73,78 @@ function projectCheck(projectPath, allowedRoot, appId, mode, targetAppId) {
   }
 }
 
-function safePlatformCode(error) {
-  const value = error && error.errCode
-  return Number.isInteger(value) && value > 0 && value <= 99999999 ? value : undefined
+const FAILURE_STAGES = new Set(['ENVIRONMENT', 'VALIDATION', 'COMPILE', 'UPLOAD', 'RESPONSE'])
+const ENVIRONMENT_CODES = new Set(['EACCES', 'EPERM', 'EROFS', 'ENOSPC', 'EMFILE', 'ENFILE', 'ENOMEM'])
+// Official 2.1.47 config/config.js: only codes which occur before code submission.
+const COMPILE_CODES = new Set([10005, 10006, 10007, 10008, 10009, 10031, 10032, 10033,
+  10034, 10035, 10036, 10037, 10038, 10045, 10046, 10081, 10091, 10092, 10093, 20000])
+
+function safeSdkCode(value) {
+  const code = Number.isInteger(value) ? String(value) : value
+  return typeof code === 'string' && /^[A-Za-z0-9_+.-]{1,48}$/.test(code) ? code : undefined
+}
+
+function safePlatformCode(value) {
+  return Number.isInteger(value) && value !== 0 && Math.abs(value) <= 99999999 ? value : undefined
+}
+
+function safeDiagnostics(value) {
+  if (!value || typeof value !== 'object') return {}
+  const sdkCode = safeSdkCode(value.sdkCode)
+  const platformErrorCode = safePlatformCode(value.platformErrorCode)
+  return {
+    ...(FAILURE_STAGES.has(value.failureStage) ? { failureStage: value.failureStage } : {}),
+    ...(sdkCode === undefined ? {} : { sdkCode }),
+    ...(platformErrorCode === undefined ? {} : { platformErrorCode }),
+  }
+}
+
+function wrappedPlatformCode(error) {
+  const direct = safePlatformCode(error && error.errCode)
+  if (direct !== undefined && error.errorStage !== 'builder') return direct
+  // 2.1.47 wraps backend JSON and signature-CGI failures in CodeError.message.
+  // Read only recognized complete envelopes; never return the source text.
+  if (!error || ![20001, 20003].includes(error.code)
+    || typeof error.message !== 'string' || error.message.length > 16 * 1024) return undefined
+  const body = error.message.replace(/^(?:Error: ){0,3}/, '')
+  if (body.startsWith('{') && body.endsWith('}')) {
+    try { return safePlatformCode(JSON.parse(body).errCode) } catch { return undefined }
+  }
+  const match = /^errCode: (-?\d{1,8}); errMsg: [\s\S]*$/.exec(body)
+  return match ? safePlatformCode(Number(match[1])) : undefined
+}
+
+function failure(code, failureStage, error) {
+  const sdkCode = safeSdkCode(error && error.code)
+  return { ok: false, code, failureStage, ...(sdkCode === undefined ? {} : { sdkCode }) }
+}
+
+function sdkFailure(error) {
+  const code = error && error.code
+  if (ENVIRONMENT_CODES.has(code)) return failure('ENVIRONMENT_FAILED', 'ENVIRONMENT', error)
+  if (COMPILE_CODES.has(code) || (error && error.errorStage === 'builder')) {
+    return failure('COMPILE_FAILED', 'COMPILE', error)
+  }
+  if (code === 20002) return failure('SIGNATURE_FAILED', 'VALIDATION', error)
+  if ([10000, 30000].includes(code)) return failure('INPUT_INVALID', 'VALIDATION', error)
+  const platformErrorCode = wrappedPlatformCode(error)
+  if (platformErrorCode !== undefined) {
+    return { ...failure('WECHAT_REJECTED', 'UPLOAD', error), platformErrorCode }
+  }
+  return failure('UPLOAD_UNKNOWN', 'UPLOAD', error)
 }
 
 async function uploadWithSdk(input, { ci, allowedRoot, timeoutMs = DEFAULT_TIMEOUT_MS }) {
-  if (!validInput(input)) return { ok: false, code: 'INPUT_INVALID' }
+  if (!validInput(input)) return failure('INPUT_INVALID', 'VALIDATION')
   if (typeof allowedRoot !== 'string' || !path.isAbsolute(allowedRoot)) {
-    return { ok: false, code: 'WORKER_MISCONFIGURED' }
+    return failure('WORKER_MISCONFIGURED', 'ENVIRONMENT')
   }
   const projectResult = projectCheck(
     input.projectPath, allowedRoot, input.appId, input.mode, input.targetAppId,
   )
-  if (projectResult.code) return { ok: false, code: projectResult.code }
+  if (projectResult.code) return failure(projectResult.code, 'VALIDATION')
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 15 * 60 * 1000) {
-    return { ok: false, code: 'WORKER_MISCONFIGURED' }
+    return failure('WORKER_MISCONFIGURED', 'ENVIRONMENT')
   }
 
   let timer
@@ -113,11 +169,7 @@ async function uploadWithSdk(input, { ci, allowedRoot, timeoutMs = DEFAULT_TIMEO
     await Promise.race([upload, timeout])
     return { ok: true, code: 'UPLOADED' }
   } catch (error) {
-    if (error && error.timeout === true) return { ok: false, code: 'UPLOAD_UNKNOWN' }
-    const platformErrorCode = safePlatformCode(error)
-    return platformErrorCode === undefined
-      ? { ok: false, code: 'UPLOAD_FAILED' }
-      : { ok: false, code: 'UPLOAD_FAILED', platformErrorCode }
+    return sdkFailure(error)
   } finally {
     clearTimeout(timer)
   }
@@ -153,15 +205,20 @@ async function main() {
   process.stdout.write = () => true
   process.stderr.write = () => true
   let result
+  let input
   try {
-    const input = await readInput()
-    const ci = require('miniprogram-ci')
-    result = await uploadWithSdk(input, {
-      ci,
-      allowedRoot: process.env.MINI_CI_ALLOWED_ROOT,
-    })
+    input = await readInput()
+    if (!validInput(input)) result = failure('INPUT_INVALID', 'VALIDATION')
   } catch {
-    result = { ok: false, code: 'INPUT_OR_WORKER_ERROR' }
+    result = failure('INPUT_INVALID', 'VALIDATION')
+  }
+  if (!result) {
+    try {
+      const ci = require('miniprogram-ci')
+      result = await uploadWithSdk(input, { ci, allowedRoot: process.env.MINI_CI_ALLOWED_ROOT })
+    } catch (error) {
+      result = failure('ENVIRONMENT_FAILED', 'ENVIRONMENT', error)
+    }
   }
   writeResult(result)
   process.exit(result.ok ? 0 : 1)
@@ -174,4 +231,4 @@ if (require.main === module) {
   })
 }
 
-module.exports = { uploadWithSdk }
+module.exports = { uploadWithSdk, safeDiagnostics, failure }

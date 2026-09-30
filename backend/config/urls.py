@@ -29,6 +29,7 @@ from notifications import views as notification_views
 from notifications import task_views as notification_task_views
 from code_versions import views as code_version_views
 from code_versions import release_views as code_release_views
+from code_versions.domain_check import domain_check_view
 from code_versions import upload_views as code_upload_views
 from code_versions import review_views as code_review_views
 from report_exports import views as export_views
@@ -51,6 +52,7 @@ urlpatterns = [
     path("api/v1/admin/exports/<uuid:task_id>/download", export_views.export_download_view),
     path("api/v1/admin/code-versions", code_version_views.versions_view),
     path("api/v1/admin/code-release/readiness", code_release_views.readiness_view),
+    path("api/v1/admin/code-release/domain-check", domain_check_view),
     path("api/v1/admin/code-release/upload-key", code_release_views.upload_key_view),
     path("api/v1/admin/code-release/developer-upload-key", code_release_views.developer_key_view),
     path("api/v1/admin/code-release/uploads", code_upload_views.uploads_view),

@@ -84,3 +84,13 @@
 @media(max-width:700px){.code-versions-gate{grid-template-columns:1fr;gap:4px}.code-versions-section-heading{align-items:start;flex-direction:column;gap:2px}.code-release-checks{grid-template-columns:1fr}.code-jobs-list li>div{align-items:start;flex-direction:column;gap:3px}}
 @media(max-width:700px){.release-form-grid{grid-template-columns:1fr}.release-form-grid label.wide{grid-column:auto}}
 @media(max-width:480px){.code-versions-page{padding:24px 16px 60px}.code-versions-page .page-heading{align-items:start;flex-direction:column}.code-version-detail dl>div{grid-template-columns:1fr;gap:4px}}
+
+.code-domain-check{border-top:1px solid var(--mall-color-border);padding-top:16px;display:grid;gap:10px}
+.code-domain-check small{color:var(--mall-color-muted);line-height:1.6}
+.upload-task-result{display:grid;gap:8px;min-width:0}
+.upload-task-result[data-status=FAILED]>strong{color:var(--mall-color-danger)}
+.upload-task-result[data-status=SUCCEEDED]>strong{color:var(--mall-color-success)}
+.upload-task-details summary{cursor:pointer;font-size:13px;min-height:28px}
+.upload-task-details summary:focus-visible{outline:2px solid var(--mall-color-brand);outline-offset:2px}
+.upload-task-details dl{display:grid;grid-template-columns:90px minmax(0,1fr);gap:6px;font-size:12px;margin:8px 0}
+.upload-task-details dd{margin:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}

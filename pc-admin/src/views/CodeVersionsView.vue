@@ -285,8 +285,8 @@ onUnmounted(() => { ++readinessGeneration; ++keyGeneration; keyPassword.value = 
       <p v-if="readinessLoading" role="status">正在检查发布条件…</p>
       <p v-if="readinessError" class="notice" role="alert">{{ readinessError }} <button class="text-button" type="button" @click="loadReadiness">重试</button></p>
       <template v-if="readiness && !readinessLoading && !readinessError">
-        <ul class="code-release-checks"><li v-for="check in directChecks" :key="check.code" :class="`is-${check.status.toLowerCase()}`"><div><h3>{{ check.title }}</h3><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div><p v-if="check.status !== 'PASS'">{{ check.detail }}</p></li></ul>
-        <p class="code-release-summary" role="status">已满足 {{ directChecks.filter(check => check.status === 'PASS').length }} / {{ directChecks.length }} 项准备条件。密钥与 IP 白名单将在实际上传时由微信验证。</p>
+        <ul class="code-release-checks"><li v-for="check in directChecks" :key="check.code" :class="`is-${check.status.toLowerCase()}`"><div><h3>{{ check.title }}</h3><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ check.code === 'UPLOAD_KEY' && check.status === 'PASS' ? '已保存' : checkLabel(check.status) }}</span></div><p v-if="check.status !== 'PASS'">{{ check.detail }}</p></li></ul>
+        <p class="code-release-summary" role="status">已完成 {{ directChecks.filter(check => check.status === 'PASS').length }} / {{ directChecks.length }} 项本地准备检查。密钥与代码上传 IP 白名单将在实际上传时由微信验证。</p>
       </template>
     </section>
 

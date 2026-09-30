@@ -237,6 +237,84 @@ class ReleaseUploadTests(TestCase):
             call_command('run_code_upload_jobs', limit=1)
         adapter.assert_not_called()
 
+    def test_explicit_wechat_rejection_is_failed_with_bounded_diagnostics(self):
+        self.assertEqual(self.submit().status_code, 202)
+        with patch('code_versions.upload_worker._invoke_adapter', return_value={
+            'ok': False, 'code': 'WECHAT_REJECTED', 'failureStage': 'UPLOAD',
+            'sdkCode': '10086', 'platformErrorCode': -61001,
+            'message': 'private SDK error must never be returned',
+        }):
+            call_command('run_code_upload_jobs', limit=1)
+        job = ReleaseUploadJob.objects.get()
+        self.assertEqual((job.status, job.failure_code, job.failure_stage, job.sdk_code,
+                          job.platform_error_code),
+                         ('FAILED', 'WECHAT_REJECTED', 'UPLOAD', '10086', -61001))
+        result = self.client.get(URL + '/' + str(job.pk)).json()['data']
+        self.assertEqual((result['failureStage'], result['sdkCode'], result['platformErrorCode'],
+                          result['failureMessage'], result['nextAction']),
+                         ('UPLOAD', '10086', -61001,
+                          '微信明确拒绝了代码上传请求。', '检查微信返回的错误码及小程序后台配置，修正后创建新任务。'))
+        self.assertIsNotNone(result['completedAt'])
+        self.assertNotIn('private SDK error', json.dumps(result))
+
+    def test_compile_and_local_failures_are_failed_but_ambiguous_upload_remains_unknown(self):
+        self.assertEqual(self.submit().status_code, 202)
+        with patch('code_versions.upload_worker._invoke_adapter', return_value={
+            'ok': False, 'code': 'COMPILE_FAILED', 'failureStage': 'COMPILE',
+            'sdkCode': 'MINI_COMPILE',
+        }):
+            call_command('run_code_upload_jobs', limit=1)
+        job = ReleaseUploadJob.objects.get()
+        self.assertEqual((job.status, job.failure_stage, job.sdk_code),
+                         ('FAILED', 'COMPILE', 'MINI_COMPILE'))
+        self.assertEqual(self.client.get(URL + '/' + str(job.pk)).json()['data']['platformErrorCode'], None)
+        self.assertEqual(self.submit().status_code, 202)
+        with patch('code_versions.upload_worker._invoke_adapter', return_value={
+            'ok': False, 'code': 'ENVIRONMENT_FAILED', 'failureStage': 'ENVIRONMENT',
+            'sdkCode': 'ENOSPC',
+        }):
+            call_command('run_code_upload_jobs', limit=1)
+        self.assertEqual(ReleaseUploadJob.objects.order_by('-created_at').first().status, 'FAILED')
+        self.assertEqual(self.submit().status_code, 202)
+        with patch('code_versions.upload_worker._invoke_adapter', return_value={
+            'ok': False, 'code': 'UPLOAD_FAILED', 'failureStage': 'UPLOAD',
+            'sdkCode': '20003', 'platformErrorCode': -1,
+        }):
+            call_command('run_code_upload_jobs', limit=1)
+        latest = ReleaseUploadJob.objects.order_by('-created_at').first()
+        self.assertEqual((latest.status, latest.failure_code, latest.platform_error_code),
+                         ('UNKNOWN', 'RESULT_UNKNOWN', None))
+
+    def test_rejection_without_valid_platform_code_is_unknown_and_never_retried(self):
+        self.assertEqual(self.submit().status_code, 202)
+        with patch('code_versions.upload_worker._invoke_adapter', return_value={
+            'ok': False, 'code': 'WECHAT_REJECTED', 'failureStage': 'UPLOAD',
+            'sdkCode': '20003', 'platformErrorCode': 'secret -61001',
+        }):
+            call_command('run_code_upload_jobs', limit=1)
+        job = ReleaseUploadJob.objects.get()
+        self.assertEqual((job.status, job.failure_code, job.platform_error_code),
+                         ('UNKNOWN', 'RESULT_UNKNOWN', None))
+        self.assertEqual(self.client.get(URL + '/' + str(job.pk)).json()['data']['nextAction'],
+                         '先到微信小程序后台核对开发版本与上传记录，确认结果前不要重复上传。')
+        with patch('code_versions.upload_worker._invoke_adapter') as adapter:
+            call_command('run_code_upload_jobs', limit=1)
+        adapter.assert_not_called()
+
+    def test_adapter_diagnostics_reject_unbounded_or_unstructured_values(self):
+        from code_versions.upload_worker import _adapter_outcome
+        self.assertEqual(_adapter_outcome({'ok': False, 'code': ['WECHAT_REJECTED'],
+            'failureStage': {}, 'sdkCode': 'X' * 100,
+            'platformErrorCode': -1}),
+            ('UNKNOWN', 'RESULT_UNKNOWN', 'RESPONSE', '', None))
+        self.assertEqual(_adapter_outcome({'ok': False, 'code': 'WECHAT_REJECTED',
+            'failureStage': 'UPLOAD', 'sdkCode': '20003',
+            'platformErrorCode': True}),
+            ('UNKNOWN', 'RESULT_UNKNOWN', 'UPLOAD', '20003', None))
+        self.assertEqual(_adapter_outcome({'ok': False, 'code': 'COMPILE_FAILED',
+            'failureStage': 'COMPILE', 'sdkCode': 'E.COMPILE+STEP-1_2'}),
+            ('FAILED', 'COMPILE_FAILED', 'COMPILE', 'E.COMPILE+STEP-1_2', None))
+
     def test_expired_lease_fences_old_worker(self):
         from code_versions.upload_worker import UploadFailure, _finish, _mark_call_started, claim_next, recover_expired
         from django.utils import timezone
