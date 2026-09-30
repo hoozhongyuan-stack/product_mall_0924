@@ -49,6 +49,16 @@ class AccountFlowTests(TestCase):
         self.assertEqual(result.status_code, 201, result.content)
         return AdminAccount.objects.get(login_name="staff")
 
+    def test_six_character_password_is_valid_for_staff_creation(self):
+        self.login(self.client, "owner", OWNER_PASSWORD)
+        group = PermissionGroup.objects.create(code="six-password", name="密码测试")
+        token = self.confirm(self.client, "account.create")
+        result = self.send(self.client, "post", "/api/v1/admin/accounts",
+            {"loginName": "short-password-staff", "displayName": "新员工", "password": "123456",
+             "groupIds": [str(group.id)]}, token)
+        self.assertEqual(result.status_code, 201, result.content)
+        self.assertTrue(AdminAccount.objects.get(login_name="short-password-staff").check_password("123456"))
+
     def test_interactive_owner_is_unique_and_database_enforces_it(self):
         with patch("builtins.input", side_effect=["another", "另一个"]), patch(
             "getpass.getpass", side_effect=[OWNER_PASSWORD, OWNER_PASSWORD]

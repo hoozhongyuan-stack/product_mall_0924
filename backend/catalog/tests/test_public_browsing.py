@@ -121,7 +121,8 @@ class PublicBrowsingTests(TestCase):
         })
         with CaptureQueriesContext(connection) as queries:
             self.client.get(f"/api/v1/app/products?categoryId={leaf.id}&pageSize=2")
-        self.assertLessEqual(len(queries), 3)
+        # One fixed query reads the administrator payment-method policy.
+        self.assertLessEqual(len(queries), 4)
 
     def test_list_preview_uses_cheapest_sale_sku_ordered_specs_without_n_plus_one(self):
         leaf = self.category("白酒", parent=self.category("酒类"))
@@ -153,7 +154,8 @@ class PublicBrowsingTests(TestCase):
         self.assertEqual(rows[str(item.id)]["specsPreview"], "容量：500ml · 包装：单瓶")
         self.assertEqual(rows[str(plain.id)]["specsPreview"], "默认规格")
         self.assertEqual(len(two_row_queries), len(one_row_queries))
-        self.assertLessEqual(len(two_row_queries), 3)
+        # The same singleton policy query is shared by every returned product.
+        self.assertLessEqual(len(two_row_queries), 4)
 
     def test_detail_only_exposes_sale_skus_and_bound_media(self):
         root = self.category("酒类")

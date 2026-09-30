@@ -11,10 +11,12 @@ function assetUrl(path) {
 Page({
   data: {
     mediaUrl: '', fallbackUrl: '', mediaState: 'brand',
-    remainingSeconds: 3, progressPercent: 100, versionId: '',
+    skipTop: 88, remainingSeconds: 3, progressPercent: 100, versionId: '',
   },
 
   onLoad() {
+    const capsule = wx.getMenuButtonBoundingClientRect ? wx.getMenuButtonBoundingClientRect() : null
+    if (capsule && Number.isFinite(capsule.bottom)) this.setData({ skipTop: capsule.bottom + 16 })
     this.departing = false
     this.ready = false
     this.visible = false

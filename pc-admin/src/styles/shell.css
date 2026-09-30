@@ -40,7 +40,7 @@
 .nav-item:hover { background: #eff1f2; color: var(--mall-color-text); }
 .nav-item.current { background: var(--mall-color-brand-soft); color: var(--mall-color-brand); font-weight: 600; }
 .workspace { grid-column: 2; min-width: 0; }
-.workspace-navigation { background: var(--mall-color-surface); border-bottom: 1px solid var(--mall-color-border); }
+.workspace-navigation { position: sticky; top: 64px; z-index: 90; background: var(--mall-color-surface); border-bottom: 1px solid var(--mall-color-border); }
 .breadcrumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 20px 32px; font-size: 13px; color: var(--mall-color-muted); }
 .breadcrumbs a { text-decoration: none; }
 .breadcrumbs a:hover { color: var(--mall-color-brand); text-decoration: underline; }

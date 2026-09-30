@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError, api, confirmedWrite, type Account, type PermissionGroup } from '../api'
 import PasswordDialog from '../components/PasswordDialog.vue'
+import { PASSWORD_POLICY_TEXT, passwordIssue } from '../shared/password-policy'
 
 const props = defineProps<{ account: Account }>()
 const accounts = ref<Account[]>([])
@@ -68,6 +69,8 @@ async function createAccount() {
     error.value = '请填写账号资料、至少选择一个权限组，并输入当前账号密码。'
     return
   }
+  const issue = passwordIssue(newPassword.value)
+  if (issue) { error.value = issue; return }
   saving.value = true
   error.value = ''
   try {
@@ -167,7 +170,7 @@ function closeForm() {
       <div class="form-grid">
         <label>登录名<input v-model="loginName" autocomplete="off" maxlength="150" required placeholder="例如 operator-01" /></label>
         <label>显示名<input v-model="displayName" maxlength="120" required placeholder="例如 商品运营" /></label>
-        <label>新账号密码<input v-model="newPassword" type="password" autocomplete="new-password" required placeholder="请设置强密码" /></label>
+        <label>新账号密码<input v-model="newPassword" type="password" autocomplete="new-password" required :placeholder="PASSWORD_POLICY_TEXT" minlength="6" maxlength="1024" /></label>
       </div>
       <fieldset><legend>权限组（至少选一个）</legend>
         <label v-for="group in groups.filter((item) => item.enabled)" :key="group.groupId" class="check-row">

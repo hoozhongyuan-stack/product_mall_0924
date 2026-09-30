@@ -1,7 +1,6 @@
 """WeChat orchestration: short locks, external I/O, durable funds settlement."""
 import uuid
 from datetime import timedelta
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from orders.models import Order
@@ -126,7 +125,8 @@ def create_prepay(member, order_id, key):
         raise PaymentError('请提供 UUID 格式的防重复请求标识。')
     # Ownership and the public gate precede config loading/provider access.
     _owned_order(member, order_id)
-    if not getattr(settings,'ORDER_PAYMENT_METHODS_ENABLED',{}).get('WECHAT',False):
+    from .availability import payment_method_enabled
+    if not payment_method_enabled('WECHAT'):
         raise PaymentError('微信支付暂未开放。', 'PAYMENT_METHOD_DISABLED', 409)
     try:
         gateway = get_gateway()

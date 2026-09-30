@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { ElButton, ElDialog, ElInput } from 'element-plus'
 import { api, ApiError, type Account } from '../api'
+import { PASSWORD_POLICY_TEXT, passwordIssue } from '../shared/password-policy'
 
 const props = defineProps<{ target?: Account }>()
 const emit = defineEmits<{ close: []; changed: []; stale: [] }>()
@@ -35,6 +36,8 @@ async function save() {
     error.value = '两次输入的新密码不一致，请重新确认。'
     return
   }
+  const issue = passwordIssue(newPassword.value)
+  if (issue) { error.value = issue; return }
   saving.value = true
   try {
     const target = props.target
@@ -63,7 +66,7 @@ async function save() {
       <ElInput id="account-current-password" v-model="currentPassword" type="password" autocomplete="current-password" :maxlength="1024" :disabled="saving" required />
       <label for="account-new-password">新密码</label>
       <ElInput id="account-new-password" v-model="newPassword" type="password" autocomplete="new-password" :maxlength="1024" :disabled="saving" required aria-describedby="password-policy" />
-      <p id="password-policy" class="help-text">至少 12 个字符，避免纯数字、常见密码或与账号信息相似的密码。</p>
+      <p id="password-policy" class="help-text">{{ PASSWORD_POLICY_TEXT }}</p>
       <label for="account-repeat-password">确认新密码</label>
       <ElInput id="account-repeat-password" v-model="repeatedPassword" type="password" autocomplete="new-password" :maxlength="1024" :disabled="saving" required />
       <p v-if="error" class="error" role="alert">{{ error }}</p>

@@ -4,6 +4,7 @@ from django.db.models import (Sum, Min, Q, F, Value, BigIntegerField, CharField,
                               OuterRef, Exists)
 from django.utils import timezone
 from benefits.models import PointsAccount, PointsGrant, PointsEvent, BenefitLedger
+from .profile import member_profile_data
 from .models import MemberConsumption, ConsumptionEvent
 
 
@@ -41,12 +42,12 @@ def points_summary(member_ids):
     return result
 
 
-def member_rows(members):
+def member_rows(members, *, admin=False):
     members=list(members)
     ids=[member.id for member in members]
     points=points_summary(ids)
     spend={row.member_id:row for row in MemberConsumption.objects.filter(member_id__in=ids)}
-    return [{'id':str(member.id),'grade':grade_data(member.grade),'enabled':member.enabled,
+    return [{**member_profile_data(member, admin=admin),'id':str(member.id),'grade':grade_data(member.grade),'enabled':member.enabled,
              'createdAt':member.created_at.isoformat(),
              'effectiveSpendFen':spend[member.id].effective_spend_fen if member.id in spend else 0,
              'gradeEffectiveAt':spend[member.id].grade_effective_at.isoformat()

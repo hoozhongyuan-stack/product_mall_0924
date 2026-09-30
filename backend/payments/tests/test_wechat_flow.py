@@ -321,3 +321,24 @@ class WechatFlowTests(TransactionTestCase):
         WechatPaymentAttempt.objects.filter(pk=a.id).update(state='UNKNOWN')
         with self.assertRaises(PaymentError) as exc:acquire(a.id,'PREPAY')
         self.assertEqual(exc.exception.code,'WECHAT_QUERY_REQUIRED')
+
+    @override_settings(ORDER_PAYMENT_METHODS_ENABLED={'WECHAT': False, 'OFFLINE': False})
+    def test_admin_wechat_flag_controls_prepay_and_unconfigured_gateway_has_no_funds(self):
+        from payments.models import OfflinePaymentPolicy, WechatPaymentAttempt
+        from payments.wechat_gateway import WechatGatewayError
+        from payments.service import PaymentError
+        OfflinePaymentPolicy.objects.filter(pk=1).update(wechat_enabled=True)
+        order = self._order('WECHAT')
+        with patch('payments.wechat_service.get_gateway', side_effect=WechatGatewayError('未配置。', 'WECHAT_NOT_CONFIGURED', 503)):
+            with self.assertRaises(PaymentError) as caught:
+                self.prepay(order)
+        self.assertEqual(caught.exception.code, 'WECHAT_NOT_CONFIGURED')
+        self.assertFalse(WechatPaymentAttempt.objects.exists())
+        self.assertFalse(PaymentReceipt.objects.exists())
+        self.assertEqual(Order.objects.get(pk=order.pk).status, 'PENDING_PAYMENT')
+        self.prepay(order)
+        self.assertEqual(WechatPaymentAttempt.objects.count(), 1)
+        OfflinePaymentPolicy.objects.filter(pk=1).update(wechat_enabled=False)
+        with self.assertRaises(PaymentError) as caught:
+            self.prepay(order)
+        self.assertEqual(caught.exception.code, 'PAYMENT_METHOD_DISABLED')

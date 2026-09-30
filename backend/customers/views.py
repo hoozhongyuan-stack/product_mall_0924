@@ -12,6 +12,7 @@ from wechat_integration.credentials import CredentialsUnavailable, effective_cre
 
 from .auth import (InvalidWechatCode, WechatExchangeUnavailable, code_digest,
                    exchange_code, login_source_allowed, require_member)
+from .profile import member_profile_data
 from .models import CustomerAddress, Member, MemberSession, WechatCodeUse
 
 
@@ -24,7 +25,7 @@ def grade_data(grade):
 
 
 def member_data(member):
-    return {"id": str(member.id), "grade": grade_data(member.grade)}
+    return {"id": str(member.id), "grade": grade_data(member.grade), **member_profile_data(member)}
 
 
 def address_data(item):

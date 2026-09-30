@@ -104,12 +104,9 @@ DATABASES = {
 }
 TEST_RUNNER = "config.test_runner.SeededDiscoverRunner"
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-     "OPTIONS": {"user_attributes": ["login_name", "display_name"]}},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 6}},
 ]
+
 USE_TZ = True
 TIME_ZONE = "Asia/Shanghai"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

@@ -10,6 +10,7 @@ from pages import views as page_views
 from pages import startup_views, history, storefront_views
 from inventory import views as inventory_views
 from checkout import views as checkout_views
+from customers import profile_views as customer_profile_views
 from customers import views as customer_views
 from customers import operation_views as member_views
 from orders import views as order_views
@@ -40,6 +41,10 @@ from config.health import health_view
 
 urlpatterns = [
     path("healthz", health_view),
+    path("api/v1/app/member/profile", customer_profile_views.profile_view),
+    path("api/v1/app/member/avatar", customer_profile_views.avatar_view),
+    path("api/v1/app/member-avatars/<uuid:avatar_id>/file", customer_profile_views.avatar_file_view),
+    path("api/v1/admin/member-avatars/<uuid:avatar_id>/file", customer_profile_views.admin_avatar_file_view),
     path("api/v1/admin/integrations/wechat-mini-program", integration_views.settings_view),
     path("api/v1/admin/integrations/wechat-mini-program/test", integration_views.test_view),
     path("api/v1/admin/integrations/wechat-open-platform", open_platform_views.component_config_view),

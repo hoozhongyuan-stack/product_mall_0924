@@ -3,13 +3,23 @@ import secrets
 import uuid
 from datetime import timedelta
 
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.db.models import Q
 from django.utils import timezone
 
 
+from .profile import member_number
+
+
 class Member(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    member_no = models.CharField(max_length=18, default=member_number, editable=False)
+    nickname = models.CharField(max_length=40, blank=True, default="")
+    phone = models.CharField(max_length=20, blank=True, default="")
+    profile_revision = models.PositiveIntegerField(default=1)
+    avatar_id = models.UUIDField(null=True, unique=True, editable=False)
+    avatar_path = models.CharField(max_length=200, blank=True, default="", editable=False)
+    avatar_content_type = models.CharField(max_length=30, blank=True, default="", editable=False)
     wechat_app_id = models.CharField(max_length=64)
     wechat_openid = models.CharField(max_length=128)
     grade = models.ForeignKey("catalog.MemberGrade", on_delete=models.PROTECT)
@@ -18,11 +28,37 @@ class Member(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            return super().save(*args, **kwargs)
+        for attempt in range(10):
+            try:
+                with transaction.atomic():
+                    return super().save(*args, **kwargs)
+            except IntegrityError as exc:
+                constraint = getattr(getattr(exc.__cause__, "diag", None), "constraint_name", "")
+                if constraint != "unique_member_number":
+                    raise
+                self.member_no = member_number()
+        raise IntegrityError("Member number allocation exhausted")
+
     class Meta:
         db_table = "customer_member"
-        constraints = [models.UniqueConstraint(fields=["wechat_app_id", "wechat_openid"], name="unique_wechat_member")]
+        constraints = [models.UniqueConstraint(fields=["wechat_app_id", "wechat_openid"], name="unique_wechat_member"),
+                       models.UniqueConstraint(fields=["member_no"], name="unique_member_number")]
         indexes = [models.Index(fields=['-created_at', '-id'], name='member_created_id_idx'),
                    models.Index(fields=['grade', 'enabled', '-created_at'], name='member_grade_state_idx')]
+
+
+class MemberProfileQuota(models.Model):
+    member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    scope = models.CharField(max_length=16)
+    window_start = models.DateTimeField()
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "customer_profile_quota"
+        constraints = [models.UniqueConstraint(fields=["member", "scope"], name="member_profile_quota_scope")]
 
 
 class MemberSession(models.Model):

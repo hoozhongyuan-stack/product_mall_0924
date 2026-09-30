@@ -3,7 +3,7 @@ import { ElButton, ElCheckbox, ElDatePicker, ElDialog, ElDrawer, ElTag, ElInput,
 import 'element-plus/theme-chalk/base.css'
 import 'element-plus/theme-chalk/el-button.css'
 import 'element-plus/theme-chalk/el-checkbox.css'
-import 'element-plus/theme-chalk/el-date-picker.css'
+import 'element-plus/es/components/date-picker/style/css'
 import 'element-plus/theme-chalk/el-input.css'
 import 'element-plus/theme-chalk/el-overlay.css'
 import 'element-plus/theme-chalk/el-dialog.css'

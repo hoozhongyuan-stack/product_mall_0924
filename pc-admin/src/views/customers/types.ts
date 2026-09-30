@@ -1,6 +1,6 @@
 export interface Grade {id:string;code:string;name:string;rank:number;minimumSpendFen?:number}
 export interface Points {settledPoints:number;frozenPoints:number;availablePoints:number;debtPoints:number;expiredPendingPoints:number;expiringPoints:number;nextExpiryAt:string|null}
-export interface Member {id:string;grade:Grade;enabled:boolean;createdAt:string;effectiveSpendFen:number;gradeEffectiveAt:string|null;points:Points;ruleRevision?:number;gradePolicyRevision?:number}
+export interface Member {id:string;memberNo?:string;nickname?:string;avatarUrl?:string;phone?:string;profileRevision?:number;grade:Grade;enabled:boolean;createdAt:string;effectiveSpendFen:number;gradeEffectiveAt:string|null;points:Points;ruleRevision?:number;gradePolicyRevision?:number}
 export interface Page<T> {items:T[];pagination:{total:number;page:number;pageSize:number}}
 export interface Rule {revision:number;grades:Grade[];points:{earnUnitFen:number;earnPoints:number;deductPoints:number;deductFen:number;maxPercent:number;validDays:number;refundValidDays:number}}
 export interface PointEvent {id:string;kind:string;amount:number;balance?:number;orderId?:string|null;sourceRef:string;createdAt:string;expiresAt?:string|null;effect:string}

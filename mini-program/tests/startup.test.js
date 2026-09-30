@@ -205,3 +205,13 @@ test('ordinary launch from a previously selected category opens home while expli
   startup.captureLaunch({ path: 'pages/product/detail', query: { productId: 'p1' }, scene: 1011 })
   assert.equal(startup.completeLaunch(), '/pages/product/detail?productId=p1')
 })
+
+test('fullscreen startup keeps skip below native capsule', async () => {
+ global.getApp = () => ({ globalData: { apiBaseUrl: 'http://127.0.0.1:8000' } })
+ global.wx = { getMenuButtonBoundingClientRect: () => ({ bottom: 56 }), request(r) { r.fail() } }
+ const page = mount('../pages/launch/launch.js'); await page.onLoad(); assert.equal(page.data.skipTop, 72)
+ const fs = require('node:fs'), path = require('node:path')
+ const markup = fs.readFileSync(path.join(__dirname, '../pages/launch/launch.wxml'), 'utf8')
+ const config = JSON.parse(fs.readFileSync(path.join(__dirname, '../pages/launch/launch.json'), 'utf8'))
+ assert.equal(config.navigationStyle, 'custom'); assert.match(markup, /mode="aspectFill"/); assert.doesNotMatch(markup, /品牌名称/)
+})

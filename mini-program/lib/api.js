@@ -46,4 +46,24 @@ function post(path, body, headers = {}) { return request('POST', path, body, {},
 function put(path, body) { return request('PUT', path, body) }
 function remove(path, body) { return request('DELETE', path, body) }
 
-module.exports = { baseUrl, get, post, put, remove }
+function upload(path, filePath, formData = {}) {
+  return new Promise((resolve, reject) => {
+    const token = wx.getStorageSync('mall.memberToken') || ''
+    wx.uploadFile({ url: `${baseUrl()}${path}`, filePath, name: 'file', formData,
+      header: token ? { Authorization: `Bearer ${token}` } : {}, timeout: 20000,
+      success(result) {
+        let payload
+        try { payload = JSON.parse(result.data) } catch (_) { reject(new Error('上传响应无效，请重试。')); return }
+        if (!payload || typeof payload !== 'object') { reject(new Error('上传响应无效，请重试。')); return }
+        if (result.statusCode >= 200 && result.statusCode < 300 && payload.success === true) { resolve(payload.data); return }
+        const error = new Error(payload.error && payload.error.message || '头像上传失败，请重试。')
+        error.statusCode = result.statusCode
+        if (error.statusCode === 401 && token === wx.getStorageSync('mall.memberToken')) {
+          wx.removeStorageSync('mall.memberToken'); wx.removeStorageSync('mall.wechatPaymentIntent.v1')
+        }
+        reject(error)
+      }, fail() { reject(new Error('头像上传失败，请检查网络后重试。')) },
+    })
+  })
+}
+module.exports = { baseUrl, get, post, put, remove, upload }

@@ -53,3 +53,68 @@ test('inventory pilot: production-mounted SKU dialog renders, pages and retains 
   expect(runtimeErrors).toEqual([])
   verify()
 })
+
+test('inventory date panel is bounded and workspace navigation stays visible while scrolling', async ({ page }, testInfo) => {
+  await installMockApi(page, async (route, path) => {
+    if (path === '/api/v1/admin/me') { await ok(route, { ...account, permissionCodes: ['inventory.read'] }); return true }
+    if (path === '/api/v1/admin/warehouses') { await ok(route, { items: [] }); return true }
+    if (path === '/api/v1/admin/inventory/outbounds') { await ok(route, { items: [], page: 1, pageSize: 20, total: 0 }); return true }
+    return false
+  })
+  await page.goto('/inventory/outbounds')
+  await page.getByPlaceholder('开始日期', { exact: true }).click()
+  const panel = page.locator('.inventory-date-popover')
+  await expect(panel).toBeVisible()
+  await expect(panel).toHaveCSS('opacity', '1')
+  await expect(panel.locator('.el-picker-panel')).toBeVisible()
+  const bounds = await panel.boundingBox()
+  expect(bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width - 16)
+  expect(bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height * .75)
+  expect(bounds!.y).toBeGreaterThanOrEqual(0)
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height)
+  const table = panel.locator('.el-date-table').first()
+  expect((await table.boundingBox())!.width).toBeLessThan(340)
+  expect(await panel.locator('.el-picker-panel').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+  await expect(panel.getByText('近 7 天', { exact: true })).toBeVisible()
+  await screenshot(page, testInfo, 'inventory-date-panel')
+  await panel.getByText('近 7 天', { exact: true }).click()
+  await expect(page.getByPlaceholder('开始日期', { exact: true })).not.toHaveValue('')
+  await page.evaluate(() => { document.querySelector('.page-content')!.setAttribute('style', 'min-height:2000px'); window.scrollTo(0, 650) })
+  const nav = page.locator('.workspace-navigation')
+  await expect(nav).toBeVisible()
+  expect((await nav.boundingBox())!.y).toBe(64)
+  await screenshot(page, testInfo, 'inventory-date-navigation')
+})
+
+test('payment modes save independently and member identity uses the public number', async ({ page }, testInfo) => {
+  let saved: Record<string, unknown> | null = null
+  const policy = { instructions: '请核实到账', merchantAccountId: 'test-bank', revision: 1,
+    wechatTimeoutMinutes: 30, offlineTimeoutMinutes: 1440, offlineEnabled: false, wechatEnabled: false,
+    availablePaymentMethods: [], configured: true, wechatConfigurationStatus: 'NOT_CONFIGURED' }
+  await installMockApi(page, async (route, path) => {
+    if (path === '/api/v1/admin/me') { await ok(route, { ...account, permissionCodes: ['payment.settings.manage', 'member.read'] }); return true }
+    if (path === '/api/v1/admin/payments/offline-policy') {
+      if (route.request().method() === 'PUT') { saved = route.request().postDataJSON(); await ok(route, { ...policy, ...saved, revision: 2, availablePaymentMethods: ['OFFLINE', 'WECHAT'] }) }
+      else await ok(route, policy)
+      return true
+    }
+    if (path === '/api/v1/admin/members') {
+      await ok(route, { items: [{ id: 'member-internal-id', memberNo: 'm20260930130512A7x', nickname: '测试会员', phone: '13800138000', avatarUrl: '/api/v1/app/member-avatars/test/file', grade: { id: 'grade', name: '普通会员' }, enabled: true, effectiveSpendFen: 0, points: { availablePoints: 0, frozenPoints: 0, debtPoints: 0 }, createdAt: '2026-09-30T05:05:12Z' }], grades: [], pagination: { page: 1, pageSize: 20, total: 1 } }); return true
+    }
+    return false
+  })
+  await page.goto('/store/payments')
+  await page.getByRole('checkbox', { name: '线下支付', exact: true }).check()
+  await page.getByRole('checkbox', { name: '微信支付', exact: true }).check()
+  await expect(page.getByRole('checkbox', { name: '线下支付', exact: true })).toBeChecked()
+  await page.getByRole('button', { name: '保存付款配置', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('付款配置已保存')
+  expect(saved).toMatchObject({ offlineEnabled: true, wechatEnabled: true, expectedRevision: 1 })
+  await screenshot(page, testInfo, 'payment-enabled-config')
+  await page.goto('/members')
+  await expect(page.getByText('测试会员', { exact: true })).toBeVisible()
+  await expect(page.getByText('13800138000', { exact: true })).toBeVisible()
+  await expect(page.getByText('m20260930130512A7x', { exact: true })).toBeVisible()
+  await expect(page.getByRole('img', { name: '会员头像' })).toBeVisible()
+  await screenshot(page, testInfo, 'member-profile-list')
+})
