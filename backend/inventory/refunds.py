@@ -3,6 +3,7 @@ import uuid
 from django.db import transaction
 from django.db.models import Sum
 from .models import InventoryBalance, InventoryLedger, InventoryReservation
+from .pool_access import resolve_anchor_id
 
 
 def restore_unshipped_refund_locked(line, quantity, case_id):
@@ -29,7 +30,7 @@ def restore_unshipped_refund_locked(line, quantity, case_id):
     if prior_quantity + quantity > line.quantity:
         raise ValueError("累计退款回库超过原购买数量。")
     balance = InventoryBalance.objects.select_for_update().get(pk=reservation.balance_id)
-    if balance.warehouse_id != line.warehouse_id or balance.sku_id != line.sku_id:
+    if balance.warehouse_id != line.warehouse_id or balance.sku_id != resolve_anchor_id(line.sku_id):
         raise ValueError("原销售余额与订单项不一致。")
     before = balance.on_hand_base_units
     balance.on_hand_base_units += quantity * line.ratio
@@ -64,7 +65,7 @@ def record_return_disposition_locked(line, acceptance, actor):
         damaged_quantity=acceptance.received_quantity-acceptance.salable_quantity,actor=actor,reason=acceptance.reason)
     if acceptance.salable_quantity:
         balance=InventoryBalance.objects.select_for_update().get(pk=reservation.balance_id)
-        if balance.warehouse_id!=line.warehouse_id or balance.sku_id!=line.sku_id:
+        if balance.warehouse_id!=line.warehouse_id or balance.sku_id!=resolve_anchor_id(line.sku_id):
             raise ValueError("原销售余额与订单项不一致。")
         before=balance.on_hand_base_units
         balance.on_hand_base_units+=acceptance.salable_quantity*line.ratio

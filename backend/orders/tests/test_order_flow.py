@@ -12,7 +12,7 @@ from benefits.models import CouponCampaign, MemberCoupon, PointsGrant
 from benefits.service import grant_points
 from catalog.models import Asset, Category, MemberGrade, Product, Sku, SkuUnitVersion
 from customers.models import CustomerAddress, Member, MemberSession
-from inventory.models import InventoryBalance, Warehouse
+from inventory.models import InventoryBalance, StockPool, StockPoolSku, Warehouse
 
 
 @override_settings(WECHAT_MINI_APP_ID="wx-order-test",
@@ -263,6 +263,22 @@ class OrderFlowTests(TestCase):
         self.assertEqual(InventoryBalance.objects.get(sku=self.skus[0]).reserved_base_units, 2)
         conflict = self._submit(quote_id, key, paymentMethod="WECHAT")
         self.assertEqual(conflict.status_code, 409)
+
+    def test_shared_pool_mixed_skus_reserve_one_physical_balance(self):
+        from inventory.models import InventoryReservation
+
+        InventoryBalance.objects.filter(sku=self.skus[1]).delete()
+        pool = StockPool.objects.create(anchor_sku=self.skus[0], base_unit="件")
+        StockPoolSku.objects.create(sku=self.skus[0], pool=pool)
+        StockPoolSku.objects.create(sku=self.skus[1], pool=pool)
+        quote_id = self._quote(items=[{"skuId": str(self.skus[0].id), "quantity": 5},
+                                      {"skuId": str(self.skus[1].id), "quantity": 5}])
+        result = self._submit(quote_id)
+        self.assertEqual(result.status_code, 201, result.content)
+        balance = InventoryBalance.objects.get(sku=self.skus[0])
+        self.assertEqual(balance.reserved_base_units, 10)
+        self.assertEqual(InventoryReservation.objects.count(), 2)
+        self.assertEqual(InventoryReservation.objects.values("balance_id").distinct().count(), 1)
 
     def test_multi_sku_shortage_rolls_back_everything_and_key_can_retry(self):
         from orders.models import Order, OrderIdempotency

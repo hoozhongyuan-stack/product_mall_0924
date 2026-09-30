@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import InventoryBalance, InventoryLedger, InventoryReservation, InventoryReservationEvent
+from .pool_access import resolve_anchor_ids
 
 
 class ReservationError(ValueError):
@@ -15,9 +16,11 @@ class ReservationError(ValueError):
 def lock_default_balances(warehouse_id, sku_ids):
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError("锁定库存余额必须在数据库事务内执行。")
+    anchors = resolve_anchor_ids(sku_ids)
     rows = InventoryBalance.objects.select_for_update().filter(
-        warehouse_id=warehouse_id, sku_id__in=sku_ids).order_by("warehouse_id", "sku_id")
-    return {row.sku_id: row for row in rows}
+        warehouse_id=warehouse_id, sku_id__in=set(anchors.values())).order_by("warehouse_id", "sku_id")
+    by_anchor = {row.sku_id: row for row in rows}
+    return {sku_id: by_anchor[anchor] for sku_id, anchor in anchors.items() if anchor in by_anchor}
 
 
 def reserve_order_lines(lines, locked_balances):
@@ -34,13 +37,20 @@ def reserve_order_lines(lines, locked_balances):
         raise ReservationError("订单内 SKU 不可重复。", "VALIDATION_FAILED")
     if len(locked_balances) != len(requested):
         raise ReservationError("商品库存不足，请重新确认订单。")
+    required_by_balance = {}
+    for sku_id, line in requested.items():
+        balance = locked_balances[sku_id]
+        required_by_balance[balance.id] = required_by_balance.get(balance.id, 0) + line.base_quantity
+    unique_balances = {row.id: row for row in locked_balances.values()}
+    for balance in unique_balances.values():
+        if balance.on_hand_base_units - balance.reserved_base_units < required_by_balance[balance.id]:
+            raise ReservationError("商品库存不足，请重新确认订单。")
+    for balance in unique_balances.values():
+        balance.reserved_base_units += required_by_balance[balance.id]
+        balance.save(update_fields=["reserved_base_units", "updated_at"])
     for sku_id in sorted(requested):
         line = requested[sku_id]
         balance = locked_balances[sku_id]
-        if balance.on_hand_base_units - balance.reserved_base_units < line.base_quantity:
-            raise ReservationError("商品库存不足，请重新确认订单。")
-        balance.reserved_base_units += line.base_quantity
-        balance.save(update_fields=["reserved_base_units", "updated_at"])
         reservation = InventoryReservation.objects.create(
             order_line=line, balance=balance, base_quantity=line.base_quantity)
         InventoryReservationEvent.objects.create(
@@ -53,7 +63,7 @@ def release_order_reservations(order):
         raise RuntimeError("释放占库必须在同一数据库事务内执行。")
     reservations = list(InventoryReservation.objects.filter(order_line__order=order,
                                                             status=InventoryReservation.Status.ACTIVE)
-                        .select_related("balance").order_by("balance__warehouse_id", "balance__sku_id"))
+                        .select_related("balance").order_by("balance__warehouse_id", "balance__sku_id", "order_line_id"))
     balance_ids = [reservation.balance_id for reservation in reservations]
     balances = {balance.id: balance for balance in InventoryBalance.objects.select_for_update().filter(
         id__in=balance_ids).order_by("warehouse_id", "sku_id")}
@@ -77,7 +87,7 @@ def consume_order_reservations(order):
         raise RuntimeError("确认订单库存必须在同一数据库事务内执行。")
     reservations = list(InventoryReservation.objects.filter(
         order_line__order=order, status=InventoryReservation.Status.ACTIVE)
-        .select_related("order_line").order_by("balance__warehouse_id", "balance__sku_id"))
+        .select_related("order_line").order_by("balance__warehouse_id", "balance__sku_id", "order_line_id"))
     if not reservations:
         return False
     balance_ids = [reservation.balance_id for reservation in reservations]
@@ -100,7 +110,7 @@ def consume_order_reservations(order):
             base_quantity=quantity)
         line = reservation.order_line
         InventoryLedger.objects.create(
-            warehouse_id=balance.warehouse_id, sku_id=balance.sku_id,
+            warehouse_id=balance.warehouse_id, sku_id=line.sku_id,
             unit_version_id=line.unit_version_id, order_line=line,
             movement_type=InventoryLedger.MovementType.SALE,
             operation_unit=line.sale_unit, operation_quantity=line.quantity,
@@ -115,11 +125,13 @@ def assert_order_reservations(order):
     if not transaction.get_connection().in_atomic_block:
         raise RuntimeError("核对订单占用必须在同一数据库事务内执行。")
     lines = {line.id: (line.base_quantity, line.warehouse_id, line.sku_id) for line in order.lines.all()}
+    anchors = resolve_anchor_ids([line[2] for line in lines.values()])
     reservations = list(InventoryReservation.objects.filter(order_line__order=order)
                         .values_list("order_line_id", "base_quantity", "balance__warehouse_id",
                                      "balance__sku_id", "status"))
     if (not lines or len(reservations) != len(lines) or
-            any(line_id not in lines or (quantity, warehouse_id, sku_id) != lines[line_id] or
+            any(line_id not in lines or (quantity, warehouse_id) != lines[line_id][:2] or
+                sku_id != anchors[lines[line_id][2]] or
                 status != InventoryReservation.Status.ACTIVE
                 for line_id, quantity, warehouse_id, sku_id, status in reservations)):
         raise RuntimeError("订单库存占用与成交快照不一致。")

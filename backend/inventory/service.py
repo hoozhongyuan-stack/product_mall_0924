@@ -12,6 +12,7 @@ from accounts.models import AdminAccount
 from catalog.inventory_access import lock_stock_skus
 
 from .models import InboundDocument, InboundLine, InventoryBalance, InventoryLedger, Warehouse
+from .pool_access import ensure_independent_pool, resolve_anchor_ids
 from .validation import InventoryError, code_field, number_field, text_field, uuid_field
 
 
@@ -150,11 +151,18 @@ def confirm_inbound(request, actor, document_id, expected_revision, key):
         skus = {sku.id: sku for sku in lock_stock_skus([line.sku_id for line in lines])}
         if any(skus[line.sku_id].current_unit_id != line.unit_version_id for line in lines):
             raise InventoryError("SKU 单位换算已变化，请重新创建入库单。", "UNIT_VERSION_CHANGED", 409)
-        for line in lines:
-            balance, _ = InventoryBalance.objects.get_or_create(
-                warehouse=document.warehouse, sku_id=line.sku_id,
+        anchors = resolve_anchor_ids([line.sku_id for line in lines])
+        for anchor in sorted(set(anchors.values())):
+            if anchor in skus:
+                ensure_independent_pool(skus[anchor])
+        for anchor in sorted(set(anchors.values())):
+            InventoryBalance.objects.get_or_create(
+                warehouse=document.warehouse, sku_id=anchor,
                 defaults={"on_hand_base_units": 0, "reserved_base_units": 0})
-            balance = InventoryBalance.objects.select_for_update().get(pk=balance.pk)
+        locked = {balance.sku_id: balance for balance in InventoryBalance.objects.select_for_update().filter(
+            warehouse=document.warehouse, sku_id__in=set(anchors.values())).order_by("sku_id")}
+        for line in lines:
+            balance = locked[anchors[line.sku_id]]
             before = balance.on_hand_base_units
             if before > MAX_QUANTITY - line.base_quantity:
                 raise InventoryError("入库后库存数量过大。")

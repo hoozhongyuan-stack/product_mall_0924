@@ -5,6 +5,7 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { api, ApiError, type Account } from '../api'
 import StockDocumentForm, { type StockDraftPayload } from './inventory/StockDocumentForm.vue'
 import StocktakePanel from './inventory/StocktakePanel.vue'
+import InventoryPoolBindingPanel from './inventory/InventoryPoolBindingPanel.vue'
 import { csvTable } from './inventory/csv.mjs'
 import type { InboundDetail, InboundSummary, InventoryBalance, InventoryLedger, OutboundDetail, OutboundSummary, Page, Warehouse, WarehouseList } from './inventory/types'
 import './inventory/inventory.css'
@@ -371,6 +372,7 @@ onUnmounted(() => { detailGeneration++; window.removeEventListener('beforeunload
         <p v-if="!balanceLoading && !balanceError && !balances.items.length" class="inventory-empty">暂无匹配库存。可先创建仓库，再保存并确认一张入库单。</p>
       </div>
       <div v-if="balances.total > balances.pageSize" class="inventory-pagination"><span>共 {{ balances.total }} 条</span><el-pagination :current-page="balances.page" :page-size="balances.pageSize" :total="balances.total" layout="prev, pager, next" @current-change="loadBalances" /></div>
+      <InventoryPoolBindingPanel v-if="canManage" />
     </div>
 
     <div v-else-if="tab === 'warehouses'" class="inventory-section">

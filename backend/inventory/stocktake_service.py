@@ -14,6 +14,7 @@ from catalog.inventory_access import lock_stock_skus
 from .models import (InventoryBalance, InventoryLedger, StocktakeAction,
                      StocktakeDocument, StocktakeLine, Warehouse)
 from .service import MAX_QUANTITY
+from .pool_access import resolve_anchor_ids
 from .validation import InventoryError, number_field, text_field, uuid_field
 
 
@@ -94,6 +95,9 @@ def create_stocktake(request, actor, values, key):
         skus = list(lock_stock_skus(sku_ids))
         if len(skus) != len(sku_ids) or any(not sku.current_unit_id for sku in skus):
             raise InventoryError("SKU 不存在或未配置库存单位。", "SKU_UNIT_NOT_READY", 409)
+        anchors = resolve_anchor_ids(sku_ids)
+        if any(anchors[sku_id] != sku_id for sku_id in sku_ids):
+            raise InventoryError("共享库存只能选择库存池锚 SKU 盘点。", "POOL_ANCHOR_REQUIRED", 409)
         balances = {balance.sku_id: balance for balance in
                     InventoryBalance.objects.select_for_update().filter(
                         warehouse=warehouse, sku_id__in=sku_ids).order_by("sku_id")}

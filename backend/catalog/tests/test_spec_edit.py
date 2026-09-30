@@ -9,6 +9,8 @@ from django.test import Client, TestCase
 
 from accounts.models import AccountGroup, AdminAccount, AuditLog, GroupPermission, PermissionGroup
 from catalog.models import Product, Sku, SkuGradePrice, SkuUnitVersion
+from inventory.models import StockPool, StockPoolSku
+from inventory.pool_access import bind_sku_to_pool, ensure_independent_pool
 
 
 class SpecEditTests(TestCase):
@@ -208,6 +210,59 @@ class SpecEditTests(TestCase):
         audit = AuditLog.objects.get(action_code="product.specs.update")
         self.assertEqual(audit.after["removed"][0]["skuId"], removed_id)
         self.assertEqual(audit.after["removed"][0]["gradePriceCount"], 1)
+
+    def test_unstocked_independent_pool_is_cleaned_when_draft_sku_is_removed(self):
+        payload = self.edit_payload()
+        removed_id = payload["skus"].pop()["id"]
+        pool = ensure_independent_pool(Sku.objects.select_related("current_unit").get(pk=removed_id))
+        preview = self.preview(payload)
+        saved = self.send(self.owner, "put", self.path, {**payload, "previewToken": preview["previewToken"]})
+        self.assertEqual(saved.status_code, 200, saved.content)
+        self.assertFalse(Sku.objects.filter(pk=removed_id).exists())
+        self.assertFalse(StockPoolSku.objects.filter(sku_id=removed_id).exists())
+        self.assertFalse(StockPool.objects.filter(pk=pool.pk).exists())
+
+    def test_draft_unit_change_updates_empty_independent_pool(self):
+        payload = self.edit_payload()
+        sku_id = payload["skus"][0]["id"]
+        pool = ensure_independent_pool(Sku.objects.select_related("current_unit").get(pk=sku_id))
+        payload["skus"][0]["unit"] = {"baseUnit": "件", "saleUnit": "箱", "ratio": 6}
+        preview = self.preview(payload)
+        saved = self.send(self.owner, "put", self.path, {**payload, "previewToken": preview["previewToken"]})
+        self.assertEqual(saved.status_code, 200, saved.content)
+        pool.refresh_from_db()
+        self.assertEqual(pool.base_unit, "件")
+        self.assertEqual(Sku.objects.get(pk=sku_id).current_unit.base_unit, "件")
+
+    def test_shared_anchor_cannot_be_removed_or_change_base_unit(self):
+        payload = self.edit_payload()
+        anchor = Sku.objects.select_related("current_unit").get(pk=payload["skus"][0]["id"])
+        alias = Sku.objects.select_related("current_unit").get(pk=payload["skus"][1]["id"])
+        pool = ensure_independent_pool(anchor)
+        bind_sku_to_pool(alias.id, pool.id, alias.revision)
+        remove = self.edit_payload()
+        remove["skus"].pop(0)
+        rejected = self.post(self.owner, self.path + "/preview", remove)
+        self.assertEqual(rejected.status_code, 409, rejected.content)
+        change = self.edit_payload()
+        change["skus"][0]["unit"]["baseUnit"] = "件"
+        rejected = self.post(self.owner, self.path + "/preview", change)
+        self.assertEqual(rejected.status_code, 409, rejected.content)
+
+    def test_history_free_shared_alias_can_be_removed_without_deleting_anchor_pool(self):
+        payload = self.edit_payload()
+        anchor = Sku.objects.select_related("current_unit").get(pk=payload["skus"][0]["id"])
+        alias_id = payload["skus"][1]["id"]
+        alias = Sku.objects.select_related("current_unit").get(pk=alias_id)
+        pool = ensure_independent_pool(anchor)
+        bind_sku_to_pool(alias.id, pool.id, alias.revision)
+        payload["skus"].pop()
+        preview = self.preview(payload)
+        saved = self.send(self.owner, "put", self.path, {**payload, "previewToken": preview["previewToken"]})
+        self.assertEqual(saved.status_code, 200, saved.content)
+        self.assertFalse(Sku.objects.filter(pk=alias_id).exists())
+        self.assertTrue(StockPool.objects.filter(pk=pool.pk).exists())
+        self.assertEqual(StockPoolSku.objects.get(sku=anchor).pool_id, pool.id)
 
     def test_duplicate_conflict_and_failure_leave_original_data(self):
         payload = self.edit_payload()

@@ -169,12 +169,12 @@ test('mock HTTP: product media upload failure, retry, and remove use shared edit
   verify()
 })
 
-test('mock HTTP: selected SKU CSV download protects prefixed formulas', async ({ page }, testInfo) => {
+test('mock HTTP: selected SPU CSV download protects prefixed formulas', async ({ page }, testInfo) => {
   const verify = await installMockApi(page)
   await page.goto('/catalog')
-  await page.getByRole('checkbox', { name: '选择 BROWSER_SKU', exact: true }).check()
+  await page.getByRole('checkbox', { name: '选择商品 BROWSER_PRODUCT', exact: true }).check()
   const downloadEvent = page.waitForEvent('download')
-  await page.getByRole('button', { name: '导出所选', exact: true }).click()
+  await page.getByRole('button', { name: '导出所选商品', exact: true }).click()
   const download = await downloadEvent
   const csv = await readFile((await download.path())!, 'utf8')
   expect(csv.startsWith('\uFEFF')).toBe(true)
@@ -541,7 +541,8 @@ test('mock HTTP: product rich description uses shared assets and preserves revis
   await textbox.press('ControlOrMeta+A')
   await description.getByRole('button', { name: '二级标题', exact: true }).click()
   await expect(textbox.locator('h2')).toHaveText('产地与酿造工艺')
-  await textbox.press('ArrowRight')
+  await textbox.locator('h2').click()
+  await textbox.press('End')
   await description.getByRole('button', { name: '从素材中心选择', exact: true }).click()
   await page.getByRole('dialog', { name: '选择素材', exact: true }).getByRole('button', { name: '选择素材', exact: true }).click()
   await description.getByLabel('图片 1 说明', { exact: true }).fill('商品产地示意')

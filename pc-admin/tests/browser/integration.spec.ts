@@ -3,6 +3,65 @@ import { expect, test, type APIResponse, type Response } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { openSection, screenshot } from './fixtures'
 
+test('real isolated database: one SPU row expands to independently priced SKUs', async ({ page }, testInfo) => {
+  await page.goto('/')
+  await page.getByLabel('账号', { exact: true }).fill(process.env.MALL_E2E_OWNER!)
+  await page.getByLabel('密码', { exact: true }).fill(process.env.MALL_E2E_OWNER_PASSWORD!)
+  await page.getByRole('button', { name: '登录', exact: true }).click()
+  await expect(page.getByRole('button', { name: '退出', exact: true })).toBeVisible()
+  const csrf = (await page.context().cookies()).find(cookie => cookie.name === 'csrftoken')?.value
+  expect(csrf).toBeTruthy()
+  const headers = { 'X-CSRFToken': csrf!, Origin: new URL(page.url()).origin }
+  const unique = `SPU_${testInfo.project.name}_${Date.now()}`
+  async function created(response: APIResponse) {
+    expect(response.status()).toBe(201)
+    return (await response.json()).data
+  }
+  const parent = await created(await page.request.post('/api/v1/admin/categories', { headers,
+    data: { parentId: null, name: `${unique} 一级`, status: 'ACTIVE', sortOrder: 1 } }))
+  const leaf = await created(await page.request.post('/api/v1/admin/categories', { headers,
+    data: { parentId: parent.id, name: `${unique} 二级`, status: 'ACTIVE', sortOrder: 1 } }))
+  await created(await page.request.post('/api/v1/admin/products', { headers, data: {
+    productNo: unique, name: `${unique} 商品`, categoryId: leaf.id, fulfillmentKind: 'SHIP',
+    descriptionHtml: '', specAxes: [{ clientKey: 'pack', name: '包装', sortOrder: 0, options: [
+      { clientKey: 'single', value: '单件', sortOrder: 0 },
+      { clientKey: 'box', value: '整箱', sortOrder: 1 },
+    ] }], skus: [
+      { skuCode: `${unique}_S`, specOptionKeys: ['single'], listPriceFen: 100,
+        saleStatus: 'OFF_SALE', gradePrices: [], unit: { baseUnit: '件', saleUnit: '件', ratio: 1 } },
+      { skuCode: `${unique}_B`, specOptionKeys: ['box'], listPriceFen: 500,
+        saleStatus: 'OFF_SALE', gradePrices: [], unit: { baseUnit: '件', saleUnit: '箱', ratio: 6 } },
+    ],
+  } }))
+  await page.goto('/catalog')
+  await page.getByPlaceholder('名称或编号').fill(unique)
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  const directory = page.getByLabel('商品列表，可横向滚动')
+  await expect(directory.locator('tbody')).toHaveCount(1)
+  await expect(directory).toContainText('¥1.00–¥5.00')
+  await directory.getByRole('button', { name: '展开规格' }).click()
+  await expect(directory.locator('.catalog-sku-card')).toHaveCount(2)
+  await expect(directory).toContainText(`${unique}_S`)
+  await expect(directory).toContainText(`${unique}_B`)
+  await screenshot(page, testInfo, 'spu-directory-expanded')
+  await page.getByRole('button', { name: 'SKU 批量管理' }).click()
+  await expect(page.getByLabel('SKU 批量管理列表，可横向滚动').locator('tbody tr')).toHaveCount(2)
+  await page.goto('/inventory')
+  const poolPanel = page.getByRole('region', { name: '库存池绑定' })
+  await expect(poolPanel).toBeVisible()
+  await poolPanel.getByPlaceholder('输入商品名称或编码').fill(unique)
+  await poolPanel.getByRole('button', { name: '查询商品' }).click()
+  await poolPanel.getByRole('button', { name: new RegExp(`${unique} 商品`) }).click()
+  await poolPanel.getByLabel('待绑定 SKU').selectOption({ label: `${unique}_B（件）` })
+  await poolPanel.getByLabel('目标锚 SKU').selectOption({ label: `${unique}_S（件 · 待建池）` })
+  await poolPanel.getByRole('button', { name: '核对并绑定' }).click()
+  const post = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/admin/inventory/pool-bindings'
+    && response.request().method() === 'POST')
+  await page.getByRole('button', { name: '确认绑定' }).click()
+  expect((await post).status()).toBe(200)
+  await expect(poolPanel).toContainText(`与 ${unique}_S 共享`)
+})
+
 test('real isolated database: login and create a persisted coupon draft', async ({ page }, testInfo) => {
   const loginName = process.env.MALL_E2E_OWNER
   const password = process.env.MALL_E2E_OWNER_PASSWORD

@@ -8,6 +8,7 @@
 .inventory-section {
   min-width:0;
 }
+.inventory-pool-panel{margin-top:24px;padding:20px}.inventory-pool-panel h2{margin:0 0 6px;font-size:19px}.inventory-pool-panel h3{margin:18px 0 10px;font-size:16px}.inventory-pool-panel .page-heading p{color:var(--mall-color-muted);font-size:13px;line-height:1.6}.inventory-pool-search,.inventory-pool-form{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin-top:16px}.inventory-pool-search label,.inventory-pool-form label{display:grid;gap:6px;min-width:min(250px,100%);font-size:13px;font-weight:650}.inventory-pool-search input,.inventory-pool-form select{min-height:40px;border:1px solid var(--mall-color-border);border-radius:7px;padding:8px 10px;background:#fff}.inventory-pool-products{margin-top:16px}.inventory-pool-products p{font-size:13px;color:var(--mall-color-muted)}.inventory-pool-products button{margin:0 8px 8px 0;max-width:100%;white-space:normal;text-align:left}.inventory-pool-bindings{margin-top:18px}.inventory-pool-form .help-text,.inventory-pool-preview{flex-basis:100%;margin:0}.inventory-pool-preview{font-size:13px;font-weight:650}.inventory-pool-panel table{min-width:580px}
 .inventory-section>.page-heading {
   margin-bottom:22px;
 }

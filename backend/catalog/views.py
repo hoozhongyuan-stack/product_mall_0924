@@ -4,7 +4,7 @@ from itertools import groupby
 
 from django.core import signing
 from django.db import transaction
-from django.db.models import Count, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, Max, Min, OuterRef, Q, Subquery
 from django.utils import timezone
 
 from common.http import offset_response, parse_json_object, method
@@ -13,12 +13,13 @@ from accounts.security import audit, error, permissions, require, response
 from .description import parse_description, set_description_images
 from .media import resolve_media, set_gallery
 from .models import BatchCategoryRequest, Category, MemberGrade, Product, Sku, SkuGradePrice, SkuSpecSelection, SkuUnitVersion
-from .presentation import category_data, grade_data, product_data, public_product_data, sku_data
+from .presentation import asset_data, category_data, grade_data, product_data, public_product_data, sku_data
 from .sale_state import change_sku_sale_status
 from .service import active_leaf, create_product, parse_prices, parse_unit
 from .spec_edit import preview_specs, save_specs
 from .validation import CatalogError, list_field, number_field, object_field, redeem_valid_until, text_field, uuid_field
 from inventory.sku_guards import referenced_sku_ids
+from inventory.pool_access import PoolBindingError, update_empty_pool_base_unit
 from payments.availability import enabled_payment_methods
 
 
@@ -177,6 +178,71 @@ def sku_rows_view(request):
         return failure(request, exc)
 
 
+def product_rows_view(request):
+    """Admin directory with product pagination and SKU facts as a read projection."""
+    bad = method(request, "GET")
+    if bad:
+        return bad
+    _, bad = require(request, "catalog.read")
+    if bad:
+        return bad
+    try:
+        page, size = page_args(request)
+        keyword = request.GET.get("keyword", "").strip()
+        if len(keyword) > 100:
+            raise CatalogError("搜索词过长。")
+        products = Product.objects.select_related("main_image").order_by("-created_at", "id")
+        if keyword:
+            code_match = Sku.objects.filter(product_id=OuterRef("pk"), sku_code__icontains=keyword)
+            products = products.alias(sku_code_match=Exists(code_match)).filter(
+                Q(name__icontains=keyword) | Q(product_no__icontains=keyword) | Q(sku_code_match=True))
+        category_id = request.GET.get("categoryId")
+        if category_id:
+            identifier = uuid_field(category_id, "分类 ID")
+            products = products.filter(Q(category_id=identifier) | Q(category__parent_id=identifier))
+        fulfillment = request.GET.get("fulfillmentKind")
+        if fulfillment:
+            if fulfillment not in Product.Fulfillment.values:
+                raise CatalogError("商品类型不正确。")
+            products = products.filter(fulfillment_kind=fulfillment)
+        status = request.GET.get("productStatus")
+        if status:
+            if status not in Product.Status.values:
+                raise CatalogError("商品状态不正确。")
+            products = products.filter(status=status)
+        sku_status = request.GET.get("skuStatus")
+        if sku_status:
+            if sku_status not in Sku.SaleStatus.values:
+                raise CatalogError("SKU 状态不正确。")
+            matching_sku = Sku.objects.filter(product_id=OuterRef("pk"), sale_status=sku_status)
+            products = products.alias(sku_status_match=Exists(matching_sku)).filter(sku_status_match=True)
+        total = products.count()
+        selected = list(products.annotate(
+            sku_count=Count("skus"),
+            on_sale_sku_count=Count("skus", filter=Q(skus__sale_status=Sku.SaleStatus.ON_SALE)),
+            min_list_price_fen=Min("skus__list_price_fen"),
+            max_list_price_fen=Max("skus__list_price_fen"),
+        )[(page - 1) * size:page * size])
+        matched = {}
+        if keyword and selected:
+            for sku_id, product_id in Sku.objects.filter(
+                    product_id__in=[item.id for item in selected], sku_code__icontains=keyword
+                    ).order_by("sku_code", "id").values_list("id", "product_id"):
+                matched.setdefault(product_id, []).append(str(sku_id))
+        rows = [{"productId": str(item.id), "productRevision": item.revision,
+                 "productNo": item.product_no, "name": item.name,
+                 "categoryId": str(item.category_id), "fulfillmentKind": item.fulfillment_kind,
+                 "status": item.status,
+                 "mainImage": asset_data(item.main_image) if item.main_image_id else None,
+                 "skuCount": item.sku_count, "onSaleSkuCount": item.on_sale_sku_count,
+                 "minListPriceFen": item.min_list_price_fen,
+                 "maxListPriceFen": item.max_list_price_fen,
+                 "matchedSkuIds": matched.get(item.id, [])} for item in selected]
+        return offset_response(request, {"rows": rows, "page": page, "pageSize": size, "total": total})
+    except CatalogError as exc:
+        return failure(request, exc)
+
+
 def batch_items(values, id_key, extra=()):
     if set(values) - ({"items", "saleStatus" if id_key == "skuId" else "categoryId"} | set(extra)):
         raise CatalogError("批量请求含有不支持的字段。")
@@ -233,32 +299,46 @@ def batch_category_preview_view(request):
         return bad
     try:
         values = body(request)
-        if set(values) != {"skuIds", "categoryId"}:
-            raise CatalogError("请选择 SKU 和目标分类。")
-        identifiers = [uuid_field(value, "SKU ID") for value in list_field(values["skuIds"], "所选 SKU", 100, 1)]
+        by_product = set(values) == {"productIds", "categoryId"}
+        if not by_product and set(values) != {"skuIds", "categoryId"}:
+            raise CatalogError("请选择商品或 SKU 和目标分类。")
+        field = "productIds" if by_product else "skuIds"
+        label = "商品 ID" if by_product else "SKU ID"
+        identifiers = [uuid_field(value, label) for value in list_field(values[field], label, 100, 1)]
         if len(set(identifiers)) != len(identifiers):
-            raise CatalogError("不能重复选择同一个 SKU。")
+            raise CatalogError(f"不能重复选择同一个{label}。")
         category_id = uuid_field(values["categoryId"], "分类 ID")
         category = Category.objects.select_related("parent").filter(id=category_id).first()
         if not category or not category.parent_id:
             raise CatalogError("请选择二级分类。")
-        skus = Sku.objects.select_related("product").filter(id__in=identifiers)
-        by_id = {sku.id: sku for sku in skus}
-        if len(by_id) != len(identifiers):
-            raise CatalogError("所选 SKU 已发生变化，请刷新列表。", "SELECTION_STALE", 409)
         selected = {}
         ordered_products = []
-        for identifier in identifiers:
-            product_id = by_id[identifier].product_id
-            if product_id not in selected:
-                selected[product_id] = 0
-                ordered_products.append(by_id[identifier].product)
-            selected[product_id] += 1
-        counts = dict(Sku.objects.filter(product_id__in=selected).values("product_id")
-                      .annotate(total=Count("id")).values_list("product_id", "total"))
+        if by_product:
+            products = {product.id: product for product in Product.objects.filter(id__in=identifiers)}
+            if len(products) != len(identifiers):
+                raise CatalogError("所选商品已发生变化，请刷新列表。", "SELECTION_STALE", 409)
+            ordered_products = [products[identifier] for identifier in identifiers]
+        else:
+            skus = Sku.objects.select_related("product").filter(id__in=identifiers)
+            by_id = {sku.id: sku for sku in skus}
+            if len(by_id) != len(identifiers):
+                raise CatalogError("所选 SKU 已发生变化，请刷新列表。", "SELECTION_STALE", 409)
+            for identifier in identifiers:
+                product_id = by_id[identifier].product_id
+                if product_id not in selected:
+                    selected[product_id] = 0
+                    ordered_products.append(by_id[identifier].product)
+                selected[product_id] += 1
+        if by_product:
+            counts = dict(Sku.objects.filter(product_id__in=identifiers).values("product_id")
+                          .annotate(total=Count("id")).values_list("product_id", "total"))
+            selected = {identifier: counts.get(identifier, 0) for identifier in identifiers}
+        else:
+            counts = dict(Sku.objects.filter(product_id__in=selected).values("product_id")
+                          .annotate(total=Count("id")).values_list("product_id", "total"))
         rows = []
         for product in ordered_products:
-            total = counts[product.id]
+            total = counts.get(product.id, 0)
             reason = ("目标分类已停用。" if category.status != Category.Status.ACTIVE or
                       category.parent.status != Category.Status.ACTIVE else
                       "商品已在该分类。" if product.category_id == category.id else None)
@@ -269,7 +349,7 @@ def batch_category_preview_view(request):
         signed_items = [{"productId": row["productId"], "expectedRevision": row["productRevision"]}
                         for row in rows if row["canChange"]]
         token = signing.dumps({"actorId": str(actor.id), "categoryId": str(category.id),
-                               "skuIds": [str(identifier) for identifier in identifiers],
+                               field: [str(identifier) for identifier in identifiers],
                                "items": signed_items}, salt="catalog.batch-category", compress=True)
         return response(request, {"previewToken": token, "productCount": len(rows),
                                   "skuCount": sum(counts.values()),
@@ -530,6 +610,10 @@ def sku_change(request, sku_id, operation):
                         (not previous or previous.base_unit != unit["base_unit"])):
                     raise CatalogError("SKU 已有关联库存单据或余额，不能修改基础单位。",
                                        "SKU_INVENTORY_REFERENCED", 409)
+                try:
+                    update_empty_pool_base_unit(sku.id, unit["base_unit"])
+                except PoolBindingError as exc:
+                    raise CatalogError(str(exc), "POOL_UNIT_MISMATCH", 409) from exc
                 before = {"unit": {"baseUnit": previous.base_unit, "saleUnit": previous.sale_unit,
                                    "ratio": previous.ratio} if previous else None}
                 version = SkuUnitVersion.objects.create(sku=sku, **unit)

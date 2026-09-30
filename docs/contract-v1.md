@@ -67,10 +67,11 @@
 | `GET/POST /api/v1/admin/categories`、`PATCH /api/v1/admin/categories/{id}` | `parentId`、名称、排序、状态、`expectedRevision` | 两级分类树；管理端读取时返回关联商品数与在售商品数，停用前检查在售商品。 |
 | `GET /api/v1/admin/member-grades` | 无 | 返回阶段 A 的等级字典供 SKU 等级价编辑；阶段 D 再提供等级规则管理。 |
 | `GET /api/v1/admin/sku-rows` | `keyword`、`categoryId`、`fulfillmentKind`、SKU 状态、`page`、`pageSize` | 一行一个 SKU：`skuId`、`skuCode`、`skuRevision`、`productId`、`productRevision`、`productNo`、`productName`、商品类型、有序 `specs[{name,value}]`、日常价、等级价、状态。`rowKey=skuId`；当前分页信息位于 `data` 的 `page/pageSize/total`。库存尚未接入。 |
+| `GET /api/v1/admin/product-rows` | `keyword`（商品名、商品编号或 SKU 编码）、`categoryId`、`fulfillmentKind`、`productStatus`、`skuStatus`、`page`、`pageSize` | 商品管理默认目录按 SPU 分页，一行一个商品；`rows` 返回商品 ID/编号/名称、分类、履约类型、派生商品状态、主图、SKU 总数/在售数、SKU 日常价最小/最大值及本次搜索命中的 `matchedSkuIds`。SKU 状态筛选表示“包含该状态 SKU 的商品”，不改变 SPU 分页总数口径。展开详情复用 `GET /products/{id}`；旧 SKU 列表接口保留给明确的 SKU 批量工作区。 |
 | `POST /api/v1/admin/products`、`GET/PATCH /api/v1/admin/products/{id}` | 商品基础字段、规格项和值、SKU 列表、素材 ID、`expectedRevision` | 商品与 SKU 独立 ID/编码；服务端校验规格上限、组合唯一及素材绑定。创建只允许草稿及下架 SKU；PATCH 只修改商品基础字段及媒体替换/移除，拒绝提交独立商品 `status`。规格编辑使用下列独立接口。 |
 | `POST /api/v1/admin/products/{id}/specs/preview`、`PUT /api/v1/admin/products/{id}/specs` | 草稿商品的完整 `specAxes`、`skus`、`expectedRevision`；保留的规格项/值须带原 ID，保留的 SKU 须带 `id`、`expectedSkuRevision`；PUT 另带预览返回的 `previewToken` | 两个接口均需 `catalog.write`、`sku.price.write`、`sku.status.write`、`sku.unit.write`。预览返回保留/新增/移除 SKU 和移除项的等级价、单位版本数量；令牌绑定操作者、商品、请求内容和 SKU 修订快照，10 分钟有效。PUT 锁定商品及 SKU，在一个事务中重新校验预览、修订、组合和全局 SKU 编码；匹配组合保留 SKU ID 与未变资料，新增组合建新 SKU，移除组合删除草稿 SKU 与其当前资料并写审计。非草稿拒绝。 |
 | `POST /api/v1/admin/sku-rows/batch-status` | 当前页选中 `items[{skuId,expectedRevision}]`、`saleStatus` | 最多 100 个 SKU，每项在事务中锁所属商品再锁 SKU、校验修订和上架前置条件、更新商品派生状态及审计；返回 `results[{id,success,revision,productStatus?,productRevision?,code?,message?}]` 及成功/失败数。逐项失败不影响已成功项；客户端变更筛选或分页时清空选择。 |
-| `POST /api/v1/admin/products/batch-category/preview` | 当前页选中 `skuIds[]`、目标 `categoryId` | 服务端按商品去重，返回受影响商品总数、全部 SKU 总数、页外 SKU 数、各商品修订号和不可操作原因，并生成 10 分钟有效的签名 `previewToken`。 |
+| `POST /api/v1/admin/products/batch-category/preview` | 商品目录提交当前页选中的 `productIds[]`；旧 SKU 工作区仍可提交 `skuIds[]`；两种请求均须附目标 `categoryId` | 商品目录按 SPU 预览，包含零 SKU 草稿；旧 SKU 请求按商品去重。返回商品与 SKU 数、商品修订号和不可操作原因，并生成 10 分钟有效的签名 `previewToken`。 |
 | `POST /api/v1/admin/products/batch-category` | `items[{productId,expectedRevision}]`、目标 `categoryId`、`previewToken`、`Idempotency-Key` 请求头 | 仅可提交预览中允许操作的商品；预览摘要不匹配或过期则拒绝。逐商品重新校验，返回逐项成功/失败；同一操作者、同一键和同一请求重试返回已记录结果，换内容返回 409。 |
 | `PATCH /api/v1/admin/skus/{id}/status`、`PATCH /api/v1/admin/skus/{id}/price`、`PUT /api/v1/admin/skus/{id}/grade-prices`、`PUT /api/v1/admin/skus/{id}/unit` | SKU 状态、日常价、等级价数组或新单位版本、`expectedRevision` | 每项独立验权限与修订号；SKU 首次上架要求商品有主图、启用的二级及一级分类和销售单位。SKU 与商品派生状态、修订号、审计同事务保存。等级价 PUT 仅替换已启用等级的价格，保留已停用等级的原价及旧版本；单位旧版本保留。 |
 | `POST /api/v1/admin/assets` | `multipart/form-data` 的 `kind=IMAGE/VIDEO/GIF` 与 `file` | 仅 `asset.upload` 可调用，返回 `assetId`、MIME、大小、宽高及 `adminUrl`；校验文件声明、容器结构和实际解码，GIF 须至少 2 帧。图片/GIF 10 MiB、视频 50 MiB。本机使用已安装的 `ffmpeg`；上传服务缺少解码器时返回 503。文件写入 `MALL_MEDIA_ROOT`，生产环境必须显式配置持久目录。未绑定素材分别受单账号 200 MiB、全站 1 GiB 配额限制，超过 24 小时由 `purge_orphan_media` 清理，上传时也会补充清理。 |
@@ -82,7 +83,7 @@
 | `POST /api/v1/admin/startup/preview`、`POST /api/v1/admin/startup/publish` | 预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另需 `Idempotency-Key` 与绑定 `startup.publish`、对象 `startup`、当前修订的一次性 `X-Action-Confirmation` | 预览返回修订及两张素材的管理端 URL；发布要求两项有效并返回 `versionId/revision/gifUrl/fallbackUrl`，后两项为公开相对路径。同键同修订重试返回原版本；不同键重复发布当前修订返回 409；版本、指针、请求记录和审计同事务提交，失败旧版继续生效。 |
 | `GET /api/v1/app/startup` | 无 | 只返回当前发布版本的 `versionId/revision/gifUrl/fallbackUrl`，素材 URL 为 `/api/v1/app/assets/{id}/file` 相对路径；未发布返回 `404 STARTUP_UNPUBLISHED`。 |
 | `GET /api/v1/app/home`、`GET /api/v1/app/pages/{id}` | 无；微页面 ID 为 UUID | 只返回当前发布版本的可见组件。首页返回 `versionId/config`，未发布为 `404 HOME_UNPUBLISHED`；微页面返回 `pageId/versionId/name/config`，名称为发布时快照，未发布或非微页面为 `404 PAGE_UNPUBLISHED`；非 UUID 路径由路由层返回 404。`/api/v1/app/bootstrap` 仍待实现。 |
-| `GET /api/v1/app/categories`、`GET /api/v1/app/products`、`GET /api/v1/app/products/{id}` | 商品列表支持 `categoryId`、`keyword`、`page`、`pageSize`；详情以商品 ID 获取 | 分类接口返回启用的两级分类；商品接口只返回启用分类下有主图及在售 SKU 的上架商品。列表保留最低在售 SKU 日常价 `minListPriceFen`，并给 `cartEligible` 与 `availabilityCode`；详情每个 SKU 给 `listPriceFen`、当前 `applicablePriceFen`、`priceSource`、`availableQuantity`、`cartEligible`。有效会员按等级显示适用价，游客显示日常价。库存按默认启用仓的 `(账面－预留) ÷ 当前销售单位比例` 计算。即使有库存，`purchasable` 仍为 false，直到订单链路验收；下架后详情及素材返回 404。 |
+| `GET /api/v1/app/categories`、`GET /api/v1/app/products`、`GET /api/v1/app/products/{id}` | 商品列表支持 `categoryId`、`keyword`、`page`、`pageSize`；详情以商品 ID 获取 | 分类接口返回启用的两级分类；商品接口只返回启用分类下有主图及在售 SKU 的上架商品。列表保留最低在售 SKU 日常价 `minListPriceFen`，并给 `cartEligible` 与 `availabilityCode`；详情每个 SKU 给 `listPriceFen`、当前 `applicablePriceFen`、`priceSource`、`availableQuantity`、`cartEligible`。有效会员按等级显示适用价，游客显示日常价。库存按默认启用仓对应库存池的 `(账面－预留) ÷ 该 SKU 当前销售单位比例` 计算；共享池 SKU 的展示数量不可相加。即使有库存，`purchasable` 仍为 false，直到订单链路验收；下架后详情及素材返回 404。 |
 
 建议错误码：`AUTH_REQUIRED`、`SESSION_EXPIRED`、`PERMISSION_DENIED`、`VALIDATION_FAILED`、`REVISION_CONFLICT`、`CATEGORY_IN_USE`、`SKU_CODE_DUPLICATE`、`SKU_SPEC_IMMUTABLE`、`MEDIA_INVALID`、`PUBLISH_TARGET_INVALID`、`STOCK_NOT_READY`、`RATE_LIMITED`、`INTERNAL_ERROR`。状态码分别使用 400/401/403/404/409/422/429/500；业务错误码是客户端稳定判断依据，文案可调整。
 
@@ -143,7 +144,7 @@
 
 | 表/实体 | 必须保存的字段 | 强约束 |
 |---|---|---|
-| `warehouse`、`inventory_balance` | 仓库及唯一默认仓；`(warehouse_id, sku_id)`、`on_hand_base_units`、`reserved_base_units` | 同一 SKU/仓库余额行唯一；`0 <= reserved <= on_hand`。已付款待履约数量单独统计，不再减一次账面库存。 |
+| `warehouse`、`inventory_stock_pool`、`inventory_stock_pool_sku`、`inventory_balance` | 仓库及唯一默认仓；库存池的锚 SKU、基本单位、销售 SKU 显式映射；余额的 `(warehouse_id, sku_id)`、`on_hand_base_units`、`reserved_base_units` | 余额行中的 `sku_id` 是库存池锚 SKU，业务唯一口径为仓库×库存池；未映射 SKU 使用自身独立库存。`0 <= reserved <= on_hand`。已付款待履约数量单独统计，不再减一次账面库存。现有余额不自动合并。 |
 | `inventory_reservation`、`inventory_ledger` | 订单项、仓库、SKU、基本单位数量、换算版本、占用/确认/释放状态；不可变流水及业务编号 | 一个订单项在同一仓的有效占用唯一；流水不直接修改或删除，纠错写反向流水。 |
 | `customer_identity`、`member` | 微信身份标识与站内会员 ID、等级及状态 | 手机号不是唯一身份或自动合并依据；用户私有资源按会员 ID 校验归属。 |
 | `order`、`order_item` | 订单号、会员、固定支付方式、支付状态、超时快照、金额；商品/SKU/规格/单位/数量/价格/分摊/仓库/履约类型快照 | 订单号唯一；订单项成交快照不可随商品编辑改变；金额分摊之和等于订单金额。 |
@@ -156,6 +157,8 @@
 | 方法与路径 | 核心输入 | 结果与幂等约束 |
 |---|---|---|
 | `POST /api/v1/app/checkout/quotes` | `{items:[{skuId,quantity,seenPriceFen?}],addressId?,couponId?,pointsToUse?}`；最多 50 个不同 SKU，数量 1—9999；券 ID 为本人可用券，积分为非负整数 | 返回 `quoteId/expiresAt/lines/goodsTotalFen/shippingFeeFen/couponDiscountFen/pointsDiscountFen/payableFen/availableCoupons/availablePoints/selectedCouponId/pointsToUse/ready/confirmRequired/addressRequired/availablePaymentMethods/orderSubmissionAvailable`。`availablePaymentMethods` 只列服务端已开放方式，当前 `[]`；布尔字段表示至少一种方式已开放，不替代商品、地址、价格及会员校验。报价不占库存或权益，提交时重新校验。 |
+| `GET /api/v1/admin/inventory/pool-product-options` | `keyword` 可按商品名、商品编号或 SKU 编码搜索，最多返回 20 个商品及 SKU 数 | 需 `inventory.read`，只返回绑定选择所需商品身份，不附带价格或商品素材；库存岗位无需 `catalog.read`。 |
+| `GET/POST /api/v1/admin/inventory/pool-bindings` | GET `productId` 返回同商品 SKU、修订号、单位和池绑定；POST `{skuId,poolId,expectedSkuRevision}` 或 `{skuId,anchorSkuId,expectedSkuRevision}` | 读取需 `inventory.read`，绑定需 `inventory.manage`。只允许同 SPU、相同基本单位的 SKU 显式共享；目标尚无池时可用锚 SKU 建池。已有余额、占用、流水或交易证据的源 SKU 拒绝改绑，不搬迁或合并历史库存；修订冲突与绑定冲突返回 409。 |
 | `GET/PUT /api/v1/admin/settlement/shipping-policy` | 需 `settlement.shipping.manage`；写入 `{feeFen,deliveryScope:'NATIONWIDE',expectedRevision}` | 首版每笔含快递商品的订单收取一次固定运费，纯核销单为零；初始化金额 1000 分，全国配送。金额 0—1000000 分，修订冲突返回 409；写入审计。 |
 | `POST /api/v1/app/orders` | `{quoteId,paymentMethod}` 和 `Idempotency-Key` UUID 请求头；优惠选择固定在报价中 | 提交按 `paymentMethod` 独立校验开放条件，关闭方式返回 `SETTLEMENT_NOT_READY`，当前两种均关闭。隔离测试路径重验售价、库存、运费及权益；同事务创建订单与占用、保存优惠分摊。应付大于零为待付款，零元直接结算且不生成虚构资金收据；零元公开提交也受方式闸门保护。 |
 | `GET /api/v1/app/orders/{id}` | 登录用户与订单 ID | 只返回本人订单；明确支付、履约、优惠及异常状态，客户端超时后以此查询最终结果。 |
@@ -202,7 +205,7 @@ B1 仅完成真实入库与库存读取；人工出库、盘点、订单占用�
 
 ### 5.4 库存盘点任务、差异审核与调整流水
 
-`inventory` 模块拥有盘点任务、盘点明细、差异审核及调整流水。任务按一个仓库、1—50 个指定 SKU 创建，记录开始时的账面数量与单位；盘点期间不冻结仓库，原有入库和人工出库照常进行。盘点人提交全部实盘数量时，服务端按稳定 SKU 顺序取得锁、重读最新账面及锁定量，以 `实盘 - 提交时账面` 形成待审核差异。盘点原因与提交快照供审核，不在提交时改余额。
+`inventory` 模块拥有盘点任务、盘点明细、差异审核及调整流水。任务按一个仓库、1—50 个库存池锚 SKU 创建，记录开始时的账面数量与单位；共享同一实物的销售 SKU 不分别盘点，以免重复计算。盘点期间不冻结仓库，原有入库和人工出库照常进行。盘点人提交全部实盘数量时，服务端按稳定锚 SKU 顺序取得锁、重读最新账面及锁定量，以 `实盘 - 提交时账面` 形成待审核差异。盘点原因与提交快照供审核，不在提交时改余额。
 
 | 接口 | 输入及结果 | 权限与事务 |
 |---|---|---|
@@ -215,7 +218,7 @@ B1 仅完成真实入库与库存读取；人工出库、盘点、订单占用�
 
 ### 5.5 B3 选购与服务端报价
 
-`customers` 拥有微信身份、会员站内令牌及收货地址；`catalog` 拥有日常价、等级价、单位及商品状态；`inventory/availability.py` 提供默认仓只读可售量；`checkout` 只生成十分钟有效的报价快照，不修改余额或预留量。既有第 5.4 节盘点切片历史上也曾标为 B3；本节起按用户明确指定的 **B3「选购与报价」** 命名，盘点以业务名称识别。
+`customers` 拥有微信身份、会员站内令牌及收货地址；`catalog` 拥有日常价、等级价、单位及商品状态；`inventory/availability.py` 提供默认仓只读可售量，先查 SKU 所属库存池余额再按该 SKU 的正整数比例折算；`checkout` 将报价内同池 SKU 的需求合计后判断是否缺货，只生成十分钟有效的报价快照，不修改余额或预留量。既有第 5.4 节盘点切片历史上也曾标为 B3；本节起按用户明确指定的 **B3「选购与报价」** 命名，盘点以业务名称识别。
 
 | 接口 | 输入及结果 | 保护边界 |
 |---|---|---|
@@ -227,7 +230,7 @@ B1 仅完成真实入库与库存读取；人工出库、盘点、订单占用�
 
 ### 5.6 B4 订单事务与公开提交闸门
 
-`orders` 拥有 `customer_order`、`customer_order_line` 和成功防重复键；`inventory` 拥有 `inventory_reservation` 及不可改写的占用事件。订单提交在一个 PostgreSQL 事务内按既有入出库的锁序先锁商品/SKU 并重新核对在售状态、等级适用价、单位版本和报价金额，再按 `(warehouse_id, sku_id)` 顺序锁余额并重查最终可售量；订单与逐项成交快照、占用记录、防重复键同时提交。任一行不足或中途失败，整单及全部占用回滚，失败键可在条件变化后重试。相同会员、范围与 UUID 键的相同业务内容在 24 小时内返回原订单当前状态；不同内容返回 `IDEMPOTENCY_CONFLICT`；过期成功键返回 `IDEMPOTENCY_KEY_EXPIRED` 和原订单 ID，不重新建单。订单金额及逐行成交事实和占用事件由数据库触发器拒绝改写。
+`orders` 拥有 `customer_order`、`customer_order_line` 和成功防重复键；`inventory` 拥有 `inventory_reservation` 及不可改写的占用事件。订单提交在一个 PostgreSQL 事务内按既有入出库的锁序先锁商品/SKU 并重新核对在售状态、等级适用价、单位版本和报价金额，再按 `(warehouse_id, 库存池锚 SKU id)` 顺序锁余额；同池多条 SKU 需求先换算并合计基本单位，再与该池最终可售量比较。订单与逐项成交快照、占用记录、防重复键同时提交。任一池不足或中途失败，整单及全部占用回滚，失败键可在条件变化后重试。相同会员、范围与 UUID 键的相同业务内容在 24 小时内返回原订单当前状态；不同内容返回 `IDEMPOTENCY_CONFLICT`；过期成功键返回 `IDEMPOTENCY_KEY_EXPIRED` 和原订单 ID，不重新建单。订单金额及逐行成交事实和占用事件由数据库触发器拒绝改写。
 
 取消与到期关闭先锁订单，再按余额顺序释放有效占用；重复关闭不二次释放。`close_expired_orders` 管理命令需由部署环境定时执行；本机仅验证命令和事务行为，不能把未配置调度的环境视为自动关单。订单详情和取消只允许所属会员访问。C0 已用独立 PostgreSQL 连接验证内部可信收款入口与取消/超时竞争；实际渠道关单竞态仍需 C2 真实商户联调。
 
