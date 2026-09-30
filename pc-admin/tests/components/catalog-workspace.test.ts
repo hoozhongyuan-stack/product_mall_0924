@@ -17,6 +17,7 @@ beforeEach(() => {
   vi.mocked(api).mockImplementation(async (path, init) => {
     if (path === '/categories') return categories as never
     if (path === '/member-grades') return [] as never
+    if (path.startsWith('/product-rows')) return { rows: [{ productId: 'p1', productRevision: 4, productNo: 'P-1', name: '测试商品', categoryId: 'leaf', fulfillmentKind: 'SHIP', status: 'DRAFT', mainImage: null, minListPriceFen: 888, maxListPriceFen: 888, skuCount: 1, onSaleSkuCount: 0, matchedSkuIds: [] }], page: 1, pageSize: 20, total: 1 } as never
     if (path.startsWith('/sku-rows')) return { rows: [sku], page: 1, pageSize: 20, total: 1 } as never
     if (path === '/products/p1') return (init?.method ? { ...product, name: '新的商品名', productRevision: 5 } : product) as never
     throw new Error(`unexpected request ${path}`)
@@ -32,6 +33,42 @@ async function setup() {
 const button = (wrapper: ReturnType<typeof mount>, text: string) => wrapper.findAll('button').find(b => b.text() === text)!
 
 describe('focused product workspace', () => {
+  it('pages by SPU and expands SKU details without treating the SKU as a product row', async () => {
+    const wrapper = await setup()
+    expect(vi.mocked(api).mock.calls.some(([path]) => path.startsWith('/product-rows?'))).toBe(true)
+    expect(wrapper.get('.catalog-pagination').text()).toContain('共 1 个商品')
+    expect(wrapper.findAll('.catalog-product-table tbody > tr')).toHaveLength(1)
+    await button(wrapper, '展开规格').trigger('click'); await flushPromises()
+    expect(wrapper.get('.catalog-sku-card').text()).toContain('SKU-1')
+    expect(wrapper.findAll('.catalog-product-table tbody > tr')).toHaveLength(2)
+    expect(vi.mocked(api).mock.calls.some(([path]) => path === '/products/p1')).toBe(true)
+  })
+  it('keeps SPU selection scoped to product actions and SKU batches in their own view', async () => {
+    const wrapper = await setup()
+    await wrapper.get('input[aria-label="选择商品 P-1"]').setValue(true)
+    expect(wrapper.text()).toContain('已选 1 个商品')
+    expect(button(wrapper, '导出所选商品').attributes('disabled')).toBeUndefined()
+    expect(wrapper.findAll('button').some(b => b.text() === '批量下架 SKU')).toBe(false)
+    await button(wrapper, 'SKU 批量管理').trigger('click'); await flushPromises()
+    expect(wrapper.text()).toContain('已选 0 个 SKU')
+    expect(wrapper.findAll('button').some(b => b.text() === '批量下架 SKU')).toBe(true)
+  })
+  it('previews category changes by selected SPU IDs without loading SKU details', async () => {
+    const previous = vi.mocked(api).getMockImplementation()!
+    vi.mocked(api).mockImplementation((path, init) => path === '/products/batch-category/preview'
+      ? Promise.resolve({ previewToken: 'token', productCount: 1, skuCount: 1, otherSkuCount: 0,
+        items: [{ productId: 'p1', productNo: 'P-1', selectedSkuCount: 1, totalSkuCount: 1,
+          productRevision: 4, canChange: true }] }) : previous(path, init))
+    const wrapper = await setup()
+    await wrapper.get('input[aria-label="选择商品 P-1"]').setValue(true)
+    await button(wrapper, '批量调整分类').trigger('click')
+    await wrapper.get('.catalog-batch-category select').setValue('leaf')
+    await button(wrapper, '核对影响范围').trigger('click'); await flushPromises()
+    const call = vi.mocked(api).mock.calls.find(([path]) => path === '/products/batch-category/preview')!
+    expect(JSON.parse(call[1]!.body as string)).toEqual({ productIds: ['p1'], categoryId: 'leaf' })
+    expect(vi.mocked(api).mock.calls.some(([path]) => path === '/products/p1')).toBe(false)
+    expect(wrapper.get('.catalog-impact-summary').text()).toContain('1 个商品')
+  })
   it('keeps rich description changes under the existing dirty and product revision boundary', async () => {
     const wrapper = await setup()
     await button(wrapper, '编辑商品').trigger('click'); await flushPromises()

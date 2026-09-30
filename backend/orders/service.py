@@ -242,10 +242,16 @@ def submit_order(member, body, key):
         from inventory.reservations import lock_default_balances
         balance_ids = [UUID(line["skuId"]) for line in quote.lines]
         locked_balances = lock_default_balances(warehouse.id, balance_ids)
+        required_by_balance = {}
         for sku, unit, row, quantity, amount in current:
             balance = locked_balances.get(sku.id)
-            if not balance or balance.on_hand_base_units - balance.reserved_base_units < quantity * unit.ratio:
+            if not balance:
                 raise OrderError("商品库存不足，请重新报价。", "OUT_OF_STOCK", 409)
+            required_by_balance[balance.id] = (
+                balance, required_by_balance.get(balance.id, (balance, 0))[1] + quantity * unit.ratio)
+        if any(balance.on_hand_base_units - balance.reserved_base_units < required
+               for balance, required in required_by_balance.values()):
+            raise OrderError("商品库存不足，请重新报价。", "OUT_OF_STOCK", 409)
         total = sum(item[4] for item in current)
         if (quote.payable_fen != total + shipping_fee - quote.coupon_discount_fen
                 - quote.points_discount_fen or

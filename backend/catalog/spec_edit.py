@@ -10,6 +10,8 @@ from django.db.models import ProtectedError
 from django.db.models.functions import Upper
 
 from accounts.security import audit
+from inventory.pool_access import (PoolBindingError, pool_change_allowed,
+                                   remove_unused_pool_membership, update_empty_pool_base_unit)
 from inventory.sku_guards import referenced_sku_ids
 
 from .models import (MemberGrade, Product, Sku, SkuGradePrice, SkuSpecSelection,
@@ -37,13 +39,23 @@ def reject_inventory_rewrites(plan):
         [sku.id for sku in plan["removed"]] +
         [row["matched"].id for row in plan["skus"] if row["matched"]]
     )
-    if not protected_ids:
-        return
-
     for sku in plan["removed"]:
         if sku.id in protected_ids:
             raise CatalogError(f"SKU {sku.sku_code} 已有关联库存单据或余额，不能移除规格组合。",
                                "SKU_INVENTORY_REFERENCED", 409)
+        if not pool_change_allowed(sku.id, removing=True):
+            raise CatalogError(f"SKU {sku.sku_code} 已有共享库存池或历史记录，不能移除规格组合。",
+                               "SKU_INVENTORY_REFERENCED", 409)
+    for row in plan["skus"]:
+        sku = row["matched"]
+        if (sku and sku.id not in protected_ids and sku.current_unit and
+                sku.current_unit.base_unit != row["unit"]["base_unit"] and
+                not pool_change_allowed(sku.id, new_base_unit=row["unit"]["base_unit"])):
+            raise CatalogError(f"SKU {sku.sku_code} 的共享库存池不能修改基础单位。",
+                               "POOL_UNIT_MISMATCH", 409)
+    if not protected_ids:
+        return
+
     for row in plan["skus"]:
         sku = row["matched"]
         if not sku or sku.id not in protected_ids:
@@ -238,6 +250,7 @@ def replace_draft_data(product, plan):
     # Current draft-only removals have no transaction history yet. Preserve an
     # impact snapshot in audit, then delete all dependent current records.
     for sku in plan["removed"]:
+        remove_unused_pool_membership(sku.id)
         SkuGradePrice.objects.filter(sku=sku).delete()
         SkuSpecSelection.objects.filter(sku=sku).delete()
         if sku.current_unit_id:
@@ -310,6 +323,7 @@ def replace_draft_data(product, plan):
         current = sku.current_unit
         if not current or (current.base_unit, current.sale_unit, current.ratio) != (
                 row["unit"]["base_unit"], row["unit"]["sale_unit"], row["unit"]["ratio"]):
+            update_empty_pool_base_unit(sku.id, row["unit"]["base_unit"])
             sku.current_unit = SkuUnitVersion.objects.create(sku=sku, **row["unit"])
             changed = True
         if changed:
@@ -335,5 +349,5 @@ def save_specs(request, actor, product_id, values):
             audit(request, "product.specs.update", "product", product.id, actor,
                   before={"skuIds": [str(sku.id) for sku in current]}, after=impact)
         return product_data(product)
-    except (IntegrityError, ProtectedError) as exc:
+    except (IntegrityError, ProtectedError, PoolBindingError) as exc:
         raise CatalogError("规格或 SKU 与当前数据冲突，请刷新后重试。", "CATALOG_CONFLICT", 409) from exc

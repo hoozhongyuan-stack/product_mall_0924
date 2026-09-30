@@ -25,6 +25,31 @@ class Warehouse(models.Model):
         ]
 
 
+class StockPool(models.Model):
+    """One physical stock identity; anchor SKU preserves the existing balance key."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    anchor_sku = models.OneToOneField("catalog.Sku", on_delete=models.PROTECT,
+                                      related_name="anchored_stock_pool")
+    base_unit = models.CharField(max_length=30)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "inventory_stock_pool"
+
+
+class StockPoolSku(models.Model):
+    """Explicit membership. Absence means the SKU owns an independent pool."""
+
+    sku = models.OneToOneField("catalog.Sku", primary_key=True, on_delete=models.PROTECT,
+                               related_name="stock_pool_membership")
+    pool = models.ForeignKey(StockPool, on_delete=models.PROTECT, related_name="members")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "inventory_stock_pool_sku"
+
+
 class InventoryBalance(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT, related_name="balances")

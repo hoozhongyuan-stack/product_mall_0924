@@ -12,6 +12,7 @@ from accounts.security import audit
 from catalog.inventory_access import lock_stock_skus
 
 from .models import InventoryBalance, InventoryLedger, OutboundDocument, OutboundLine, Warehouse
+from .pool_access import resolve_anchor_ids
 from .service import MAX_QUANTITY, line_data
 from .validation import InventoryError, number_field, uuid_field
 
@@ -120,9 +121,19 @@ def confirm_outbound(request, actor, document_id, expected_revision, key):
         skus = {sku.id: sku for sku in lock_stock_skus([line.sku_id for line in lines])}
         if any(skus[line.sku_id].current_unit_id != line.unit_version_id for line in lines):
             raise InventoryError("SKU 单位换算已变化，请重新创建出库单。", "UNIT_VERSION_CHANGED", 409)
+        anchors = resolve_anchor_ids([line.sku_id for line in lines])
+        balances = {balance.sku_id: balance for balance in InventoryBalance.objects.select_for_update().filter(
+            warehouse=document.warehouse, sku_id__in=set(anchors.values())).order_by("sku_id")}
+        requested = {}
         for line in lines:
-            balance = (InventoryBalance.objects.select_for_update()
-                       .filter(warehouse=document.warehouse, sku_id=line.sku_id).first())
+            anchor = anchors[line.sku_id]
+            requested[anchor] = requested.get(anchor, 0) + line.base_quantity
+        if any(anchor not in balances or
+               balances[anchor].on_hand_base_units - balances[anchor].reserved_base_units < quantity
+               for anchor, quantity in requested.items()):
+            raise InventoryError("可售库存不足，出库单未确认。", "INSUFFICIENT_STOCK", 409)
+        for line in lines:
+            balance = balances[anchors[line.sku_id]]
             available = (balance.on_hand_base_units - balance.reserved_base_units) if balance else 0
             if available < line.base_quantity:
                 raise InventoryError("可售库存不足，出库单未确认。", "INSUFFICIENT_STOCK", 409)

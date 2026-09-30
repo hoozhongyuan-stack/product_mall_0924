@@ -9,6 +9,7 @@ from django.utils import timezone
 from catalog.quote_access import quote_catalog_rows
 from benefits.service import BenefitError, quote_benefits
 from inventory.availability import default_available_base_units
+from inventory.pool_access import resolve_anchor_ids
 from payments.availability import enabled_payment_methods
 from shipping.service import current_shipping_policy, shipping_fee_for_lines
 
@@ -91,6 +92,17 @@ def create_quote(body, member, source_digest=""):
     ids = [item[0] for item in requested]
     skus = quote_catalog_rows(ids, member)
     warehouse, balances = default_available_base_units(ids)
+    anchors = resolve_anchor_ids(ids)
+    pool_demand = {}
+    pool_available = {}
+    for sku_id, quantity, _ in requested:
+        sku = skus.get(sku_id)
+        if sku and sku["onSale"] and sku["ratio"]:
+            anchor = anchors[sku_id]
+            pool_demand[anchor] = pool_demand.get(anchor, 0) + quantity * sku["ratio"]
+            pool_available[anchor] = balances.get(sku_id, 0)
+    short_pools = {anchor for anchor, demand in pool_demand.items()
+                   if demand > pool_available[anchor]}
 
     lines, goods_total, ready, changed = [], 0, True, False
     for sku_id, quantity, seen in requested:
@@ -117,7 +129,7 @@ def create_quote(body, member, source_digest=""):
             status = "UNIT_UNAVAILABLE"
         elif not warehouse:
             status = "WAREHOUSE_UNAVAILABLE"
-        elif quantity > available_qty:
+        elif quantity > available_qty or anchors[sku_id] in short_pools:
             status = "OUT_OF_STOCK"
         line_changed = seen is not None and seen != price
         changed = changed or line_changed

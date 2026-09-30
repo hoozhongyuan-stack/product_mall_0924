@@ -2,19 +2,104 @@
 
 import uuid
 
-from django.db import IntegrityError
-from django.db.models import Count, Q, Sum
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Exists, OuterRef, Q, Sum
 
 from common.http import offset_response, method
 from accounts.security import error, parse_json, require, response
+from accounts.security import audit
+from catalog.models import Product, Sku
 from .selection import selection_page
+from .pool_access import (PoolBindingError, bind_sku_to_pool, ensure_independent_pool, pool_info_for_skus,
+                          resolve_anchor_id)
 
-from .models import InboundDocument, InventoryBalance, InventoryLedger, OutboundDocument, StocktakeDocument, Warehouse
+from .models import InboundDocument, InventoryBalance, InventoryLedger, OutboundDocument, StockPool, StockPoolSku, StocktakeDocument, Warehouse
 from .outbound_service import confirm_outbound, create_outbound, outbound_data
 from .service import (InventoryError, confirm_inbound, create_inbound,
                       create_warehouse, inbound_data, warehouse_data)
 from .validation import uuid_field
 from .stocktake_service import create_stocktake, review_stocktake, stocktake_data, submit_stocktake
+
+
+def pool_product_options_view(request):
+    bad = method(request, "GET")
+    if bad:
+        return bad
+    _, bad = require(request, "inventory.read")
+    if bad:
+        return bad
+    keyword = request.GET.get("keyword", "").strip()
+    if len(keyword) > 100:
+        return error(request, 400, "VALIDATION_FAILED", "搜索词过长。")
+    products = Product.objects.order_by("-created_at", "id")
+    if keyword:
+        sku_match = Sku.objects.filter(product_id=OuterRef("pk"), sku_code__icontains=keyword)
+        products = products.alias(sku_match=Exists(sku_match)).filter(
+            Q(name__icontains=keyword) | Q(product_no__icontains=keyword) | Q(sku_match=True))
+    rows = products.annotate(sku_count=Count("skus"))[:20]
+    return response(request, {"items": [{"productId": str(row.id), "productNo": row.product_no,
+                                         "name": row.name, "skuCount": row.sku_count} for row in rows]})
+
+
+def pool_bindings_view(request):
+    bad = method(request, "GET", "POST")
+    if bad:
+        return bad
+    actor, bad = require(request, "inventory.read" if request.method == "GET" else "inventory.manage")
+    if bad:
+        return bad
+    try:
+        if request.method == "GET":
+            product_id = uuid_field(request.GET.get("productId"), "商品 ID")
+            rows = list(Sku.objects.filter(product_id=product_id).select_related("current_unit")
+                        .order_by("sku_code", "id"))
+            info = pool_info_for_skus([row.id for row in rows])
+            anchors = {row.id: row.sku_code for row in rows}
+            return response(request, {"items": [
+                {"skuId": str(row.id), "skuCode": row.sku_code, "skuRevision": row.revision,
+                 "baseUnit": row.current_unit.base_unit if row.current_unit else None,
+                 **info[row.id], "poolAnchorSkuCode": anchors.get(
+                     uuid.UUID(info[row.id]["anchorSkuId"]))}
+                for row in rows]})
+        values = body(request)
+        if not isinstance(values, dict) or (set(values) not in (
+                {"skuId", "poolId", "expectedSkuRevision"},
+                {"skuId", "anchorSkuId", "expectedSkuRevision"})):
+            raise InventoryError("库存池绑定字段不正确。")
+        sku_id = uuid_field(values["skuId"], "SKU ID")
+        revision = values["expectedSkuRevision"]
+        if type(revision) is not int or revision < 1:
+            raise InventoryError("SKU 修订号不正确。")
+        with transaction.atomic():
+            if "anchorSkuId" in values:
+                anchor_id = uuid_field(values["anchorSkuId"], "锚 SKU ID")
+                locked = {row.id: row for row in Sku.objects.select_for_update(of=("self",))
+                          .select_related("current_unit").filter(pk__in=[sku_id, anchor_id]).order_by("id")}
+                anchor = locked.get(anchor_id)
+                if anchor is None:
+                    raise Sku.DoesNotExist
+                was_pool_present = StockPool.objects.filter(anchor_sku_id=anchor_id).exists()
+                target = ensure_independent_pool(anchor)
+                if target.anchor_sku_id != anchor_id:
+                    raise PoolBindingError("锚 SKU 已加入其他库存池。")
+                if not was_pool_present:
+                    audit(request, "inventory.pool.create", "sku", anchor_id, actor,
+                          after={"poolId": str(target.id), "baseUnit": target.base_unit})
+                pool_id = target.id
+            else:
+                pool_id = uuid_field(values["poolId"], "库存池 ID")
+            pool, changed = bind_sku_to_pool(sku_id, pool_id, revision)
+            if changed:
+                audit(request, "inventory.pool.bind", "sku", sku_id, actor,
+                      after={"poolId": str(pool.id), "anchorSkuId": str(pool.anchor_sku_id)})
+        return response(request, {"skuId": str(sku_id), "poolId": str(pool.id),
+                                  "anchorSkuId": str(pool.anchor_sku_id), "changed": changed})
+    except (Sku.DoesNotExist, StockPool.DoesNotExist):
+        return error(request, 404, "NOT_FOUND", "SKU 或库存池不存在。")
+    except PoolBindingError as exc:
+        return error(request, 409, "POOL_BINDING_CONFLICT", str(exc))
+    except InventoryError as exc:
+        return failure(request, exc)
 
 
 def failure(request, exc):
@@ -99,15 +184,25 @@ def balances_view(request):
         if request.GET.get("warehouseId"):
             rows = rows.filter(warehouse_id=uuid_field(request.GET["warehouseId"], "仓库 ID"))
         if request.GET.get("skuId"):
-            rows = rows.filter(sku_id=uuid_field(request.GET["skuId"], "SKU ID"))
+            rows = rows.filter(sku_id=resolve_anchor_id(uuid_field(request.GET["skuId"], "SKU ID")))
         if keyword:
+            alias_anchors = StockPoolSku.objects.filter(
+                sku__sku_code__icontains=keyword).values_list("pool__anchor_sku_id", flat=True)
             rows = rows.filter(Q(sku__sku_code__icontains=keyword) |
-                               Q(sku__product__name__icontains=keyword))
+                               Q(sku__product__name__icontains=keyword) |
+                               Q(sku_id__in=alias_anchors))
         total = rows.count()
         rows = rows.order_by("warehouse__code", "sku__sku_code", "id")[(page - 1) * size:page * size]
+        infos = pool_info_for_skus([row.sku_id for row in rows])
+        member_codes = {}
+        for member in StockPoolSku.objects.filter(pool__anchor_sku_id__in=[row.sku_id for row in rows]).select_related("sku", "pool"):
+            member_codes.setdefault(member.pool.anchor_sku_id, []).append(member.sku.sku_code)
         items = [{"warehouseId": str(row.warehouse_id), "warehouseName": row.warehouse.name,
                   "skuId": str(row.sku_id), "skuCode": row.sku.sku_code,
                   "productName": row.sku.product.name,
+                  **infos[row.sku_id],
+                  "poolAnchorSkuCode": row.sku.sku_code,
+                  "poolSkuCodes": sorted(member_codes.get(row.sku_id, [row.sku.sku_code])),
                   "baseUnit": row.sku.current_unit.base_unit if row.sku.current_unit else "",
                   "onHandBaseUnits": row.on_hand_base_units,
                   "reservedBaseUnits": row.reserved_base_units,

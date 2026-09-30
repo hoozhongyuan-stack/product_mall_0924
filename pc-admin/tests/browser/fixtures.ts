@@ -56,6 +56,11 @@ export async function installMockApi(page: Page, override?: (route: Route, path:
     if (path.endsWith('/categories')) return ok(route, categories)
     if (path === '/api/v1/app/products') return ok(route, { rows: [], total: 0, page: 1, pageSize: 100 })
     if (path === '/api/v1/admin/member-grades') return ok(route, [])
+    if (path === '/api/v1/admin/product-rows') return ok(route, { rows: [{ productId: sku.productId,
+      productRevision: sku.productRevision, productNo: sku.productNo, name: sku.productName,
+      categoryId: sku.categoryId, fulfillmentKind: sku.fulfillmentKind, status: sku.productStatus,
+      mainImage: null, minListPriceFen: sku.listPriceFen, maxListPriceFen: sku.listPriceFen,
+      skuCount: 1, onSaleSkuCount: 0, matchedSkuIds: [] }], total: 1, page: 1, pageSize: 20 })
     if (path === '/api/v1/admin/sku-rows') return ok(route, { rows: [sku], total: 1, page: 1, pageSize: 20 })
     unmatched.push(`${route.request().method()} ${path}`)
     await route.fulfill({ status: 501, json: { success: false, error: { code: 'UNMOCKED', message: '未定义的测试请求' } } })

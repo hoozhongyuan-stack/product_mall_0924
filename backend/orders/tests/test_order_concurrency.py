@@ -15,7 +15,8 @@ from accounts.models import AdminAccount
 from catalog.models import Asset, Category, MemberGrade, Product, Sku, SkuUnitVersion
 from checkout.service import create_quote
 from customers.models import Member
-from inventory.models import InventoryBalance, InventoryLedger, InventoryReservationEvent, Warehouse
+from inventory.models import (InventoryBalance, InventoryLedger, InventoryReservationEvent,
+                              StockPool, StockPoolSku, Warehouse)
 from inventory.outbound_service import confirm_outbound, create_outbound
 from inventory.validation import InventoryError
 from orders.models import Order, OrderIdempotency
@@ -96,6 +97,23 @@ class OrderConcurrencyTests(TransactionTestCase):
         results, errors = self._race(lambda i: submit_order(
             Member.objects.select_related("grade").get(pk=self.members[i].id),
             {"quoteId": quotes[i], "paymentMethod": "OFFLINE"}, keys[i]))
+        self.assertEqual(len(results), 1)
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], OrderError)
+        self.assertEqual(errors[0].code, "OUT_OF_STOCK")
+        self.assertEqual(InventoryBalance.objects.get(sku=self.skus[0]).reserved_base_units, 2)
+        self.assertEqual(Order.objects.count(), 1)
+
+    def test_two_buyers_cannot_oversell_shared_pool_across_skus(self):
+        InventoryBalance.objects.filter(sku=self.skus[1]).delete()
+        pool = StockPool.objects.create(anchor_sku=self.skus[0], base_unit="件")
+        StockPoolSku.objects.bulk_create([
+            StockPoolSku(pool=pool, sku=sku) for sku in self.skus
+        ])
+        quotes = [self._quote(self.members[i], [self.skus[i].id], 2) for i in range(2)]
+        results, errors = self._race(lambda i: submit_order(
+            Member.objects.select_related("grade").get(pk=self.members[i].id),
+            {"quoteId": quotes[i], "paymentMethod": "OFFLINE"}, uuid.uuid4()))
         self.assertEqual(len(results), 1)
         self.assertEqual(len(errors), 1)
         self.assertIsInstance(errors[0], OrderError)

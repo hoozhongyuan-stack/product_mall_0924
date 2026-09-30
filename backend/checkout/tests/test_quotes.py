@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from accounts.models import AdminAccount
 from catalog.models import Asset, Category, MemberGrade, Product, Sku, SkuGradePrice, SkuUnitVersion
-from inventory.models import InventoryBalance, Warehouse
+from inventory.models import InventoryBalance, StockPool, StockPoolSku, Warehouse
 from customers.models import CustomerAddress, Member, MemberSession
 
 
@@ -45,6 +45,21 @@ class QuoteApiTests(TestCase):
         self.assertTrue(result["ready"])
         self.assertFalse(result["orderSubmissionAvailable"])
         self.assertEqual(result["availablePaymentMethods"], [])
+
+    def test_shared_pool_mixed_skus_cannot_quote_more_than_physical_stock(self):
+        single = Sku.objects.create(product=self.product, sku_code="S-SINGLE", spec_key="single",
+                                    list_price_fen=300, sale_status=Sku.SaleStatus.ON_SALE)
+        unit = SkuUnitVersion.objects.create(sku=single, base_unit="瓶", sale_unit="瓶", ratio=1)
+        single.current_unit = unit
+        single.save(update_fields=["current_unit"])
+        pool = StockPool.objects.create(anchor_sku=self.sku, base_unit="瓶")
+        StockPoolSku.objects.create(sku=self.sku, pool=pool)
+        StockPoolSku.objects.create(sku=single, pool=pool)
+        result = self.quote(items=[{"skuId": str(self.sku.id), "quantity": 2},
+                                   {"skuId": str(single.id), "quantity": 7}]).json()["data"]
+        self.assertFalse(result["ready"])
+        self.assertEqual([line["availableQuantity"] for line in result["lines"]], [3, 18])
+        self.assertIn("OUT_OF_STOCK", [line["status"] for line in result["lines"]])
 
     def test_quote_exposes_only_enabled_payment_method(self):
         with override_settings(ORDER_PAYMENT_METHODS_ENABLED={"WECHAT": False, "OFFLINE": True}):

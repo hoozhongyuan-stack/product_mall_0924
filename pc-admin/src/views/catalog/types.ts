@@ -43,6 +43,22 @@ export interface SkuRow {
   unit: SkuUnit
 }
 export interface SkuPage { rows: SkuRow[]; page: number; pageSize: number; total: number }
+export interface ProductRow {
+  productId: string
+  productRevision: number
+  productNo: string
+  name: string
+  categoryId: string
+  fulfillmentKind: 'SHIP' | 'REDEEM'
+  status: ProductStatus
+  mainImage: Asset | null
+  minListPriceFen: number | null
+  maxListPriceFen: number | null
+  skuCount: number
+  onSaleSkuCount: number
+  matchedSkuIds: string[]
+}
+export interface ProductPage { rows: ProductRow[]; page: number; pageSize: number; total: number }
 export interface ProductSku extends SkuRow { specOptionIds: string[] }
 export interface SpecOption { id?: string; clientKey?: string; value: string; sortOrder: number }
 export interface SpecAxis { id?: string; clientKey?: string; name: string; sortOrder: number; options: SpecOption[] }

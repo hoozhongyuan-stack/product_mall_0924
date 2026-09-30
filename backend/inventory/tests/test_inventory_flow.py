@@ -7,6 +7,9 @@ from django.test import Client, TestCase
 from accounts.models import AccountGroup, AdminAccount, GroupPermission, PermissionGroup
 from catalog.models import Category, Product, Sku, SkuUnitVersion
 from inventory.models import InboundDocument, InventoryBalance, InventoryLedger, Warehouse
+from inventory.pool_access import (PoolBindingError, bind_sku_to_pool, ensure_independent_pool,
+                                   pool_info_for_skus, resolve_anchor_id)
+from inventory.availability import default_available_base_units
 
 
 PASSWORD = "Safe owner passphrase 2026!"
@@ -73,6 +76,93 @@ class InventoryFlowTests(TestCase):
         self.assertEqual(InventoryLedger.objects.count(), 1)
         changed_key = self.post(self.owner, path, {"expectedRevision": 1}, str(uuid.uuid4()))
         self.assertEqual(changed_key.status_code, 409)
+
+    def test_shared_pool_inbound_keeps_one_balance_and_sale_sku_provenance(self):
+        warehouse = self.make_warehouse()
+        first = self.draft(warehouse)
+        self.post(self.owner, f"/api/v1/admin/inventory/inbounds/{first['inboundId']}/confirm",
+                  {"expectedRevision": 1}, str(uuid.uuid4()))
+        sibling = Sku.objects.create(product=self.sku.product, sku_code="SKU-BOX",
+                                     spec_key="box", list_price_fen=2200)
+        unit = SkuUnitVersion.objects.create(sku=sibling, base_unit="瓶", sale_unit="盒", ratio=3)
+        sibling.current_unit = unit
+        sibling.save(update_fields=["current_unit"])
+        pool_id = pool_info_for_skus([self.sku.id])[self.sku.id]["poolId"]
+        bind_sku_to_pool(sibling.id, uuid.UUID(pool_id), sibling.revision)
+        self.assertEqual(resolve_anchor_id(sibling.id), self.sku.id)
+        second = self.draft(warehouse, [{"skuId": str(sibling.id), "quantity": 1, "unit": "SALE"}])
+        confirmed = self.post(self.owner,
+                              f"/api/v1/admin/inventory/inbounds/{second['inboundId']}/confirm",
+                              {"expectedRevision": 1}, str(uuid.uuid4()))
+        self.assertEqual(confirmed.status_code, 200, confirmed.content)
+        self.assertEqual(InventoryBalance.objects.count(), 1)
+        self.assertEqual(InventoryBalance.objects.get().on_hand_base_units, 15)
+        self.assertEqual(InventoryLedger.objects.get(inbound_line__sku=sibling).sku_id, sibling.id)
+        _, available = default_available_base_units([self.sku.id, sibling.id])
+        self.assertEqual(available, {self.sku.id: 15, sibling.id: 15})
+        other = Sku.objects.create(product=self.sku.product, sku_code="SKU-OTHER",
+                                   spec_key="other", list_price_fen=1000)
+        other_unit = SkuUnitVersion.objects.create(sku=other, base_unit="瓶", sale_unit="瓶", ratio=1)
+        other.current_unit = other_unit
+        other.save(update_fields=["current_unit"])
+        InventoryBalance.objects.create(warehouse=Warehouse.objects.get(), sku=other,
+                                        on_hand_base_units=0)
+        with self.assertRaises(PoolBindingError):
+            bind_sku_to_pool(other.id, uuid.UUID(pool_id), other.revision)
+
+    def test_first_pool_binding_api_is_idempotent(self):
+        sibling = Sku.objects.create(product=self.sku.product, sku_code="SKU-FIRST-ALIAS",
+                                     spec_key="first-alias", list_price_fen=1200)
+        unit = SkuUnitVersion.objects.create(sku=sibling, base_unit="瓶", sale_unit="提", ratio=2)
+        sibling.current_unit = unit
+        sibling.save(update_fields=["current_unit"])
+        payload = {"skuId": str(sibling.id), "anchorSkuId": str(self.sku.id),
+                   "expectedSkuRevision": sibling.revision}
+        path = "/api/v1/admin/inventory/pool-bindings"
+        first = self.post(self.owner, path, payload)
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertTrue(first.json()["data"]["changed"])
+        second = self.post(self.owner, path, payload)
+        self.assertEqual(second.status_code, 200, second.content)
+        self.assertFalse(second.json()["data"]["changed"])
+        listed = self.owner.get(f"{path}?productId={self.sku.product_id}")
+        self.assertEqual(listed.status_code, 200, listed.content)
+        items = listed.json()["data"]["items"]
+        self.assertEqual(len(items), 2)
+        self.assertEqual({item["poolId"] for item in items}, {first.json()["data"]["poolId"]})
+
+    def test_binding_rejects_stale_or_incompatible_sku_and_rebinds_unused_pool(self):
+        anchor_pool = ensure_independent_pool(self.sku)
+        other = Sku.objects.create(product=self.sku.product, sku_code="SKU-UNUSED",
+                                   spec_key="unused", list_price_fen=1000)
+        with self.assertRaises(PoolBindingError):
+            ensure_independent_pool(other)
+        unit = SkuUnitVersion.objects.create(sku=other, base_unit="瓶", sale_unit="瓶", ratio=1)
+        other.current_unit = unit
+        other.save(update_fields=["current_unit"])
+        old_pool = ensure_independent_pool(other)
+        with self.assertRaises(PoolBindingError):
+            bind_sku_to_pool(other.id, anchor_pool.id, other.revision + 1)
+        self.assertEqual(resolve_anchor_id(other.id), other.id)
+        pool, changed = bind_sku_to_pool(other.id, anchor_pool.id, other.revision)
+        self.assertTrue(changed)
+        self.assertEqual(pool.id, anchor_pool.id)
+        self.assertEqual(resolve_anchor_id(other.id), self.sku.id)
+        self.assertFalse(type(old_pool).objects.filter(pk=old_pool.id).exists())
+        another = Sku.objects.create(product=self.sku.product, sku_code="SKU-OTHER-ANCHOR",
+                                     spec_key="other-anchor", list_price_fen=1000)
+        other_unit = SkuUnitVersion.objects.create(sku=another, base_unit="件", sale_unit="件", ratio=1)
+        another.current_unit = other_unit
+        another.save(update_fields=["current_unit"])
+        with self.assertRaises(PoolBindingError):
+            bind_sku_to_pool(another.id, anchor_pool.id, another.revision)
+        third = Sku.objects.create(product=self.sku.product, sku_code="SKU-THIRD-ANCHOR",
+                                   spec_key="third-anchor", list_price_fen=1000)
+        third_unit = SkuUnitVersion.objects.create(sku=third, base_unit="瓶", sale_unit="瓶", ratio=1)
+        third.current_unit = third_unit
+        third.save(update_fields=["current_unit"])
+        with self.assertRaises(PoolBindingError):
+            bind_sku_to_pool(other.id, ensure_independent_pool(third).id, other.revision)
 
     def test_draft_replay_does_not_create_second_confirmable_slip(self):
         warehouse = self.make_warehouse()
@@ -145,6 +235,10 @@ class InventoryFlowTests(TestCase):
         AccountGroup.objects.create(account=staff, group=group)
         reader = self.login("reader")
         self.assertEqual(reader.get("/api/v1/admin/warehouses").status_code, 200)
+        options = reader.get("/api/v1/admin/inventory/pool-product-options?keyword=SKU-1")
+        self.assertEqual(options.status_code, 200, options.content)
+        self.assertEqual(options.json()["data"]["items"][0]["productId"], str(self.sku.product_id))
+        self.assertEqual(reader.get("/api/v1/admin/product-rows").status_code, 403)
         self.assertEqual(self.post(reader, "/api/v1/admin/warehouses", {
             "code": "X", "name": "X 仓", "isDefault": True,
         }).status_code, 403)
