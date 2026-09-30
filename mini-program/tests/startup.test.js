@@ -194,3 +194,14 @@ test('backgrounding pauses visible countdown; returning resumes without a new la
     Date.now = originalNow
   }
 })
+
+test('ordinary launch from a previously selected category opens home while explicit links retain their route', () => {
+  startup.captureLaunch({ path: 'pages/index/index', query: {}, scene: 1001 })
+  assert.equal(startup.completeLaunch(), '/pages/home/home')
+  startup.captureLaunch({ path: 'pages/index/index', query: {}, scene: 1007 })
+  assert.equal(startup.completeLaunch(), '/pages/index/index')
+  startup.captureLaunch({ path: 'pages/index/index', query: { categoryId: 'wine' }, scene: 1001 })
+  assert.equal(startup.completeLaunch(), '/pages/index/index?categoryId=wine')
+  startup.captureLaunch({ path: 'pages/product/detail', query: { productId: 'p1' }, scene: 1011 })
+  assert.equal(startup.completeLaunch(), '/pages/product/detail?productId=p1')
+})

@@ -232,7 +232,7 @@ def product_rows_view(request):
         rows = [{"productId": str(item.id), "productRevision": item.revision,
                  "productNo": item.product_no, "name": item.name,
                  "categoryId": str(item.category_id), "fulfillmentKind": item.fulfillment_kind,
-                 "status": item.status,
+                 "status": item.status, "manuallyOffSale": item.manually_off_sale,
                  "mainImage": asset_data(item.main_image) if item.main_image_id else None,
                  "skuCount": item.sku_count, "onSaleSkuCount": item.on_sale_sku_count,
                  "minListPriceFen": item.min_list_price_fen,

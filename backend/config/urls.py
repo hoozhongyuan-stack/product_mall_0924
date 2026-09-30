@@ -4,6 +4,7 @@ from accounts import views
 from accounts import audit_read
 from accounts.password_views import password_view
 from catalog import views as catalog_views
+from catalog import product_sale_views as catalog_sale_views
 from catalog import media_views
 from pages import views as page_views
 from pages import startup_views, history, storefront_views
@@ -177,6 +178,7 @@ urlpatterns = [
     path("api/v1/admin/audit-logs", audit_read.audit_view),
     path("api/v1/admin/business-summary", business_read.summary_view),
     path("api/v1/admin/warehouses", inventory_views.warehouses_view),
+    path("api/v1/admin/warehouses/<uuid:warehouse_id>/status", inventory_views.warehouse_status_view),
     path("api/v1/admin/settlement/shipping-policy", shipping_views.shipping_policy_view),
     path("api/v1/admin/inventory/skus", inventory_views.skus_view),
     path("api/v1/admin/inventory/pool-product-options", inventory_views.pool_product_options_view),
@@ -207,8 +209,11 @@ urlpatterns = [
     path("api/v1/admin/sku-rows/batch-status", catalog_views.batch_status_view),
     path("api/v1/admin/products/batch-category/preview", catalog_views.batch_category_preview_view),
     path("api/v1/admin/products/batch-category", catalog_views.batch_category_view),
+    path("api/v1/admin/products/batch-sale-status/preview", catalog_sale_views.batch_product_sale_preview_view),
+    path("api/v1/admin/products/batch-sale-status", catalog_sale_views.batch_product_sale_status_view),
     path("api/v1/admin/products", catalog_views.products_view),
     path("api/v1/admin/products/<uuid:product_id>", catalog_views.product_detail_view),
+    path("api/v1/admin/products/<uuid:product_id>/sale-status", catalog_sale_views.product_sale_status_view),
     path("api/v1/admin/products/<uuid:product_id>/specs/preview", catalog_views.product_specs_preview_view),
     path("api/v1/admin/products/<uuid:product_id>/specs", catalog_views.product_specs_view),
     path("api/v1/admin/skus/<uuid:sku_id>/status", catalog_views.sku_status_view),

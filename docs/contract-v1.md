@@ -36,7 +36,7 @@
 | `audit_log` | `id`、`actor_id`、`action_code`、`object_type/id`、`before/after jsonb`、`result`、`request_id`、`occurred_at` | 高影响操作保留前后值与结果；敏感字段脱敏或只记变化类型。业务修改与成功审计在同一事务内写入。 |
 | `action_confirmation` | 凭证哈希、操作者、会话键、动作、对象、修订号、到期与核销时间 | 账号和权限组高影响操作使用 5 分钟一次性凭证；核销用数据库行锁保证并发请求无法复用。原始凭证仅在确认响应中返回，不入库。 |
 | `category` | `id`、`parent_id`、`name`、`sort_order`、`status ACTIVE/INACTIVE`、`revision` | 最多二级；父级不能指向自身或二级分类。商品只绑定启用的二级分类；一级分类只用于导航。停用有在售商品的分类须先处理关联商品。 |
-| `product` | `id`、`product_no`、`name`、`category_id`、`fulfillment_kind SHIP/REDEEM`、`status DRAFT/ON_SALE/OFF_SALE`、`ever_on_sale`、`description_content`、`revision` | 新建先保存草稿，所有 SKU 初始下架。`status` 由 SKU 状态和是否曾上架派生：任一 SKU 在售则 `ON_SALE`；全部下架且曾上架则 `OFF_SALE`；从未上架则 `DRAFT`。`product_no` 全库大小写不重复，1—64 字符；名称最多 120 字符。富文本必须净化。库存决定能否购买，不决定商品是否展示。 |
+| `product` | `id`、`product_no`、`name`、`category_id`、`fulfillment_kind SHIP/REDEEM`、`status DRAFT/ON_SALE/OFF_SALE`、`ever_on_sale`、`manually_off_sale`、`description_content`、`revision` | 新建先保存草稿，所有 SKU 初始下架。商品可独立手动下架；该闸门保留各 SKU 状态，关闭时商品不可公开展示或交易。解除闸门后，若有在售 SKU 则商品恢复在售；无在售 SKU 的已发布商品仍下架。草稿首次上架需明确选择至少一个符合条件的 SKU。`product_no` 全库大小写不重复，1—64 字符；名称最多 120 字符。富文本必须净化。库存决定能否购买，不决定商品是否展示。 |
 | `product_spec_axis`、`product_spec_option`、`sku_spec_selection` | 规格项名、排序；规格值、排序；SKU 与选中值 | 每商品最多 2 个规格项、每项最多 20 个值、组合最多 100 个。选中值必须属于该商品的规格项；同商品 SKU 组合由稳定 ID 生成唯一键，不用展示名称。 |
 | `sku` | `id`、`product_id`、`sku_code`、`list_price_fen bigint`、`sale_status ON_SALE/OFF_SALE`、`unit_version_id`、`revision` | `sku_code` 在单商户内大小写不重复，1—64 字符；与商品编号、规格名值分列。`list_price_fen >= 0`。已有订单或库存流水的 SKU 编码及规格含义不直接覆盖。 |
 | `member_grade` | `id`、`code`、`name`、`rank`、`enabled`、`revision` | 阶段 A 建立等级字典，供 SKU 等级价引用和展示；默认等级按需求文档，自动升降级及运营配置留待阶段 D。`code` 和 `rank` 各自唯一。 |
@@ -67,13 +67,15 @@
 | `GET/POST /api/v1/admin/categories`、`PATCH /api/v1/admin/categories/{id}` | `parentId`、名称、排序、状态、`expectedRevision` | 两级分类树；管理端读取时返回关联商品数与在售商品数，停用前检查在售商品。 |
 | `GET /api/v1/admin/member-grades` | 无 | 返回阶段 A 的等级字典供 SKU 等级价编辑；阶段 D 再提供等级规则管理。 |
 | `GET /api/v1/admin/sku-rows` | `keyword`、`categoryId`、`fulfillmentKind`、SKU 状态、`page`、`pageSize` | 一行一个 SKU：`skuId`、`skuCode`、`skuRevision`、`productId`、`productRevision`、`productNo`、`productName`、商品类型、有序 `specs[{name,value}]`、日常价、等级价、状态。`rowKey=skuId`；当前分页信息位于 `data` 的 `page/pageSize/total`。库存尚未接入。 |
-| `GET /api/v1/admin/product-rows` | `keyword`（商品名、商品编号或 SKU 编码）、`categoryId`、`fulfillmentKind`、`productStatus`、`skuStatus`、`page`、`pageSize` | 商品管理默认目录按 SPU 分页，一行一个商品；`rows` 返回商品 ID/编号/名称、分类、履约类型、派生商品状态、主图、SKU 总数/在售数、SKU 日常价最小/最大值及本次搜索命中的 `matchedSkuIds`。SKU 状态筛选表示“包含该状态 SKU 的商品”，不改变 SPU 分页总数口径。展开详情复用 `GET /products/{id}`；旧 SKU 列表接口保留给明确的 SKU 批量工作区。 |
+| `GET /api/v1/admin/product-rows` | `keyword`（商品名、商品编号或 SKU 编码）、`categoryId`、`fulfillmentKind`、`productStatus`、`skuStatus`、`page`、`pageSize` | 商品管理默认目录按 SPU 分页，一行一个商品；`rows` 返回商品 ID/编号/名称、分类、履约类型、商品有效状态与手动下架标记、主图、SKU 总数/在售数、SKU 日常价最小/最大值及本次搜索命中的 `matchedSkuIds`。SKU 状态筛选表示“包含该状态 SKU 的商品”，不改变 SPU 分页总数口径。展开详情复用 `GET /products/{id}`；旧 SKU 列表接口保留给明确的 SKU 批量工作区。 |
 | `POST /api/v1/admin/products`、`GET/PATCH /api/v1/admin/products/{id}` | 商品基础字段、规格项和值、SKU 列表、素材 ID、`expectedRevision` | 商品与 SKU 独立 ID/编码；服务端校验规格上限、组合唯一及素材绑定。创建只允许草稿及下架 SKU；PATCH 只修改商品基础字段及媒体替换/移除，拒绝提交独立商品 `status`。规格编辑使用下列独立接口。 |
 | `POST /api/v1/admin/products/{id}/specs/preview`、`PUT /api/v1/admin/products/{id}/specs` | 草稿商品的完整 `specAxes`、`skus`、`expectedRevision`；保留的规格项/值须带原 ID，保留的 SKU 须带 `id`、`expectedSkuRevision`；PUT 另带预览返回的 `previewToken` | 两个接口均需 `catalog.write`、`sku.price.write`、`sku.status.write`、`sku.unit.write`。预览返回保留/新增/移除 SKU 和移除项的等级价、单位版本数量；令牌绑定操作者、商品、请求内容和 SKU 修订快照，10 分钟有效。PUT 锁定商品及 SKU，在一个事务中重新校验预览、修订、组合和全局 SKU 编码；匹配组合保留 SKU ID 与未变资料，新增组合建新 SKU，移除组合删除草稿 SKU 与其当前资料并写审计。非草稿拒绝。 |
-| `POST /api/v1/admin/sku-rows/batch-status` | 当前页选中 `items[{skuId,expectedRevision}]`、`saleStatus` | 最多 100 个 SKU，每项在事务中锁所属商品再锁 SKU、校验修订和上架前置条件、更新商品派生状态及审计；返回 `results[{id,success,revision,productStatus?,productRevision?,code?,message?}]` 及成功/失败数。逐项失败不影响已成功项；客户端变更筛选或分页时清空选择。 |
+| `POST /api/v1/admin/sku-rows/batch-status` | 当前页选中 `items[{skuId,expectedRevision}]`、`saleStatus` | 最多 100 个 SKU，每项在事务中锁所属商品再锁 SKU、校验修订和上架前置条件、更新商品有效状态及审计；手动下架闸门继续生效。返回 `results[{id,success,revision,productStatus?,productRevision?,code?,message?}]` 及成功/失败数。逐项失败不影响已成功项；客户端变更筛选或分页时清空选择。 |
+| `PATCH /api/v1/admin/products/{id}/sale-status` | `{expectedRevision,saleStatus,initialSkuIds?}` | SPU 单项上下架；手动下架保留 SKU 销售状态。草稿首次上架需选择至少一个本商品且具备销售单位的 SKU，并满足主图、有效分类等发布条件；随后恢复上架沿用原在售 SKU。全部上下架操作同时需要 `catalog.write` 与 `sku.status.write`，校验修订号并在事务中审计。 |
+| `POST /api/v1/admin/products/batch-sale-status/preview`、`POST /api/v1/admin/products/batch-sale-status` | `{saleStatus,items:[{productId,expectedRevision,initialSkuIds?}]}` | 最多 100 个 SPU，均需 `catalog.write` 与 `sku.status.write`。预检逐项给可操作性、原因及草稿 SKU 选项；执行逐商品事务校验并返回成功/失败明细，不因单项失败回滚已成功项。列表选择只作用于当前页，筛选、换页和刷新时清空；批量上架草稿仍由操作者逐项选择 SKU。 |
 | `POST /api/v1/admin/products/batch-category/preview` | 商品目录提交当前页选中的 `productIds[]`；旧 SKU 工作区仍可提交 `skuIds[]`；两种请求均须附目标 `categoryId` | 商品目录按 SPU 预览，包含零 SKU 草稿；旧 SKU 请求按商品去重。返回商品与 SKU 数、商品修订号和不可操作原因，并生成 10 分钟有效的签名 `previewToken`。 |
 | `POST /api/v1/admin/products/batch-category` | `items[{productId,expectedRevision}]`、目标 `categoryId`、`previewToken`、`Idempotency-Key` 请求头 | 仅可提交预览中允许操作的商品；预览摘要不匹配或过期则拒绝。逐商品重新校验，返回逐项成功/失败；同一操作者、同一键和同一请求重试返回已记录结果，换内容返回 409。 |
-| `PATCH /api/v1/admin/skus/{id}/status`、`PATCH /api/v1/admin/skus/{id}/price`、`PUT /api/v1/admin/skus/{id}/grade-prices`、`PUT /api/v1/admin/skus/{id}/unit` | SKU 状态、日常价、等级价数组或新单位版本、`expectedRevision` | 每项独立验权限与修订号；SKU 首次上架要求商品有主图、启用的二级及一级分类和销售单位。SKU 与商品派生状态、修订号、审计同事务保存。等级价 PUT 仅替换已启用等级的价格，保留已停用等级的原价及旧版本；单位旧版本保留。 |
+| `PATCH /api/v1/admin/skus/{id}/status`、`PATCH /api/v1/admin/skus/{id}/price`、`PUT /api/v1/admin/skus/{id}/grade-prices`、`PUT /api/v1/admin/skus/{id}/unit` | SKU 状态、日常价、等级价数组或新单位版本、`expectedRevision` | 每项独立验权限与修订号；SKU 首次上架要求商品有主图、启用的二级及一级分类和销售单位。SKU 与商品有效状态、修订号、审计同事务保存；商品手动下架时修改 SKU 状态不会解除 SPU 下架。等级价 PUT 仅替换已启用等级的价格，保留已停用等级的原价及旧版本；单位旧版本保留。 |
 | `POST /api/v1/admin/assets` | `multipart/form-data` 的 `kind=IMAGE/VIDEO/GIF` 与 `file` | 仅 `asset.upload` 可调用，返回 `assetId`、MIME、大小、宽高及 `adminUrl`；校验文件声明、容器结构和实际解码，GIF 须至少 2 帧。图片/GIF 10 MiB、视频 50 MiB。本机使用已安装的 `ffmpeg`；上传服务缺少解码器时返回 503。文件写入 `MALL_MEDIA_ROOT`，生产环境必须显式配置持久目录。未绑定素材分别受单账号 200 MiB、全站 1 GiB 配额限制，超过 24 小时由 `purge_orphan_media` 清理，上传时也会补充清理。 |
 | `GET /api/v1/admin/assets/{id}/file`、`GET /api/v1/app/assets/{id}/file` | 管理端预览、公开素材读取 | 管理端需 `asset.read` 或符合页面/启动草稿、当前或历史发布引用及本人未绑定上传的受限预览条件；公开 URL 在素材被当前上架商品、首页/微页面当前发布版本的可见组件，或启动页当前发布版本引用时可访问；草稿、隐藏组件和旧版独占素材不可公开。MP4 支持单段 `Range` 请求。 |
 | `GET/PUT /api/v1/admin/pages/home/draft` | 首页组件、顺序、显隐、站内链接与三项主题颜色；PUT 含 `expectedRevision` | 返回 `pageId`、草稿 `revision`、`config`、`publishedRevision`；保存草稿允许逐步配置未完成组件，不改变线上版本。`page.read` 可读，`page.edit` 可写。 |
@@ -82,6 +84,8 @@
 | `GET/PUT /api/v1/admin/startup/draft` | GET 无；PUT `{expectedRevision,gifAssetId,fallbackAssetId}`，两个素材 ID 可暂空 | 返回 `{revision,gifAssetId,fallbackAssetId,publishedRevision}`。`startup.read` 可读，`startup.edit` 可写；素材类型与文件存在性由服务端校验；过期修订返回 `REVISION_CONFLICT`。 |
 | `POST /api/v1/admin/startup/preview`、`POST /api/v1/admin/startup/publish` | 预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另需 `Idempotency-Key` 与绑定 `startup.publish`、对象 `startup`、当前修订的一次性 `X-Action-Confirmation` | 预览返回修订及两张素材的管理端 URL；发布要求两项有效并返回 `versionId/revision/gifUrl/fallbackUrl`，后两项为公开相对路径。同键同修订重试返回原版本；不同键重复发布当前修订返回 409；版本、指针、请求记录和审计同事务提交，失败旧版继续生效。 |
 | `GET /api/v1/app/startup` | 无 | 只返回当前发布版本的 `versionId/revision/gifUrl/fallbackUrl`，素材 URL 为 `/api/v1/app/assets/{id}/file` 相对路径；未发布返回 `404 STARTUP_UNPUBLISHED`。 |
+
+小程序普通冷启动完成启动页后进入首页；明确的分享、扫码或携带有效目标参数的入口仍进入其目标页面。底部“我的”页面向游客开放页面结构和公共入口，订单、积分、收货地址等私人数据须登录后读取；登录成功回到原入口并保留订单筛选，登出、登录失效或账号切换时清除本地私人展示数据。
 | `GET /api/v1/app/home`、`GET /api/v1/app/pages/{id}` | 无；微页面 ID 为 UUID | 只返回当前发布版本的可见组件。首页返回 `versionId/config`，未发布为 `404 HOME_UNPUBLISHED`；微页面返回 `pageId/versionId/name/config`，名称为发布时快照，未发布或非微页面为 `404 PAGE_UNPUBLISHED`；非 UUID 路径由路由层返回 404。`/api/v1/app/bootstrap` 仍待实现。 |
 | `GET /api/v1/app/categories`、`GET /api/v1/app/products`、`GET /api/v1/app/products/{id}` | 商品列表支持 `categoryId`、`keyword`、`page`、`pageSize`；详情以商品 ID 获取 | 分类接口返回启用的两级分类；商品接口只返回启用分类下有主图及在售 SKU 的上架商品。列表保留最低在售 SKU 日常价 `minListPriceFen`，并给 `cartEligible` 与 `availabilityCode`；详情每个 SKU 给 `listPriceFen`、当前 `applicablePriceFen`、`priceSource`、`availableQuantity`、`cartEligible`。有效会员按等级显示适用价，游客显示日常价。库存按默认启用仓对应库存池的 `(账面－预留) ÷ 该 SKU 当前销售单位比例` 计算；共享池 SKU 的展示数量不可相加。即使有库存，`purchasable` 仍为 false，直到订单链路验收；下架后详情及素材返回 404。 |
 
@@ -179,11 +183,12 @@
 
 ### 5.2 B1 仓库、余额与入库接口
 
-B1 的数据由 `inventory` 模块负责。仓库编码大小写唯一，首个仓库必须是唯一默认仓；本切片可新增非默认仓，默认仓切换与停用留待订单锁库规则接入时实现。`inventory_balance(warehouse_id, sku_id)` 唯一，数据库约束 `on_hand_base_units >= 0`、`0 <= reserved_base_units <= on_hand_base_units`。已确认的库存流水由 PostgreSQL 触发器拒绝更新和删除；错误须在后续调整单能力中写反向流水。`catalog/inventory_access.py` 是库存模块读取 SKU 当前单位的入口，库存权限不授予价格编辑。已有入库草稿、余额或流水引用的 SKU 不得移除、改编码、改基本单位或改已使用规格含义；商品规格预览和保存、SKU 单位接口均重新校验并返回 `SKU_INVENTORY_REFERENCED`，数据库外键继续保护关联行。
+B1 的数据由 `inventory` 模块负责。仓库编码大小写唯一，首个仓库必须是唯一默认仓；可新增非默认仓。当前支持启停非默认仓，默认仓切换仍需另行治理。`inventory_balance(warehouse_id, sku_id)` 唯一，数据库约束 `on_hand_base_units >= 0`、`0 <= reserved_base_units <= on_hand_base_units`。已确认的库存流水由 PostgreSQL 触发器拒绝更新和删除；错误须在后续调整单能力中写反向流水。`catalog/inventory_access.py` 是库存模块读取 SKU 当前单位的入口，库存权限不授予价格编辑。已有入库草稿、余额或流水引用的 SKU 不得移除、改编码、改基本单位或改已使用规格含义；商品规格预览和保存、SKU 单位接口均重新校验并返回 `SKU_INVENTORY_REFERENCED`，数据库外键继续保护关联行。
 
 | 接口 | 输入及结果 | 权限与事务 |
 |---|---|---|
 | `GET/POST /api/v1/admin/warehouses` | GET 返回 `{items:[{warehouseId,code,name,isDefault,enabled,revision}]}`；POST `{code,name,isDefault}` 创建仓库。 | `inventory.read` / `inventory.manage`；编码和唯一默认仓由数据库兜底。 |
+| `PATCH /api/v1/admin/warehouses/{id}/status` | `{enabled,expectedRevision}` 启用或停用仓库。 | `inventory.manage`；默认仓不可停用，非默认仓有账面库存、有效预留或未完成单据时不可停用；历史记录继续可查。修订冲突返回 409，成功操作写审计。 |
 | `GET /api/v1/admin/inventory/skus` | `keyword/page/pageSize/warehouseId?`；保留原字段及分页，追加 `productNo`、有序 `specs[{name,value}]`、`mainImage{assetId,adminUrl}|null`、`warehouseStock{warehouseId,onHandBaseUnits,reservedBaseUnits,availableBaseUnits}|null`。未传仓库时库存为 null，指定仓库但无余额时为 0；仓库参数无效 400、不存在 404。关键词匹配商品名、商品编号、SKU 编码及规格值，允许选择下架 SKU，不返回价格。 | `inventory.read`；分页上限 100。 |
 | `GET /api/v1/admin/inventory/balances` | 可按 `warehouseId/keyword` 筛选；分页返回仓库、SKU、基本单位、账面、锁定、可售数量。仅列已有余额行，未入库的 SKU 不伪装为可售。 | `inventory.read`；可售量由服务端以账面减锁定计算。 |
 | `GET/POST /api/v1/admin/inventory/inbounds`、`GET /inbounds/{id}` | POST `{warehouseId,reason,items:[{skuId,quantity,unit:BASE\|SALE}]}` 与 UUID `Idempotency-Key` 保存 1—50 行草稿；明细返回每行操作单位、版本、比例及基本单位换算快照。列表和详情可重新打开。 | 读需 `inventory.read`，创建需 `inventory.manage`；`(actor,key)` 唯一，同键同内容返回同一草稿、不同内容冲突；草稿不改余额。 |
@@ -213,6 +218,8 @@ B1 仅完成真实入库与库存读取；人工出库、盘点、订单占用�
 | `POST /stocktakes/{id}/submit` | `{expectedRevision,items:[{skuId,countedBaseUnits,reason}]}` 与 UUID `Idempotency-Key`；须提交任务内全部 SKU，数量为非负基本单位整数，有差异时须填原因；返回最新账面和待审核差异。 | `inventory.manage`；修订不符拒绝覆盖，单位或 SKU 身份变化拒绝；同键重试返回同一结果，提交失败不留部分结果。 |
 | `POST /stocktakes/{id}/return` | `{expectedRevision,reason}` 与 UUID `Idempotency-Key`；待审核单退回盘点中，保留可追溯的审核意见；盘点人重新录入并提交。 | `inventory.review`；不能直接编辑待审核数据。 |
 | `POST /stocktakes/{id}/approve` | `{expectedRevision}` 与 UUID `Idempotency-Key`；审核前重读最新账面及锁定量。若数量、锁定量或余额行更新时间与提交快照不同，返回 `BOOK_CHANGED`，须退回重盘；如调减后低于锁定量则拒绝。 | `inventory.review`；同一事务内更新全部余额、生成非零差异的不可改写调整流水、更新任务状态并记录成功审计。重复同键不重复调账，不同键/过期修订拒绝。主账号拥有该权限；库存管理预设组默认只含读写，审核需单独授予。 |
+
+库存查询、入库单、出库单、盘点单、库存流水共用列表交互：服务端返回 `page/pageSize/total`，管理端提供每页 20/50/100 条、页码与跳页、当前页勾选和全选、所选行 CSV 导出；切换筛选、页码或刷新时清空选择，不将多页选择误作全量。库存查询支持关键词、仓库和可售状态，余额行按仓库与库存池锚 SKU 标识，共享池成员编码仅作为说明，不能重复汇总实物库存。三类单据支持单号、仓库、状态、创建日期区间；流水支持关键词、仓库、变动类型、发生日期区间，流水仍按实际业务 SKU 追溯。日期和分页参数在服务端校验，导出只取当前已勾选行，不触发库存写操作。
 
 零差异审核可以完成任务而不生成零数量流水。退回时将本次提交的逐行账面、实盘、差异、原因和修订号留在审计日志，再清空可编辑明细供重盘。已被后续操作取代的幂等动作重放返回 `ACTION_ALREADY_APPLIED`，不回退任务状态。调整流水保留操作前后余额、基本单位、差异原因和盘点明细来源，不能直接改写或删除；更正已审核盘点应发起新的盘点任务。选定 SKU 范围以每单 50 行为上限，整仓自动分批创建尚未开放。该切片不开放小程序购买；订单占用、销售扣减与 C01—C11 并发验收仍在后续交易切片。
 
@@ -472,7 +479,7 @@ PC路径为 `/aftersales`、`/aftersales/{caseId}`，由订单列表/详情和�
 
 ### 5.20 D5：纯积分兑换
 
-兑换商品关联既有SKU，独立设置正整数积分售价和 `DRAFT/ON_SALE/OFF_SALE` 状态；现金售价、会员等级折扣与现金抵扣比例不参与计算。两种销售方式共享SKU库存，兑换发布仍要求已发布商品内容、有效分类、主图、当前单位及未到期的核销截止日。兑换上下架独立于现金销售开关。
+兑换商品关联既有SKU，独立设置正整数积分售价和 `DRAFT/ON_SALE/OFF_SALE` 状态；现金售价、会员等级折扣与现金抵扣比例不参与计算。两种销售方式共享SKU库存，兑换发布仍要求已发布商品内容、有效分类、主图、当前单位及未到期的核销截止日。兑换上下架独立于现金销售开关；现金 SKU 单独下架不关闭已发布的积分兑换，SPU 手动下架闸门则同时隐藏该商品的积分兑换入口。
 
 本片一次兑换一个商品，数量1—99；积分售价1—1000000。快递兑换积分售价包含配送成本，订单包邮，不再收现金或积分运费。核销兑换使用商品固定截止日。订单不使用优惠券、不增加有效消费或消费积分、不激活等级规则。
 

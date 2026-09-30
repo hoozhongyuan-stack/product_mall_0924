@@ -51,6 +51,7 @@ export interface ProductRow {
   categoryId: string
   fulfillmentKind: 'SHIP' | 'REDEEM'
   status: ProductStatus
+  manuallyOffSale: boolean
   mainImage: Asset | null
   minListPriceFen: number | null
   maxListPriceFen: number | null
@@ -70,6 +71,7 @@ export interface ProductDetail {
   fulfillmentKind: 'SHIP' | 'REDEEM'
   redeemValidUntil: string | null
   status: ProductStatus
+  manuallyOffSale: boolean
   descriptionHtml: string
   productRevision: number
   mainImage: Asset | null

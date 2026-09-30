@@ -1,7 +1,9 @@
 import { createApp } from 'vue'
-import { ElButton, ElDialog, ElDrawer, ElTag, ElInput, ElLoading, ElOption, ElPagination, ElSelect } from 'element-plus'
+import { ElButton, ElCheckbox, ElDatePicker, ElDialog, ElDrawer, ElTag, ElInput, ElLoading, ElOption, ElPagination, ElSelect } from 'element-plus'
 import 'element-plus/theme-chalk/base.css'
 import 'element-plus/theme-chalk/el-button.css'
+import 'element-plus/theme-chalk/el-checkbox.css'
+import 'element-plus/theme-chalk/el-date-picker.css'
 import 'element-plus/theme-chalk/el-input.css'
 import 'element-plus/theme-chalk/el-overlay.css'
 import 'element-plus/theme-chalk/el-dialog.css'
@@ -17,5 +19,5 @@ import App from './App.vue'
 import { router } from './router'
 import './style.css'
 
-createApp(App).use(router).use(ElButton).use(ElInput).use(ElDialog)
+createApp(App).use(router).use(ElButton).use(ElCheckbox).use(ElDatePicker).use(ElInput).use(ElDialog)
   .use(ElDrawer).use(ElTag).use(ElSelect).use(ElOption).use(ElPagination).use(ElLoading).mount('#app')

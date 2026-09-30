@@ -4,6 +4,7 @@ const ENTRY_ROUTES = new Set([
   'pages/home/home', 'pages/index/index',
   'pages/product/detail', 'pages/micro/detail',
 ])
+const EXPLICIT_ENTRY_SCENES = new Set([1007, 1008, 1011, 1012, 1013, 1044, 1047, 1048, 1049])
 
 let context = null
 
@@ -15,6 +16,7 @@ function targetFromOptions(options = {}) {
     .filter(([key, value]) => /^[A-Za-z][A-Za-z0-9_]{0,49}$/.test(key) &&
       (typeof value === 'string' || typeof value === 'number') && String(value).length <= 1000)
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+  if (path !== 'pages/home/home' && !params.length && !EXPLICIT_ENTRY_SCENES.has(Number(options.scene))) return HOME_URL
   return `/${path}${params.length ? `?${params.join('&')}` : ''}`
 }
 

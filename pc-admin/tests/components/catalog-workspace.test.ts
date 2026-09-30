@@ -69,6 +69,44 @@ describe('focused product workspace', () => {
     expect(vi.mocked(api).mock.calls.some(([path]) => path === '/products/p1')).toBe(false)
     expect(wrapper.get('.catalog-impact-summary').text()).toContain('1 个商品')
   })
+  it('requires explicit SKU selection before first SPU publish and sends one product revision', async () => {
+    const previous = vi.mocked(api).getMockImplementation()!
+    vi.mocked(api).mockImplementation((path, init) => {
+      if (path === '/products/batch-sale-status/preview') {
+        const payload = JSON.parse(String(init?.body))
+        return Promise.resolve({ items: [{ productId: 'p1', productNo: 'P-1', productRevision: 4,
+          status: 'DRAFT', skuCount: 1, onSaleSkuCount: 0,
+          skuOptions: [{ skuId: 'sku1', skuCode: 'SKU-1', hasUnit: true }],
+          canChange: payload.items[0].initialSkuIds.length > 0,
+          reason: payload.items[0].initialSkuIds.length ? undefined : '请先选择 SKU' }] })
+      }
+      if (path === '/products/batch-sale-status') return Promise.resolve({
+        results: [{ id: 'p1', success: true, revision: 5 }], successCount: 1, failedCount: 0,
+      })
+      return previous(path, init)
+    })
+    const wrapper = await setup()
+    await button(wrapper, '上架商品').trigger('click'); await flushPromises()
+    expect((button(wrapper, '确认执行').element as HTMLButtonElement).disabled).toBe(true)
+    await wrapper.get('.catalog-batch-preview input[type="checkbox"]').setValue(true)
+    await button(wrapper, '核对影响范围').trigger('click'); await flushPromises()
+    expect((button(wrapper, '确认执行').element as HTMLButtonElement).disabled).toBe(false)
+    await button(wrapper, '确认执行').trigger('click'); await flushPromises()
+    const sent = vi.mocked(api).mock.calls.find(([path]) => path === '/products/batch-sale-status')!
+    expect(JSON.parse(String(sent[1]?.body))).toEqual({ saleStatus: 'ON_SALE', items: [
+      { productId: 'p1', expectedRevision: 4, initialSkuIds: ['sku1'] },
+    ] })
+  })
+  it('hides SPU sale actions without SKU status permission', async () => {
+    const limited = { ...account, permissionCodes: account.permissionCodes.filter((code) => code !== 'sku.status.write') }
+    const wrapper = mount(ProductManagement, { attachTo: document.body, props: { account: limited },
+      global: { provide: { 'admin-account': ref(limited) }, stubs: { AssetPicker: true } } })
+    wrappers.push(wrapper)
+    await flushPromises()
+    await wrapper.get('input[aria-label="选择商品 P-1"]').setValue(true)
+    expect(wrapper.text()).toContain('商品上下架还需要 SKU 状态权限')
+    expect(wrapper.findAll('button').some((item) => ['上架商品', '下架商品', '批量上架商品', '批量下架商品'].includes(item.text()))).toBe(false)
+  })
   it('keeps rich description changes under the existing dirty and product revision boundary', async () => {
     const wrapper = await setup()
     await button(wrapper, '编辑商品').trigger('click'); await flushPromises()
