@@ -63,6 +63,53 @@ class PackageTests(SimpleTestCase):
             build_package(self.root, 10)
         self.assertEqual(raised.exception.code, "PACKAGE_TOO_LARGE")
 
+    def test_styles_are_packaged_and_missing_local_wxss_import_is_rejected(self):
+        (self.root / 'styles').mkdir()
+        (self.root / 'styles' / 'tokens.wxss').write_text(':root { color: red; }', encoding='utf-8')
+        (self.root / 'styles' / 'purchase.wxss').write_text('.price { color: red; }', encoding='utf-8')
+        (self.root / 'app.wxss').write_text(
+            '/* @import "styles/ignored.wxss"; */\n@import "/styles/tokens.wxss";', encoding='utf-8')
+        (self.root / 'pages' / 'home' / 'home.wxss').write_text(
+            '@import "../../styles/purchase.wxss";', encoding='utf-8')
+        package = build_package(self.root, 100_000)
+        with zipfile.ZipFile(io.BytesIO(package.data)) as archive:
+            self.assertIn('styles/tokens.wxss', archive.namelist())
+            self.assertIn('styles/purchase.wxss', archive.namelist())
+        (self.root / 'styles' / 'tokens.wxss').unlink()
+        with self.assertRaises(PackageError) as raised:
+            build_package(self.root, 100_000)
+        self.assertEqual(raised.exception.code, 'PACKAGE_IMPORT_MISSING')
+        (self.root / 'styles' / 'tokens.wxss').write_text(':root { color: red; }', encoding='utf-8')
+        (self.root / 'app.wxss').write_text('@import "../outside.wxss";', encoding='utf-8')
+        with self.assertRaises(PackageError) as raised:
+            build_package(self.root, 100_000)
+        self.assertEqual(raised.exception.code, 'PACKAGE_IMPORT_MISSING')
+
+    def test_repository_wxss_dependencies_are_in_snapshot(self):
+        source = Path(__file__).resolve().parents[3] / 'mini-program'
+        package = build_package(source, 20 * 1024 * 1024)
+        with zipfile.ZipFile(io.BytesIO(package.data)) as archive:
+            self.assertIn('styles/tokens.wxss', archive.namelist())
+            self.assertIn('styles/purchase.wxss', archive.namelist())
+
+    def test_styles_directory_keeps_private_file_and_symlink_guards(self):
+        styles = self.root / 'styles'
+        styles.mkdir()
+        (styles / '.private.wxss').write_text('secret', encoding='utf-8')
+        (styles / 'tokens.wxss').write_text('.ok {}', encoding='utf-8')
+        with zipfile.ZipFile(io.BytesIO(build_package(self.root, 100_000).data)) as archive:
+            self.assertIn('styles/tokens.wxss', archive.namelist())
+            self.assertNotIn('styles/.private.wxss', archive.namelist())
+        (styles / 'private.key').write_text('secret', encoding='utf-8')
+        with self.assertRaises(PackageError) as raised:
+            build_package(self.root, 100_000)
+        self.assertEqual(raised.exception.code, 'SOURCE_INVALID')
+        (styles / 'private.key').unlink()
+        (styles / 'link.wxss').symlink_to(self.root / 'app.js')
+        with self.assertRaises(PackageError) as raised:
+            build_package(self.root, 100_000)
+        self.assertEqual(raised.exception.code, 'SOURCE_INVALID')
+
     def test_symlink_rejected_and_missing_source_fails_closed(self):
         (self.root / "lib").mkdir()
         (self.root / "lib" / "link.js").symlink_to(self.root / "app.js")

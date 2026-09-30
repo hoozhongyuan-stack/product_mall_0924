@@ -47,6 +47,10 @@ def public_diagnostic(job):
     if job.status == 'RESOLVED':
         return '此前上传结果未确认，任务已按核查说明人工关闭。', ''
     if job.failure_code == 'WECHAT_REJECTED':
+        # Official DevTools: DEV_COMPILE_WXSS_FAIL = -80056.
+        if job.inner_platform_error_code == -80056:
+            return ('微信编译 WXSS 样式失败。',
+                    '检查代码包是否包含 @import 引用的全部样式文件，并修正样式语法后重新构建上传。')
         detail = PLATFORM_REASONS.get(job.platform_reason)
         if detail:
             return detail

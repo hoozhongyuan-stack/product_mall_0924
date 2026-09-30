@@ -45,6 +45,17 @@ class GitSourceMixin:
 
 
 class TrustedSourceTests(GitSourceMixin, SimpleTestCase):
+    def test_trusted_git_package_keeps_style_imports(self):
+        (self.source / 'styles').mkdir()
+        (self.source / 'styles' / 'tokens.wxss').write_text(':root { color: red; }', encoding='utf-8')
+        (self.source / 'app.wxss').write_text('@import "styles/tokens.wxss";', encoding='utf-8')
+        git(self.repo, 'add', 'mini-program')
+        git(self.repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+            'commit', '-qm', 'styles')
+        package = build_git_package(self.repo, git(self.repo, 'rev-parse', 'HEAD'), 100_000)
+        with zipfile.ZipFile(io.BytesIO(package.data)) as archive:
+            self.assertIn('styles/tokens.wxss', archive.namelist())
+
     def test_release_overlay_uses_configured_app_and_https_origin_without_editing_git(self):
         (self.source / 'project.config.json').write_text('{"appid":"touristappid"}', encoding='utf-8')
         (self.source / 'app.js').write_text("App({globalData:{apiBaseUrl:'http://127.0.0.1:8000'}})", encoding='utf-8')

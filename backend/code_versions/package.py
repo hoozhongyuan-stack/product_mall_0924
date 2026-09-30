@@ -3,6 +3,8 @@
 import hashlib
 import io
 import os
+import posixpath
+import re
 import stat
 import zipfile
 from dataclasses import dataclass
@@ -10,10 +12,12 @@ from pathlib import Path
 
 
 ROOT_FILES = ("app.js", "app.json", "app.wxss", "project.config.json", "sitemap.json")
-SOURCE_DIRS = ("assets", "components", "lib", "pages")
+SOURCE_DIRS = ("assets", "components", "lib", "pages", "styles")
 IGNORED_DIRS = frozenset({"node_modules", "tests", "__tests__", "__pycache__"})
 EXTENSIONS = frozenset({".js", ".json", ".wxml", ".wxss", ".svg", ".png",
                         ".jpg", ".jpeg", ".gif", ".webp"})
+WXSS_IMPORT = re.compile(r'''@import\s+(?:url\(\s*)?(["'])([^"']+)\1\s*\)?\s*;''', re.I)
+WXSS_COMMENT = re.compile(r'/\*.*?\*/', re.S)
 
 
 class PackageError(Exception):
@@ -102,6 +106,26 @@ def _source_paths(root):
     return sorted(paths, key=lambda path: path.relative_to(root).as_posix())
 
 
+def _check_wxss_imports(wxss_files, names):
+    """Reject missing local quoted WXSS imports before a package is marked READY."""
+    for name, content in wxss_files.items():
+        try:
+            stylesheet = WXSS_COMMENT.sub('', content.decode('utf-8'))
+        except UnicodeError as exc:
+            raise PackageError('SOURCE_INVALID') from exc
+        for match in WXSS_IMPORT.finditer(stylesheet):
+            target = match.group(2)
+            if target.startswith(('http://', 'https://', '//', 'data:')):
+                continue
+            if '\\' in target or '?' in target or '#' in target:
+                raise PackageError('PACKAGE_IMPORT_MISSING')
+            candidate = posixpath.normpath(posixpath.join(
+                posixpath.dirname(name), target.lstrip('/')) if not target.startswith('/')
+                else target.lstrip('/'))
+            if candidate in {'.', '..'} or candidate.startswith('../') or candidate not in names:
+                raise PackageError('PACKAGE_IMPORT_MISSING')
+
+
 def build_package(root, maximum_bytes):
     root = Path(root).absolute()
     if not isinstance(maximum_bytes, int) or maximum_bytes <= 0:
@@ -110,11 +134,15 @@ def build_package(root, maximum_bytes):
     data = io.BytesIO()
     source_bytes = 0
     paths = _source_paths(root)
+    names = {path.relative_to(root).as_posix() for path in paths}
+    wxss_files = {}
     with zipfile.ZipFile(data, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9,
                          allowZip64=True) as archive:
         for path in paths:
             name = path.relative_to(root).as_posix()
             content = _safe_read(path, root, maximum_bytes - source_bytes)
+            if path.suffix.lower() == '.wxss':
+                wxss_files[name] = content
             source_bytes += len(content)
             if source_bytes > maximum_bytes:
                 raise PackageError("PACKAGE_TOO_LARGE")
@@ -129,6 +157,7 @@ def build_package(root, maximum_bytes):
             archive.writestr(info, content, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
             if data.tell() > maximum_bytes:
                 raise PackageError("PACKAGE_TOO_LARGE")
+    _check_wxss_imports(wxss_files, names)
     package = data.getvalue()
     if len(package) > maximum_bytes:
         raise PackageError("PACKAGE_TOO_LARGE")
