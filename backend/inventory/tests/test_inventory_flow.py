@@ -3,6 +3,7 @@ import uuid
 
 from django.db import DatabaseError, IntegrityError, transaction
 from django.test import Client, TestCase
+from django.utils import timezone
 
 from accounts.models import AccountGroup, AdminAccount, GroupPermission, PermissionGroup
 from catalog.models import Category, Product, Sku, SkuUnitVersion
@@ -56,6 +57,68 @@ class InventoryFlowTests(TestCase):
         }, key or str(uuid.uuid4()))
         self.assertEqual(result.status_code, 201, result.content)
         return result.json()["data"]
+
+    def patch(self, path, payload):
+        return self.owner.patch(path, data=json.dumps(payload), content_type="application/json",
+                                HTTP_X_CSRFTOKEN=self.owner.cookies["csrftoken"].value)
+
+    def test_warehouse_status_requires_revision_and_empty_non_default_warehouse(self):
+        default = self.make_warehouse()
+        secondary = self.post(self.owner, "/api/v1/admin/warehouses", {
+            "code": "SECONDARY", "name": "辅助仓", "isDefault": False,
+        }).json()["data"]
+        path = f"/api/v1/admin/warehouses/{secondary['warehouseId']}/status"
+        invalid = self.patch(path, {"enabled": False, "expectedRevision": True})
+        self.assertEqual(invalid.status_code, 400)
+        stopped = self.patch(path, {"enabled": False, "expectedRevision": 1})
+        self.assertEqual(stopped.status_code, 200, stopped.content)
+        self.assertFalse(stopped.json()["data"]["enabled"])
+        self.assertEqual(stopped.json()["data"]["revision"], 2)
+        self.assertEqual(self.patch(path, {"enabled": True, "expectedRevision": 1}).status_code, 409)
+        self.assertTrue(self.patch(path, {"enabled": True, "expectedRevision": 2}).json()["data"]["enabled"])
+        default_path = f"/api/v1/admin/warehouses/{default['warehouseId']}/status"
+        self.assertEqual(self.patch(default_path, {"enabled": False, "expectedRevision": 1}).status_code, 409)
+
+    def test_warehouse_stop_rejects_stock_and_open_document(self):
+        self.make_warehouse()
+        secondary = self.post(self.owner, "/api/v1/admin/warehouses", {
+            "code": "SECONDARY", "name": "辅助仓", "isDefault": False,
+        }).json()["data"]
+        path = f"/api/v1/admin/warehouses/{secondary['warehouseId']}/status"
+        self.draft(secondary)
+        blocked = self.patch(path, {"enabled": False, "expectedRevision": 1})
+        self.assertEqual(blocked.status_code, 409)
+        self.assertIn("未完成单据", blocked.json()["error"]["message"])
+        stock_warehouse = self.post(self.owner, "/api/v1/admin/warehouses", {
+            "code": "STOCK", "name": "有货仓", "isDefault": False,
+        }).json()["data"]
+        stock_path = f"/api/v1/admin/warehouses/{stock_warehouse['warehouseId']}/status"
+        InventoryBalance.objects.create(warehouse_id=stock_warehouse["warehouseId"], sku=self.sku,
+                                        on_hand_base_units=3)
+        blocked = self.patch(stock_path, {"enabled": False, "expectedRevision": 1})
+        self.assertEqual(blocked.status_code, 409)
+        self.assertIn("账面库存", blocked.json()["error"]["message"])
+
+    def test_inventory_list_filters_and_invalid_dates(self):
+        warehouse = self.make_warehouse()
+        draft = self.draft(warehouse)
+        confirmed = self.post(self.owner,
+                              f"/api/v1/admin/inventory/inbounds/{draft['inboundId']}/confirm",
+                              {"expectedRevision": 1}, str(uuid.uuid4()))
+        self.assertEqual(confirmed.status_code, 200, confirmed.content)
+        today = timezone.localdate().isoformat()
+        inbound = self.owner.get(f"/api/v1/admin/inventory/inbounds?documentNo={draft['documentNo']}&dateFrom={today}&dateTo={today}")
+        self.assertEqual(inbound.status_code, 200, inbound.content)
+        self.assertEqual(inbound.json()["data"]["total"], 1)
+        self.assertEqual(self.owner.get("/api/v1/admin/inventory/inbounds?dateFrom=2026-12-01&dateTo=2026-01-01").status_code, 400)
+        self.assertEqual(self.owner.get("/api/v1/admin/inventory/outbounds?dateFrom=bad").status_code, 400)
+        self.assertEqual(self.owner.get("/api/v1/admin/inventory/stocktakes?dateTo=bad").status_code, 400)
+        ledger = self.owner.get(f"/api/v1/admin/inventory/ledgers?dateFrom={today}&dateTo={today}")
+        self.assertEqual(ledger.status_code, 200, ledger.content)
+        self.assertEqual(ledger.json()["data"]["total"], 1)
+        self.assertEqual(self.owner.get("/api/v1/admin/inventory/ledgers?documentNo=bad").status_code, 400)
+        self.assertEqual(self.owner.get("/api/v1/admin/inventory/balances?availability=AVAILABLE").json()["data"]["total"], 1)
+        self.assertEqual(self.owner.get("/api/v1/admin/inventory/balances?availability=UNAVAILABLE").json()["data"]["total"], 0)
 
     def test_draft_confirm_and_replay_are_atomic(self):
         warehouse = self.make_warehouse()
@@ -243,6 +306,10 @@ class InventoryFlowTests(TestCase):
             "code": "X", "name": "X 仓", "isDefault": True,
         }).status_code, 403)
         warehouse = self.make_warehouse()
+        self.assertEqual(reader.patch(f"/api/v1/admin/warehouses/{warehouse['warehouseId']}/status",
+                                      data=json.dumps({"enabled": False, "expectedRevision": 1}),
+                                      content_type="application/json",
+                                      HTTP_X_CSRFTOKEN=reader.cookies["csrftoken"].value).status_code, 403)
         second = self.post(self.owner, "/api/v1/admin/warehouses", {
             "code": "SECOND", "name": "次仓", "isDefault": True,
         })

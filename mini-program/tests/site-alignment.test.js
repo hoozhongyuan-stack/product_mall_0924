@@ -21,6 +21,7 @@ function setup() {
 }
 test('member address shortcut reaches existing address management without creating a new flow', () => {
   const visits = setup()
+  storage.set('mall.memberToken', 'member')
   const page = mount('../pages/member/index.js')
   page.openAddresses()
   assert.deepEqual(visits, ['/pages/addresses/addresses'])
@@ -79,6 +80,7 @@ test('native region picker updates three address fields immutably and missing fi
 })
 test('order shortcuts keep server fulfillment filters and points intersection without a client-side slice', async () => {
   const visits = setup()
+  storage.set('mall.memberToken', 'member')
   const member = mount('../pages/member/index.js')
   member.openOrders({ currentTarget: { dataset: { fulfillment: 'WAITING_REDEMPTION' } } })
   assert.equal(visits.at(-1), '/pages/orders/list?fulfillment=WAITING_REDEMPTION')

@@ -1,8 +1,9 @@
 """Shared-pool evidence across sale, shipment and return in PostgreSQL."""
 
 import uuid
+import json
 
-from django.test import TransactionTestCase, override_settings
+from django.test import Client, TransactionTestCase, override_settings
 
 from accounts.models import AdminAccount
 from aftersales.returns import accept_return
@@ -11,6 +12,19 @@ from catalog.models import Sku, SkuUnitVersion
 from inventory.models import InventoryBalance, InventoryLedger
 from inventory.pool_access import bind_sku_to_pool, ensure_independent_pool
 from payments.tests import test_payment_flow as payment_fixture
+from payments.tests import test_refund_flow as refund_fixture
+from payments.refunds import record_verified_refund
+
+
+def inventory_reader():
+    client = Client(enforce_csrf_checks=True)
+    client.get("/api/v1/admin/auth/csrf")
+    logged_in = client.post("/api/v1/admin/auth/login", data=json.dumps({
+        "loginName": "payment-owner", "password": "Long test password 2026!",
+    }), content_type="application/json", HTTP_X_CSRFTOKEN=client.cookies["csrftoken"].value)
+    if logged_in.status_code != 200:
+        raise AssertionError(logged_in.content)
+    return client
 
 
 @override_settings(WECHAT_MINI_APP_ID="wx-payment-test",
@@ -52,6 +66,18 @@ class SharedPoolReturnTests(TransactionTestCase):
         balance.refresh_from_db()
         self.assertEqual(balance.on_hand_base_units, before + case.order_line.ratio)
         self.assertEqual(InventoryLedger.objects.get(return_case_id=case.id).sku_id, alias.id)
+        client = inventory_reader()
+        path = "/api/v1/admin/inventory/ledgers"
+        listed = client.get(path, {"movementType": "RETURN", "keyword": case.order_line.order.order_no})
+        self.assertEqual(listed.status_code, 200, listed.content)
+        entries = listed.json()["data"]["items"]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["documentId"], str(case.id))
+        self.assertEqual(entries[0]["caseId"], str(case.id))
+        self.assertEqual(entries[0]["orderNo"], case.order_line.order.order_no)
+        detail = client.get(f"{path}/{entries[0]['ledgerId']}")
+        self.assertEqual(detail.status_code, 200, detail.content)
+        self.assertEqual(detail.json()["data"]["documentId"], str(case.id))
 
     @override_settings(EXCHANGE_ORDER_ENABLED=True)
     def test_alias_points_exchange_consumes_anchor_balance(self):
@@ -74,3 +100,32 @@ class SharedPoolReturnTests(TransactionTestCase):
         self.assertEqual(balance.on_hand_base_units, 8)
         self.assertEqual(InventoryLedger.objects.get(order_line__order_id=result["orderId"]).sku_id,
                          alias.id)
+
+
+@override_settings(WECHAT_MINI_APP_ID="wx-payment-test",
+                   ORDER_PAYMENT_METHODS_ENABLED={"WECHAT": True, "OFFLINE": True})
+class RefundLedgerReadTests(TransactionTestCase):
+    setUp = refund_fixture.RefundFlowTests.setUp
+    _order = refund_fixture.RefundFlowTests._order
+    _evidence = refund_fixture.RefundFlowTests._evidence
+    _paid_order = refund_fixture.RefundFlowTests._paid_order
+    case_and_intent = refund_fixture.RefundFlowTests.case_and_intent
+    refund_evidence = refund_fixture.RefundFlowTests.refund_evidence
+
+    def test_refund_ledger_list_and_detail_refer_to_order_and_case(self):
+        order, _, case, intent = self.case_and_intent("SHIP")
+        record_verified_refund(self.refund_evidence(intent))
+        client = inventory_reader()
+        path = "/api/v1/admin/inventory/ledgers"
+        listed = client.get(path, {"movementType": "REFUND", "keyword": order.order_no})
+        self.assertEqual(listed.status_code, 200, listed.content)
+        entries = listed.json()["data"]["items"]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["documentId"], str(case.id))
+        self.assertEqual(entries[0]["caseId"], str(case.id))
+        self.assertEqual(entries[0]["orderNo"], order.order_no)
+        by_case = client.get(path, {"movementType": "REFUND", "keyword": str(case.id)})
+        self.assertEqual(by_case.json()["data"]["total"], 1)
+        detail = client.get(f"{path}/{entries[0]['ledgerId']}")
+        self.assertEqual(detail.status_code, 200, detail.content)
+        self.assertEqual(detail.json()["data"]["documentId"], str(case.id))

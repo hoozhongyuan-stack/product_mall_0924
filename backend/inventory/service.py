@@ -7,11 +7,12 @@ import uuid
 from django.db import transaction
 from django.utils import timezone
 
-from accounts.security import audit
+from accounts.security import audit, require_live
 from accounts.models import AdminAccount
 from catalog.inventory_access import lock_stock_skus
 
-from .models import InboundDocument, InboundLine, InventoryBalance, InventoryLedger, Warehouse
+from .models import (InboundDocument, InboundLine, InventoryBalance, InventoryLedger,
+                     InventoryReservation, OutboundDocument, StocktakeDocument, Warehouse)
 from .pool_access import ensure_independent_pool, resolve_anchor_ids
 from .validation import InventoryError, code_field, number_field, text_field, uuid_field
 
@@ -67,6 +68,50 @@ def create_warehouse(request, actor, values):
               after={"code": warehouse.code, "name": warehouse.name,
                      "isDefault": warehouse.is_default})
     return warehouse_data(warehouse)
+
+
+def set_warehouse_enabled(request, warehouse_id, values):
+    if (not isinstance(values, dict) or set(values) != {"enabled", "expectedRevision"}
+            or type(values["enabled"]) is not bool
+            or type(values["expectedRevision"]) is not int or values["expectedRevision"] < 1):
+        raise InventoryError("仓库状态或预期修订号不正确。")
+    with transaction.atomic():
+        warehouse = Warehouse.objects.select_for_update().filter(id=warehouse_id).first()
+        if warehouse is None:
+            raise InventoryError("仓库不存在。", "NOT_FOUND", 404)
+        live_actor, denied = require_live(request, "inventory.manage")
+        if denied:
+            raise InventoryError("请重新登录。" if denied.status_code == 401 else "当前账号没有此操作权限。",
+                                 "SESSION_EXPIRED" if denied.status_code == 401 else "PERMISSION_DENIED",
+                                 denied.status_code)
+        if warehouse.revision != values["expectedRevision"]:
+            raise InventoryError("仓库已被其他人修改，请刷新后重试。", "REVISION_CONFLICT", 409)
+        enabled = values["enabled"]
+        if warehouse.enabled == enabled:
+            return warehouse_data(warehouse)
+        if not enabled:
+            if warehouse.is_default:
+                raise InventoryError("默认仓不能停用。", "WAREHOUSE_IN_USE", 409)
+            if InventoryBalance.objects.filter(warehouse=warehouse).filter(
+                    on_hand_base_units__gt=0).exists():
+                raise InventoryError("仓库仍有账面库存，请先处理库存。", "WAREHOUSE_IN_USE", 409)
+            if InventoryReservation.objects.filter(balance__warehouse=warehouse,
+                                                   status=InventoryReservation.Status.ACTIVE).exists():
+                raise InventoryError("仓库仍有有效预留，请先处理预留。", "WAREHOUSE_IN_USE", 409)
+            if (InboundDocument.objects.filter(warehouse=warehouse, status=InboundDocument.Status.DRAFT).exists()
+                    or OutboundDocument.objects.filter(warehouse=warehouse, status=OutboundDocument.Status.DRAFT).exists()
+                    or StocktakeDocument.objects.filter(warehouse=warehouse,
+                                                         status__in=[StocktakeDocument.Status.COUNTING,
+                                                                    StocktakeDocument.Status.PENDING_REVIEW]).exists()):
+                raise InventoryError("仓库仍有未完成单据，请先处理单据。", "WAREHOUSE_IN_USE", 409)
+        before = {"enabled": warehouse.enabled, "revision": warehouse.revision}
+        warehouse.enabled = enabled
+        warehouse.revision += 1
+        warehouse.save(update_fields=["enabled", "revision"])
+        audit(request, "inventory.warehouse.enable" if enabled else "inventory.warehouse.disable",
+              "warehouse", warehouse.id, live_actor, before=before,
+              after={"enabled": enabled, "revision": warehouse.revision})
+        return warehouse_data(warehouse)
 
 
 def create_inbound(request, actor, values, key):

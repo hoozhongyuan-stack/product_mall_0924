@@ -3,6 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, ApiError } from '../../api'
 import { buildStocktakeSubmission } from './stocktake.mjs'
+import { csvTable } from './csv.mjs'
+import InventoryListFooter from './InventoryListFooter.vue'
 import type { InventorySku, Page, StocktakeDetail, StocktakeStatus, StocktakeSummary, Warehouse } from './types'
 
 type CountInput = { count: string; reason: string }
@@ -13,6 +15,10 @@ const listLoading = ref(false)
 const listError = ref('')
 const filterWarehouse = ref('')
 const filterStatus = ref('')
+const filterDocumentNo = ref('')
+const filterDates = ref<string[] | null>([])
+const selectedIds = ref<string[]>([])
+const pageSize = ref(20)
 const selected = ref<StocktakeDetail | null>(null)
 const detailLoading = ref(false)
 const detailError = ref('')
@@ -40,6 +46,32 @@ const hasDirtyCreate = computed(() => creating.value && createTouched.value)
 const hasDirtyCount = computed(() => selected.value?.status === 'COUNTING' && countTouched.value)
 const hasBookChanged = computed(() => selected.value?.status === 'PENDING_REVIEW'
   && selected.value.items.some((item) => item.bookChanged))
+const selectedRows = computed(() => tasks.value.items.filter(row => selectedIds.value.includes(row.stocktakeId)))
+const allSelected = computed(() => tasks.value.items.length > 0 && selectedRows.value.length === tasks.value.items.length)
+function toggleAll(value: boolean | string | number) {
+  selectedIds.value = value ? tasks.value.items.map(row => row.stocktakeId) : []
+}
+function toggleRow(id: string, value: boolean | string | number) {
+  selectedIds.value = value ? [...selectedIds.value.filter(item => item !== id), id]
+    : selectedIds.value.filter(item => item !== id)
+}
+function exportSelected() {
+  if (!selectedRows.value.length) return
+  const rows = [
+    ['盘点单号', '仓库', 'SKU 数', '创建人', '创建时间', '状态'],
+    ...selectedRows.value.map(row => [row.documentNo, row.warehouseName, row.itemCount,
+      row.createdBy, date(row.createdAt), statusName(row.status)]),
+  ]
+  const url = URL.createObjectURL(new Blob([csvTable(rows)], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '盘点单-所选行.csv'
+  document.body.append(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+function changePageSize(value: number) { pageSize.value = value; void loadList(1) }
 watch(() => createSaving.value || actionSaving.value || confirmationPending.value, value => emit('busy', value), { immediate: true })
 watch(() => hasDirtyCreate.value || hasDirtyCount.value, (value) => emit('dirty', value), { immediate: true })
 watch(() => props.warehouses, (rows) => {
@@ -96,15 +128,20 @@ function setCreateSkus(ids: string[]) {
   changeCreate()
 }
 async function loadList(page = 1) {
+  selectedIds.value = []
   const sequence = ++listSequence
   listLoading.value = true
   listError.value = ''
-  const query = new URLSearchParams({ page: String(page), pageSize: '20' })
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize.value) })
   if (filterWarehouse.value) query.set('warehouseId', filterWarehouse.value)
   if (filterStatus.value) query.set('status', filterStatus.value)
+  if (filterDocumentNo.value.trim()) query.set('documentNo', filterDocumentNo.value.trim())
+  if (Array.isArray(filterDates.value) && filterDates.value.length === 2) {
+    query.set('dateFrom', filterDates.value[0]); query.set('dateTo', filterDates.value[1])
+  }
   try {
     const result = await api<Page<StocktakeSummary>>(`/inventory/stocktakes?${query}`)
-    if (sequence === listSequence) tasks.value = result
+    if (sequence === listSequence) { selectedIds.value = []; tasks.value = result }
   } catch (reason) { if (sequence === listSequence) listError.value = failure(reason) }
   finally { if (sequence === listSequence) listLoading.value = false }
 }
@@ -244,10 +281,10 @@ onMounted(() => { void loadList(1) })
   <div class="inventory-section stocktake-section">
     <div class="page-heading"><div><h1>盘点单</h1><p>按仓库与指定 SKU 发起盘点，实盘提交后审核差异；审核通过才调整账面。</p></div><el-button v-if="canManage" type="primary" @click="toggleCreate">{{ creating ? '关闭表单' : '＋ 创建盘点任务' }}</el-button></div>
     <p v-if="!canManage && !canReview" class="hint">当前账号可查看盘点记录。创建和提交需要库存管理权限，审核需要库存审核权限。</p>
-    <form class="inventory-filters" @submit.prevent="loadList(1)"><label>仓库<el-select v-model="filterWarehouse" placeholder="全部仓库"><el-option label="全部仓库" value="" /><el-option v-for="row in warehouses" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label><label>状态<el-select v-model="filterStatus" placeholder="全部状态"><el-option label="全部状态" value="" /><el-option label="盘点中" value="COUNTING" /><el-option label="待审核" value="PENDING_REVIEW" /><el-option label="已通过" value="APPROVED" /></el-select></label><el-button type="primary" native-type="submit" :loading="listLoading">查询</el-button><el-button @click="filterWarehouse = ''; filterStatus = ''; loadList(1)">重置</el-button></form>
+    <form class="inventory-filters" @submit.prevent="loadList(1)"><label>单号<el-input v-model="filterDocumentNo" maxlength="40" clearable placeholder="输入盘点单号" /></label><label>仓库<el-select v-model="filterWarehouse" placeholder="全部仓库"><el-option label="全部仓库" value="" /><el-option v-for="row in warehouses" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label><label>状态<el-select v-model="filterStatus" placeholder="全部状态"><el-option label="全部状态" value="" /><el-option label="盘点中" value="COUNTING" /><el-option label="待审核" value="PENDING_REVIEW" /><el-option label="已通过" value="APPROVED" /></el-select></label><label>创建时间<el-date-picker v-model="filterDates" type="daterange" value-format="YYYY-MM-DD" range-separator="至" start-placeholder="开始" end-placeholder="结束" /></label><el-button type="primary" native-type="submit" :loading="listLoading">查询</el-button><el-button @click="filterDocumentNo = ''; filterWarehouse = ''; filterStatus = ''; filterDates = []; loadList(1)">重置</el-button></form>
     <p v-if="listError" class="notice" role="alert">{{ listError }} <el-button link type="primary" @click="loadList(tasks.page)">重试</el-button></p>
-    <div class="panel table-wrap" v-loading="listLoading"><table><thead><tr><th>盘点单号</th><th>仓库</th><th>盘点范围</th><th>SKU 数</th><th>创建人 / 时间</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="row in tasks.items" :key="row.stocktakeId"><td class="code">{{ row.documentNo }}</td><td>{{ row.warehouseName }}</td><td>指定 SKU</td><td class="inventory-number">{{ row.itemCount }}</td><td>{{ row.createdBy }}<small class="inventory-subline">{{ date(row.createdAt) }}</small></td><td><span :class="statusBadge(row.status)">{{ statusName(row.status) }}</span></td><td><el-button link type="primary" :loading="detailLoading" @click="loadDetail(row.stocktakeId)">{{ row.status === 'COUNTING' && canManage ? '录入实盘' : row.status === 'PENDING_REVIEW' && canReview ? '审核差异' : '查看详情' }}</el-button></td></tr></tbody></table><p v-if="!listLoading && !listError && !tasks.items.length" class="inventory-empty">暂无匹配盘点单。可选择仓库与 SKU 创建盘点任务。</p></div>
-    <div v-if="tasks.total > tasks.pageSize" class="inventory-pagination"><span>共 {{ tasks.total }} 条</span><el-pagination :current-page="tasks.page" :page-size="tasks.pageSize" :total="tasks.total" layout="prev, pager, next" @current-change="loadList" /></div>
+    <div class="panel table-wrap" v-loading="listLoading"><table><thead><tr><th><el-checkbox :model-value="allSelected" :disabled="listLoading" aria-label="全选当前页盘点单" @change="toggleAll" /></th><th>盘点单号</th><th>仓库</th><th>盘点范围</th><th>SKU 数</th><th>创建人 / 时间</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="row in tasks.items" :key="row.stocktakeId"><td><el-checkbox :model-value="selectedIds.includes(row.stocktakeId)" :disabled="listLoading" :aria-label="`选择盘点单 ${row.documentNo}`" @change="toggleRow(row.stocktakeId, $event)" /></td><td class="code">{{ row.documentNo }}</td><td>{{ row.warehouseName }}</td><td>指定 SKU</td><td class="inventory-number">{{ row.itemCount }}</td><td>{{ row.createdBy }}<small class="inventory-subline">{{ date(row.createdAt) }}</small></td><td><span :class="statusBadge(row.status)">{{ statusName(row.status) }}</span></td><td><el-button link type="primary" :loading="detailLoading" @click="loadDetail(row.stocktakeId)">{{ row.status === 'COUNTING' && canManage ? '录入实盘' : row.status === 'PENDING_REVIEW' && canReview ? '审核差异' : '查看详情' }}</el-button></td></tr></tbody></table><p v-if="!listLoading && !listError && !tasks.items.length" class="inventory-empty">暂无匹配盘点单。可选择仓库与 SKU 创建盘点任务。</p></div>
+    <InventoryListFooter :page="tasks.page" :page-size="tasks.pageSize" :total="tasks.total" :selected-count="selectedIds.length" :loading="listLoading" @page="loadList" @size="changePageSize" @export="exportSelected" />
 
     <form v-if="creating && canManage" class="panel inventory-form stocktake-form" @submit.prevent="createTask"><h3>创建盘点任务</h3><div class="inventory-form-grid"><label>盘点仓库 <span class="required">*</span><el-select :model-value="createWarehouse" :disabled="createSaving" placeholder="选择仓库" @update:model-value="(value: string) => { createWarehouse = value; changeCreate() }"><el-option v-for="row in warehouses.filter((warehouse) => warehouse.enabled)" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label><label>SKU 范围 <span class="required">*</span><el-select :model-value="createSkus" multiple collapse-tags filterable remote reserve-keyword :remote-method="searchSkus" :loading="skuLoading" :disabled="createSaving" placeholder="搜索并选择 1 至 50 个 SKU" @update:model-value="setCreateSkus"><el-option v-for="sku in skuOptions" :key="sku.skuId" :label="`${sku.skuCode} · ${sku.productName}`" :value="sku.skuId" /></el-select></label></div><p class="help-text">已选 {{ createSkus.length }} / 50 个 SKU。任务创建时保存账面快照；盘点期间仓库可继续正常出入库。</p><p v-if="createError" class="error" role="alert">{{ createError }}</p><div class="inventory-actions"><el-button :disabled="createSaving" @click="toggleCreate">取消</el-button><el-button type="primary" native-type="submit" :loading="createSaving">创建任务</el-button></div></form>
 

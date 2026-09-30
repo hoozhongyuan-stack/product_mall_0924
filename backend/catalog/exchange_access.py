@@ -25,7 +25,7 @@ def exchange_catalog_rows(sku_ids,*,lock=False):
     result={}
     for sku in skus:
         product=sku.product; category=product.category; unit=sku.current_unit
-        eligible=bool(product.ever_on_sale and product.main_image_id and category.status=='ACTIVE'
+        eligible=bool(product.ever_on_sale and not product.manually_off_sale and product.main_image_id and category.status=='ACTIVE'
             and category.parent and category.parent.status=='ACTIVE' and unit
             and (product.fulfillment_kind!='REDEEM' or product.redeem_valid_until and product.redeem_valid_until>=timezone.localdate()))
         result[sku.id]={'sku':sku,'unit':unit,'eligible':eligible,'skuId':str(sku.id),'productId':str(product.id),
@@ -47,6 +47,7 @@ def exchange_sku_options(search,page,size):
 
 
 def eligible_exchange_sku_ids():
-    return Sku.objects.filter(product__ever_on_sale=True,product__main_image__isnull=False,
+    return Sku.objects.filter(product__ever_on_sale=True, product__manually_off_sale=False,
+        product__main_image__isnull=False,
         current_unit__isnull=False,product__category__status='ACTIVE',product__category__parent__status='ACTIVE').filter(
         Q(product__fulfillment_kind='SHIP') | Q(product__fulfillment_kind='REDEEM',product__redeem_valid_until__gte=timezone.localdate())).values('id')

@@ -43,3 +43,51 @@ test('public consumption causes explain completion refunds and reversal without 
  assert.match(m.presentOverview({ ...overview, gradePolicyRevision: 0 }).gradeRuleCopy, /尚未/)
  assert.match(m.presentPoint({ ...entry('x', 'CLAWBACK'), sourceRef: 'REFUND_COMPLETED' }).reasonLabel, /退款完成/)
 })
+
+test('guest member page keeps public shortcuts and protects private destinations', async () => {
+ const p = prime(), urls = []
+ storage.clear(); wx.navigateTo = ({ url }) => urls.push(url)
+ wx.request = () => assert.fail('guest overview must not be requested')
+ await p.onShow()
+ assert.equal(p.data.state, 'auth')
+ assert.equal(p.data.member, null)
+ p.openOrders({ currentTarget: { dataset: { status: 'PENDING_PAYMENT' } } })
+ p.openPoints()
+ p.openExchange()
+ assert.deepEqual(urls, [
+  '/pages/login/login?returnTo=member&next=orders&status=PENDING_PAYMENT',
+  '/pages/login/login?returnTo=member&next=points',
+  '/pages/exchange/index',
+ ])
+})
+
+test('expired member session cannot open private entries', async () => {
+ const p = prime(), urls = []
+ wx.navigateTo = ({ url }) => urls.push(url)
+ wx.request = (r) => failure(r, 401, '登录已失效')
+ await p.onShow()
+ assert.equal(p.data.member, null)
+ p.openAddresses()
+ assert.deepEqual(urls, ['/pages/login/login?returnTo=member&next=addresses'])
+})
+
+test('member login validates a return destination and restores the selected order filter', async () => {
+ let page
+ global.Page = (value) => { page = value }
+ delete require.cache[require.resolve('../pages/login/login.js')]
+ require('../pages/login/login.js')
+ const p = { ...page, data: { ...page.data, agreed: true }, setData(patch) { this.data = { ...this.data, ...patch } } }
+ const urls = []
+ wx.login = ({ success }) => success({ code: 'code' })
+ wx.setStorageSync = (key, value) => storage.set(key, value)
+ wx.request = (r) => success(r, { accessToken: 'fresh' })
+ wx.redirectTo = ({ url }) => urls.push(url)
+ wx.navigateBack = () => urls.push('back')
+ p.onLoad({ returnTo: 'member', next: 'orders', status: 'PENDING_PAYMENT' })
+ await p.login()
+ assert.deepEqual(urls, ['/pages/orders/list?status=PENDING_PAYMENT'])
+ assert.equal(storage.get('mall.memberToken'), 'fresh')
+ p.onLoad({ returnTo: 'member', next: 'https://evil.invalid' })
+ await p.login()
+ assert.deepEqual(urls.slice(-1), ['back'])
+})

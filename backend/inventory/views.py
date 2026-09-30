@@ -1,9 +1,10 @@
 """Authenticated inventory API; no catalog pricing data is exposed here."""
 
 import uuid
+from datetime import date
 
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Exists, OuterRef, Q, Sum
+from django.db.models import Count, Exists, F, OuterRef, Q, Sum
 
 from common.http import offset_response, method
 from accounts.security import error, parse_json, require, response
@@ -16,7 +17,7 @@ from .pool_access import (PoolBindingError, bind_sku_to_pool, ensure_independent
 from .models import InboundDocument, InventoryBalance, InventoryLedger, OutboundDocument, StockPool, StockPoolSku, StocktakeDocument, Warehouse
 from .outbound_service import confirm_outbound, create_outbound, outbound_data
 from .service import (InventoryError, confirm_inbound, create_inbound,
-                      create_warehouse, inbound_data, warehouse_data)
+                      create_warehouse, inbound_data, set_warehouse_enabled, warehouse_data)
 from .validation import uuid_field
 from .stocktake_service import create_stocktake, review_stocktake, stocktake_data, submit_stocktake
 
@@ -132,6 +133,31 @@ def page_args(request):
     return page, size
 
 
+def document_filters(request, rows, *, date_field="created_at", has_document_no=True):
+    number = request.GET.get("documentNo", "").strip()
+    if len(number) > 40:
+        raise InventoryError("单号过长。")
+    if number:
+        if not has_document_no:
+            raise InventoryError("流水请使用关键词查询单号。")
+        rows = rows.filter(document_no__icontains=number)
+    start, end = request.GET.get("dateFrom", ""), request.GET.get("dateTo", "")
+    try:
+        start_day = date.fromisoformat(start) if start else None
+        end_day = date.fromisoformat(end) if end else None
+        if (start_day and start_day.isoformat() != start) or (end_day and end_day.isoformat() != end):
+            raise ValueError
+    except ValueError as exc:
+        raise InventoryError("日期须为 YYYY-MM-DD。") from exc
+    if start_day and end_day and start_day > end_day:
+        raise InventoryError("开始日期不能晚于结束日期。")
+    if start_day:
+        rows = rows.filter(**{f"{date_field}__date__gte": start_day})
+    if end_day:
+        rows = rows.filter(**{f"{date_field}__date__lte": end_day})
+    return rows
+
+
 def warehouses_view(request):
     bad = method(request, "GET", "POST")
     if bad:
@@ -148,6 +174,19 @@ def warehouses_view(request):
         return failure(request, exc)
     except IntegrityError:
         return error(request, 409, "WAREHOUSE_CONFLICT", "仓库编码或默认仓库已存在。")
+
+
+def warehouse_status_view(request, warehouse_id):
+    bad = method(request, "PATCH")
+    if bad:
+        return bad
+    _, bad = require(request, "inventory.manage")
+    if bad:
+        return bad
+    try:
+        return response(request, set_warehouse_enabled(request, warehouse_id, body(request)))
+    except InventoryError as exc:
+        return failure(request, exc)
 
 
 def skus_view(request):
@@ -191,6 +230,15 @@ def balances_view(request):
             rows = rows.filter(Q(sku__sku_code__icontains=keyword) |
                                Q(sku__product__name__icontains=keyword) |
                                Q(sku_id__in=alias_anchors))
+        availability = request.GET.get("availability", "")
+        if availability not in ("", "AVAILABLE", "UNAVAILABLE", "RESERVED"):
+            raise InventoryError("可售库存状态不正确。")
+        if availability == "AVAILABLE":
+            rows = rows.filter(on_hand_base_units__gt=F("reserved_base_units"))
+        elif availability == "UNAVAILABLE":
+            rows = rows.filter(on_hand_base_units=F("reserved_base_units"))
+        elif availability == "RESERVED":
+            rows = rows.filter(reserved_base_units__gt=0)
         total = rows.count()
         rows = rows.order_by("warehouse__code", "sku__sku_code", "id")[(page - 1) * size:page * size]
         infos = pool_info_for_skus([row.sku_id for row in rows])
@@ -233,6 +281,7 @@ def inbounds_view(request):
             if status not in InboundDocument.Status.values:
                 raise InventoryError("入库单状态不正确。")
             rows = rows.filter(status=status)
+        rows = document_filters(request, rows)
         total = rows.count()
         rows = rows.order_by("-created_at", "id")[(page - 1) * size:page * size]
         items = []
@@ -300,6 +349,7 @@ def outbounds_view(request):
             if status not in OutboundDocument.Status.values:
                 raise InventoryError("出库单状态不正确。")
             rows = rows.filter(status=status)
+        rows = document_filters(request, rows)
         total = rows.count()
         rows = rows.order_by("-created_at", "id")[(page - 1) * size:page * size]
         items = []
@@ -368,6 +418,7 @@ def stocktakes_view(request):
             if status not in StocktakeDocument.Status.values:
                 raise InventoryError("盘点状态不正确。")
             rows = rows.filter(status=status)
+        rows = document_filters(request, rows)
         total = rows.count()
         rows = rows.order_by("-created_at", "id")[(page - 1) * size:page * size]
         items = []
@@ -442,17 +493,30 @@ def ledger_data(row, include_version=False):
         document = source_line.order
         document_no = document.order_no
         base_unit = source_line.base_unit
+        document_id = document.id
+        case_id = None
+    elif row.movement_type in ("REFUND", "RETURN"):
+        source_line = row.refund_order_line if row.movement_type == "REFUND" else row.return_order_line
+        case_id = row.refund_case_id if row.movement_type == "REFUND" else row.return_case_id
+        document = source_line.order
+        document_no = f"{document.order_no} · 售后 {case_id}"
+        document_id = case_id
+        base_unit = source_line.base_unit
     else:
         source_line = (row.inbound_line if row.movement_type == "INBOUND" else
                        row.outbound_line if row.movement_type == "OUTBOUND" else row.stocktake_line)
         document = source_line.document
         document_no = document.document_no
+        document_id = document.id
+        case_id = None
         base_unit = source_line.base_unit
     data = {"ledgerId": str(row.id), "movementType": row.movement_type,
             "warehouseId": str(row.warehouse_id), "warehouseName": row.warehouse.name,
             "skuId": str(row.sku_id), "skuCode": row.sku.sku_code,
             "productName": row.sku.product.name, "documentNo": document_no,
-            "documentId": str(document.id), "operationUnit": row.operation_unit,
+            "documentId": str(document_id), "orderNo": document.order_no if case_id else None,
+            "caseId": str(case_id) if case_id else None,
+            "operationUnit": row.operation_unit,
             "operationQuantity": row.operation_quantity, "ratio": row.ratio,
             "baseUnit": base_unit,
             "deltaBaseUnits": row.delta_base_units, "balanceBefore": row.balance_before,
@@ -467,7 +531,8 @@ def ledger_data(row, include_version=False):
 def _ledger_rows():
     return InventoryLedger.objects.select_related("warehouse", "sku__product", "actor",
                                                   "inbound_line__document", "outbound_line__document",
-                                                  "stocktake_line__document", "order_line__order")
+                                                  "stocktake_line__document", "order_line__order",
+                                                  "refund_order_line__order", "return_order_line__order")
 
 
 def ledgers_view(request):
@@ -493,12 +558,22 @@ def ledgers_view(request):
         if len(keyword) > 120:
             raise InventoryError("搜索词过长。")
         if keyword:
-            rows = rows.filter(Q(sku__sku_code__icontains=keyword) |
-                               Q(sku__product__name__icontains=keyword) |
-                               Q(inbound_line__document__document_no__icontains=keyword) |
-                               Q(outbound_line__document__document_no__icontains=keyword) |
-                               Q(stocktake_line__document__document_no__icontains=keyword) |
-                               Q(order_line__order__order_no__icontains=keyword))
+            matching = (Q(sku__sku_code__icontains=keyword) |
+                        Q(sku__product__name__icontains=keyword) |
+                        Q(inbound_line__document__document_no__icontains=keyword) |
+                        Q(outbound_line__document__document_no__icontains=keyword) |
+                        Q(stocktake_line__document__document_no__icontains=keyword) |
+                        Q(order_line__order__order_no__icontains=keyword) |
+                        Q(refund_order_line__order__order_no__icontains=keyword) |
+                        Q(return_order_line__order__order_no__icontains=keyword))
+            try:
+                case_keyword = uuid.UUID(keyword)
+            except ValueError:
+                pass
+            else:
+                matching |= Q(refund_case_id=case_keyword) | Q(return_case_id=case_keyword)
+            rows = rows.filter(matching)
+        rows = document_filters(request, rows, date_field="occurred_at", has_document_no=False)
         total = rows.count()
         rows = rows.order_by("-occurred_at", "-id")[(page - 1) * size:page * size]
         return offset_response(request, {"items": [ledger_data(row) for row in rows],

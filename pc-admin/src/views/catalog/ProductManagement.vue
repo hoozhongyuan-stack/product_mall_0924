@@ -7,6 +7,7 @@ import ProductDescriptionEditor from './ProductDescriptionEditor.vue'
 import { ApiError, api, type Account } from '../../api'
 import ProductCreateForm from './ProductCreateForm.vue'
 import ProductSpecEditor from './ProductSpecEditor.vue'
+import ProductSalePanel, { type ProductSalePreviewItem } from './ProductSalePanel.vue'
 import type { Asset, Category, MemberGrade, ProductDetail, ProductPage, ProductRow, SaleStatus, SkuPage, SkuRow } from './types'
 import { fenToYuan, yuanToFen } from './types'
 
@@ -29,6 +30,7 @@ const permissions = computed(() => props.account.permissionCodes)
 const canUpload = computed(() => permissions.value.includes('asset.upload'))
 const canWrite = computed(() => permissions.value.includes('catalog.write'))
 const canStatus = computed(() => permissions.value.includes('sku.status.write'))
+const canProductSale = computed(() => canWrite.value && canStatus.value)
 const canPrice = computed(() => permissions.value.includes('sku.price.write'))
 const canUnit = computed(() => permissions.value.includes('sku.unit.write'))
 const canSeeInventory = computed(() => permissions.value.includes('inventory.read') || permissions.value.includes('inventory.manage'))
@@ -60,6 +62,12 @@ const batchCategoryId = ref('')
 const categoryPreview = ref<CategoryBatchPreview | null>(null)
 const previewLoading = ref(false)
 const categoryBatchKey = ref('')
+const productSaleAction = ref<SaleStatus | null>(null)
+const productSalePreview = ref<ProductSalePreviewItem[]>([])
+const productSalePreviewReady = ref(false)
+const productSaleSelections = ref<Record<string, string[]>>({})
+const productSaleBusy = ref(false)
+const productSaleResult = ref<{ items: (BatchItemResult & { label: string })[]; successCount: number; failedCount: number } | null>(null)
 const batchResult = ref<{ action: BatchAction; items: (BatchItemResult & { label: string })[];
   successCount: number; failedCount: number; skippedCount: number } | null>(null)
 const inlineGradeDrafts = ref<Record<string, Record<string, string>>>({})
@@ -127,7 +135,7 @@ const skuDirty = computed(() => {
     (original.gradePrices.find((price) => price.gradeId === grade.id)
       ? fenToYuan(original.gradePrices.find((price) => price.gradeId === grade.id)!.priceFen) : ''))
 })
-const hasUnsaved = computed(() => (formOpen.value && createDirty.value) || productDirty.value || specDirty.value || skuDirty.value)
+const hasUnsaved = computed(() => (formOpen.value && createDirty.value) || productDirty.value || specDirty.value || skuDirty.value || productSaleBusy.value)
 watch(hasUnsaved, (value) => emit('dirtyChange', value), { immediate: true })
 const categoryName = (id: string) => categories.value.find((item) => item.id === id)?.name || '已停用或未知分类'
 const batchRowLabel = (row: SkuRow | ProductRow) => 'skuId' in row ? row.skuCode : `${row.name}（${row.productNo}）`
@@ -156,6 +164,11 @@ function clearSelection() {
   batchResult.value = null
   categoryPreview.value = null
   categoryBatchKey.value = ''
+  productSaleAction.value = null
+  productSalePreview.value = []
+  productSalePreviewReady.value = false
+  productSaleSelections.value = {}
+  productSaleResult.value = null
 }
 function setSelected(id: string, checked: boolean) {
   if (listMode.value === 'PRODUCT') selectedProductIds.value = checked ? [...selectedProductIds.value, id] : selectedProductIds.value.filter((item) => item !== id)
@@ -163,6 +176,10 @@ function setSelected(id: string, checked: boolean) {
   batchAction.value = null
   batchResult.value = null
   categoryPreview.value = null
+  productSaleAction.value = null
+  productSalePreview.value = []
+  productSalePreviewReady.value = false
+  productSaleResult.value = null
 }
 function togglePage(checked: boolean) {
   if (listMode.value === 'PRODUCT') selectedProductIds.value = checked ? pageData.value.rows.map((row) => row.productId) : []
@@ -170,6 +187,10 @@ function togglePage(checked: boolean) {
   batchAction.value = null
   batchResult.value = null
   categoryPreview.value = null
+  productSaleAction.value = null
+  productSalePreview.value = []
+  productSalePreviewReady.value = false
+  productSaleResult.value = null
 }
 
 async function load(page = 1) {
@@ -417,6 +438,76 @@ function startBatch(action: BatchAction) {
   categoryBatchKey.value = ''
   batchResult.value = null
   error.value = ''
+  productSaleAction.value = null
+}
+
+function startProductSale(status: SaleStatus, row?: ProductRow) {
+  if (row) selectedProductIds.value = [row.productId]
+  if (!selectedProducts.value.length) return
+  productSaleAction.value = status
+  productSalePreview.value = []
+  productSalePreviewReady.value = false
+  productSaleSelections.value = {}
+  productSaleResult.value = null
+  batchAction.value = null
+  error.value = ''
+  void requestProductSalePreview()
+}
+
+function toggleInitialSku(productId: string, skuId: string, checked: boolean) {
+  const existing = productSaleSelections.value[productId] || []
+  productSaleSelections.value = { ...productSaleSelections.value,
+    [productId]: checked ? [...existing, skuId] : existing.filter((id) => id !== skuId) }
+  productSalePreviewReady.value = false
+}
+
+function productSaleItems() {
+  return selectedProducts.value.map((row) => ({ productId: row.productId,
+    expectedRevision: row.productRevision,
+    initialSkuIds: productSaleSelections.value[row.productId] || [] }))
+}
+
+async function requestProductSalePreview() {
+  if (!productSaleAction.value || !selectedProducts.value.length) return
+  const action = productSaleAction.value
+  const items = productSaleItems()
+  productSaleBusy.value = true
+  productSalePreviewReady.value = false
+  error.value = ''
+  try {
+    const result = await api<{ items: ProductSalePreviewItem[] }>('/products/batch-sale-status/preview', {
+      method: 'POST', body: JSON.stringify({ saleStatus: action, items }),
+    })
+    if (productSaleAction.value === action && JSON.stringify(productSaleItems()) === JSON.stringify(items)) {
+      productSalePreview.value = result.items
+      productSalePreviewReady.value = true
+    }
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : '商品上下架影响范围核对失败。' }
+  finally { productSaleBusy.value = false }
+}
+
+async function executeProductSale() {
+  const action = productSaleAction.value
+  if (!action || !productSalePreviewReady.value || !productSalePreview.value.length) return
+  const targets = productSalePreview.value.filter((item) => item.canChange)
+  if (!targets.length) return
+  const labels = new Map(selectedProducts.value.map((row) => [row.productId, `${row.name}（${row.productNo}）`]))
+  const items = productSaleItems().filter((item) => targets.some((target) => target.productId === item.productId))
+  productSaleBusy.value = true
+  error.value = ''
+  try {
+    const result = await api<BatchResult>('/products/batch-sale-status', {
+      method: 'POST', body: JSON.stringify({ saleStatus: action, items }),
+    })
+    const skipped = productSalePreview.value.filter((item) => !item.canChange).map((item) => ({
+      id: item.productId, success: false, skipped: true, label: labels.get(item.productId) || item.productNo,
+      message: item.reason || '不可执行',
+    }))
+    await load(pageData.value.page)
+    productSaleResult.value = { successCount: result.successCount, failedCount: result.failedCount,
+      items: [...result.results.map((item) => ({ ...item, label: labels.get(item.id) || item.id })), ...skipped] }
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : '商品上下架失败，请刷新后重试。' }
+  finally { productSaleBusy.value = false }
 }
 
 function batchReason(row: SkuRow | ProductRow): string {
@@ -559,6 +650,7 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
     </div>
     <p v-if="canCreate && !loading && !hasActiveLeaf" class="hint">请先在“分类”中创建启用的一级及二级分类。</p>
     <p v-if="canWrite && !canCreate" class="hint">创建商品包含 SKU 状态、价格和单位写入，当前账号需要这三项权限。</p>
+    <p v-if="canWrite && !canStatus" class="hint">商品上下架还需要 SKU 状态权限。</p>
     <div class="catalog-view-switch" aria-label="商品管理视图"><button type="button" :class="listMode === 'PRODUCT' ? 'primary-button' : 'secondary-button'" @click="switchMode('PRODUCT')">商品列表（SPU）</button><button type="button" :class="listMode === 'SKU' ? 'primary-button' : 'secondary-button'" @click="switchMode('SKU')">SKU 批量管理</button></div>
     <p v-if="error" class="error notice" role="alert">{{ error }}</p>
     <form class="catalog-filters" role="search" @submit.prevent="applyFilters">
@@ -578,6 +670,8 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
           <button v-if="listMode === 'SKU' && canStatus" class="secondary-button" type="button" :disabled="!selectedRows.length || saving" @click="startBatch('ON_SALE')">批量上架 SKU</button>
           <button v-if="listMode === 'SKU' && canStatus" class="secondary-button" type="button" :disabled="!selectedRows.length || saving" @click="startBatch('OFF_SALE')">批量下架 SKU</button>
           <button v-if="listMode === 'PRODUCT' && canWrite" class="secondary-button" type="button" :disabled="!selectedProducts.length || saving" @click="startBatch('CATEGORY')">批量调整分类</button>
+          <button v-if="listMode === 'PRODUCT' && canProductSale" class="secondary-button" type="button" :disabled="!selectedProducts.length || productSaleBusy" @click="startProductSale('ON_SALE')">批量上架商品</button>
+          <button v-if="listMode === 'PRODUCT' && canProductSale" class="secondary-button" type="button" :disabled="!selectedProducts.length || productSaleBusy" @click="startProductSale('OFF_SALE')">批量下架商品</button>
           <button v-if="listMode === 'PRODUCT'" class="secondary-button" type="button" :disabled="!selectedProducts.length" @click="exportSelected">导出所选商品</button>
         </div>
         <small>每页 20 {{ listMode === 'PRODUCT' ? '个商品' : '个 SKU' }}</small>
@@ -588,9 +682,9 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
             <td><input type="checkbox" :aria-label="`选择商品 ${row.productNo}`" :checked="selectedProductIds.includes(row.productId)" @change="setSelected(row.productId, ($event.target as HTMLInputElement).checked)" /></td>
             <td><div class="catalog-product-identity"><img v-if="row.mainImage" :src="row.mainImage.adminUrl" :alt="`${row.name}主图`" /><span v-else class="catalog-image-empty" aria-hidden="true">无图</span><div><strong class="strong-cell">{{ row.name }}</strong><small class="catalog-product-meta">商品编号 {{ row.productNo }}</small></div></div></td>
             <td>{{ row.fulfillmentKind === 'SHIP' ? '快递发货' : '到店核销' }}<small class="catalog-product-meta">{{ categoryName(row.categoryId) }}</small></td>
-            <td class="catalog-price">{{ priceRange(row) }}</td><td>{{ row.skuCount }} 个<small class="catalog-product-meta">{{ row.onSaleSkuCount }} 个在售</small></td>
-            <td><span :class="['badge', row.status === 'ON_SALE' ? 'badge-good' : 'badge-muted']">{{ row.status === 'DRAFT' ? '草稿' : row.status === 'ON_SALE' ? '在售' : '下架' }}</span></td>
-            <td class="catalog-actions"><button class="text-button" type="button" :aria-expanded="expandedProductId === row.productId" :aria-controls="`sku-detail-${row.productId}`" @click="toggleProduct(row.productId)">{{ expandedProductId === row.productId ? '收起规格' : '展开规格' }}</button><button v-if="canWrite" class="text-button" type="button" :disabled="productLoading" @click="openProduct(row.productId)">编辑商品</button></td>
+            <td class="catalog-price">{{ priceRange(row) }}</td><td>{{ row.skuCount }} 个<small class="catalog-product-meta">{{ row.onSaleSkuCount }} 个 SKU 已上架</small></td>
+            <td><span :class="['badge', row.status === 'ON_SALE' ? 'badge-good' : 'badge-muted']">{{ row.status === 'DRAFT' ? '草稿' : row.status === 'ON_SALE' ? '在售' : '下架' }}</span><small v-if="row.manuallyOffSale" class="catalog-product-meta">商品手动下架，SKU 状态已保留</small></td>
+            <td class="catalog-actions"><button class="text-button" type="button" :aria-expanded="expandedProductId === row.productId" :aria-controls="`sku-detail-${row.productId}`" @click="toggleProduct(row.productId)">{{ expandedProductId === row.productId ? '收起规格' : '展开规格' }}</button><button v-if="canWrite" class="text-button" type="button" :disabled="productLoading" @click="openProduct(row.productId)">编辑商品</button><button v-if="canProductSale && row.status !== 'ON_SALE'" class="text-button" type="button" :disabled="productSaleBusy" @click="startProductSale('ON_SALE', row)">上架商品</button><button v-if="canProductSale && row.status === 'ON_SALE'" class="text-button" type="button" :disabled="productSaleBusy" @click="startProductSale('OFF_SALE', row)">下架商品</button></td>
           </tr><tr v-if="expandedProductId === row.productId" :id="`sku-detail-${row.productId}`" class="catalog-expanded-row"><td colspan="7"><p v-if="detailLoadingId === row.productId" role="status">正在加载 SKU…</p><p v-else-if="detailErrors[row.productId]" class="error" role="alert">{{ detailErrors[row.productId] }} <button class="text-button" type="button" @click="loadProductDetail(row.productId)">重试</button></p>
               <div v-else-if="productDetails[row.productId]" class="catalog-sku-details"><p>该商品有 {{ row.skuCount }} 个 SKU。{{ row.matchedSkuIds.length ? `搜索命中 ${row.matchedSkuIds.length} 个 SKU，已标出。` : '' }}库存以库存管理中的实际余额为准。<span v-if="canSeeInventory && poolErrors[row.productId]" class="catalog-inline-error" role="alert">库存池资料读取失败：{{ poolErrors[row.productId] }} <button class="text-button" type="button" @click="loadPoolBindings(row.productId)">重试</button></span></p><div v-for="sku in productDetails[row.productId].skus" :key="sku.skuId" :class="['catalog-sku-card', { 'catalog-sku-match': row.matchedSkuIds.includes(sku.skuId) }]"><div><strong>{{ sku.specs.length ? sku.specs.map((spec) => `${spec.name}：${spec.value}`).join(' · ') : '默认规格' }}</strong><small class="catalog-product-meta">{{ sku.skuCode }}<span v-if="row.matchedSkuIds.includes(sku.skuId)"> · 搜索命中</span> · {{ sku.unit.ratio }} {{ sku.unit.baseUnit }}／{{ sku.unit.saleUnit }}</small><small v-if="canSeeInventory && poolBindings[sku.skuId]" class="catalog-product-meta">{{ poolBindings[sku.skuId].poolId ? `库存池 ${poolBindings[sku.skuId].poolId}` : '尚未建立库存池' }} · {{ poolBindings[sku.skuId].shared ? `共享实物（基准 SKU ${poolBindings[sku.skuId].poolAnchorSkuCode || poolBindings[sku.skuId].anchorSkuId}）` : '独立实物' }}</small><small v-if="canSeeInventory && !poolBindings[sku.skuId]" class="catalog-product-meta">库存池资料请到库存管理核对</small></div><div>日常价 ¥{{ fenToYuan(sku.listPriceFen) }}<small class="catalog-product-meta">{{ sku.saleStatus === 'ON_SALE' ? 'SKU 上架' : 'SKU 下架' }}</small></div><div class="catalog-grade-cell"><div v-if="grades.some((grade) => grade.enabled)" class="catalog-grade-list"><label v-for="grade in grades.filter((item) => item.enabled)" :key="grade.id"><span>{{ grade.name }}</span><input :value="inlineGradeDrafts[sku.skuId]?.[grade.id] || ''" inputmode="decimal" :aria-label="`${sku.skuCode} ${grade.name}等级价（元）`" placeholder="—" :disabled="!canPrice || savingGradeSku === sku.skuId" @input="updateInlineGrade(sku.skuId, grade.id, ($event.target as HTMLInputElement).value)" /></label></div><span v-else>暂无启用的等级</span><small v-if="inlineErrors[sku.skuId]" class="catalog-inline-error" role="alert">{{ inlineErrors[sku.skuId] }}</small></div><div class="catalog-actions"><button v-if="canStatus" class="text-button" type="button" @click="openSku(sku, 'status')">SKU 状态</button><button v-if="canPrice" class="text-button" type="button" @click="openSku(sku, 'price')">日常价</button><button v-if="canPrice" class="text-button" type="button" :disabled="!inlineGradeChanged(sku) || savingGradeSku === sku.skuId" @click="saveInlineGrade(sku)">保存等级价</button><button v-if="canUnit" class="text-button" type="button" @click="openSku(sku, 'unit')">单位</button></div></div><p v-if="!productDetails[row.productId].skus.length" class="empty-state">尚无 SKU。</p></div>
             </td></tr></tbody></table><p v-if="!pageData.rows.length" class="empty-state">没有匹配的商品。可调整筛选；有编辑权限时先创建商品草稿。</p>
@@ -615,10 +709,19 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
           </tr></tbody></table>
         <p v-if="!skuPage.rows.length" class="empty-state">没有匹配的 SKU。可调整筛选；有编辑权限时先创建商品草稿。</p>
       </div>
+      <ProductSalePanel v-if="productSaleAction" :action="productSaleAction" :products="selectedProducts"
+        :preview="productSalePreview" :selected-sku-ids="productSaleSelections" :ready="productSalePreviewReady"
+        :busy="productSaleBusy" :can-status="canStatus" @cancel="productSaleAction = null"
+        @preview="requestProductSalePreview" @execute="executeProductSale" @toggle-sku="toggleInitialSku" />
+      <section v-if="productSaleResult" class="panel action-panel catalog-batch-result" role="status" aria-label="商品上下架结果">
+        <div class="panel-heading"><h3>商品上下架结果</h3><button class="text-button" type="button" @click="productSaleResult = null">关闭</button></div>
+        <p>成功 {{ productSaleResult.successCount }} 项，失败 {{ productSaleResult.failedCount }} 项，未执行 {{ productSaleResult.items.filter((item) => item.skipped).length }} 项。</p>
+        <ul><li v-for="item in productSaleResult.items" :key="item.id"><strong>{{ item.label }}</strong>：{{ item.skipped ? `未执行：${item.message}` : item.success ? '成功' : `${item.message || item.code || '失败'}，请刷新后重试` }}</li></ul>
+      </section>
       <section v-if="batchAction" class="panel action-panel catalog-batch-preview" aria-labelledby="batch-title">
         <div class="panel-heading"><div><h3 id="batch-title">确认{{ batchAction === 'CATEGORY' ? '调整分类' : batchAction === 'ON_SALE' ? '批量上架 SKU' : '批量下架 SKU' }}</h3>
           <p v-if="batchAction === 'CATEGORY'">已选 {{ selectedProducts.length }} 个商品。分类按商品调整，会影响这些商品的全部 SKU。</p>
-          <p v-else>已选 {{ selectedRows.length }} 个 SKU，可执行 {{ eligibleRows.length }} 个，不能执行 {{ selectedRows.length - eligibleRows.length }} 个。首个 SKU 上架会同步上架商品；最后一个在售 SKU 下架会同步下架商品。缺少主图或分类停用的行会被拒绝。</p></div>
+          <p v-else>已选 {{ selectedRows.length }} 个 SKU，可执行 {{ eligibleRows.length }} 个，不能执行 {{ selectedRows.length - eligibleRows.length }} 个。未手动下架的商品会随 SKU 状态同步；手动下架的商品需单独上架。缺少主图或分类停用的行会被拒绝。</p></div>
           <button class="text-button" type="button" :disabled="saving" @click="batchAction = null">取消</button></div>
         <div v-if="batchAction === 'CATEGORY'" class="catalog-batch-category-row"><label class="catalog-batch-category">目标二级分类<select v-model="batchCategoryId"><option value="">请选择</option><option v-for="item in activeLeafCategories" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
           <button class="secondary-button" type="button" :disabled="!batchCategoryId || previewLoading || saving" @click="requestCategoryPreview">{{ previewLoading ? '核对中…' : '核对影响范围' }}</button></div>
@@ -659,7 +762,7 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
         <label>履约方式<select v-model="productFulfillment"><option value="SHIP">发货</option><option value="REDEEM">核销</option></select></label>
         <label v-if="productFulfillment === 'REDEEM'">核销截止日期（截止日当天有效）<input v-model="productRedeemValidUntil" type="date" /></label>
         </div>
-      <p class="help-text">商品当前{{ editingProduct.status === 'DRAFT' ? '为草稿' : editingProduct.status === 'ON_SALE' ? '在售' : '已下架' }}。商品销售状态由 SKU 自动计算；请在列表的“SKU 状态”操作上架或下架。</p>
+      <p class="help-text">商品当前{{ editingProduct.status === 'DRAFT' ? '为草稿' : editingProduct.status === 'ON_SALE' ? '在售' : '已下架' }}。商品列表可整体上下架；SKU 状态保留各规格的独立售卖选择。</p>
       <p v-if="!canStatus" class="help-text">当前账号没有调整 SKU 上下架状态的权限。</p>
       <ProductMediaEditor v-model:main-image="productMainImage" v-model:gallery-images="productGalleryImages" v-model:video="productVideo"
         :target-key="JSON.stringify([account.accountId, editingProduct.productId])" :can-upload="canUpload" :disabled="saving || !canWrite"

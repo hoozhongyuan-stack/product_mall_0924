@@ -4,6 +4,7 @@ export interface Warehouse {
   name: string
   isDefault: boolean
   enabled: boolean
+  revision: number
 }
 
 export interface WarehouseList { items: Warehouse[] }
@@ -18,6 +19,8 @@ export interface InventoryBalance {
   onHandBaseUnits: number
   reservedBaseUnits: number
   availableBaseUnits: number
+  poolSkuCodes: string[]
+  poolAnchorSkuCode: string
 }
 
 export interface Page<T> { items: T[]; page: number; pageSize: number; total: number }
@@ -85,7 +88,7 @@ export interface OutboundDetail extends OutboundSummary { items: InboundItem[] }
 
 export interface InventoryLedger {
   ledgerId: string
-  movementType: 'INBOUND' | 'OUTBOUND' | 'ADJUSTMENT' | 'SALE'
+  movementType: 'INBOUND' | 'OUTBOUND' | 'ADJUSTMENT' | 'SALE' | 'REFUND' | 'RETURN'
   warehouseId: string
   warehouseName: string
   skuId: string
@@ -93,6 +96,8 @@ export interface InventoryLedger {
   productName: string
   documentNo: string
   documentId: string
+  orderNo: string | null
+  caseId: string | null
   operationUnit: string
   operationQuantity: number
   ratio: number

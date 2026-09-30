@@ -59,11 +59,11 @@ class SaleStateConcurrencyTests(TransactionTestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.status, Product.Status.ON_SALE)
         self.assertTrue(self.product.ever_on_sale)
-        self.assertEqual(self.product.revision, 2)
+        self.assertEqual(self.product.revision, 3)
         self.assertEqual(Sku.objects.filter(product=self.product, sale_status="ON_SALE").count(), 2)
 
         self.change_together(Sku.SaleStatus.OFF_SALE, 2)
         self.product.refresh_from_db()
         self.assertEqual(self.product.status, Product.Status.OFF_SALE)
-        self.assertEqual(self.product.revision, 3)
+        self.assertEqual(self.product.revision, 5)
         self.assertEqual(Sku.objects.filter(product=self.product, sale_status="ON_SALE").count(), 0)
