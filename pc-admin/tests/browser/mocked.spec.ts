@@ -308,7 +308,7 @@ test('mock HTTP: configuration and operations pages show honest capability state
     if (path.endsWith('/aftersales')) { await ok(route, { items: [], total: 0, page: 1, pageSize: 20 }); return true }
     return false
   })
-  const pages = [['/subscription-messages', '订阅消息', '发送暂未开通'], ['/subscription-message-tasks', '消息任务', '暂无匹配的消息任务。'], ['/store/code-versions', '代码版本', '微信第三方授权'], ['/store/payments', '付款配置', '各支付方式均未开放'], ['/fulfillment/settings', '履约设置', '自动确认收货'], ['/members/rules', '等级与积分规则', '普通会员'], ['/assets', '素材中心', 'browser.png'], ['/audit-logs', '操作日志', '当前条件下没有操作日志。'], ['/aftersales', '售后管理', '暂无']]
+  const pages = [['/subscription-messages', '订阅消息', '发送暂未开通'], ['/subscription-message-tasks', '消息任务', '暂无匹配的消息任务。'], ['/store/code-versions', '代码版本', '上传准备'], ['/store/payments', '付款配置', '各支付方式均未开放'], ['/fulfillment/settings', '履约设置', '自动确认收货'], ['/members/rules', '等级与积分规则', '普通会员'], ['/assets', '素材中心', 'browser.png'], ['/audit-logs', '操作日志', '当前条件下没有操作日志。'], ['/aftersales', '售后管理', '暂无']]
   for (const [path, title, content] of pages) {
     await page.goto(path)
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
@@ -351,17 +351,17 @@ test('mock HTTP: code release checks and key confirmation stay clear on desktop 
     return false
   })
   await page.goto('/store/code-versions')
-  await expect(page.getByRole('heading', { name: '发布条件检查' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '上传准备' })).toBeVisible()
   await expect(page.getByText('已满足', { exact: true })).toBeVisible()
   await expect(page.getByText('未满足', { exact: true }).first()).toBeVisible()
-  await expect(page.getByText('无法验证', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '自动提审与发布' })).not.toBeVisible()
   await screenshot(page, testInfo, 'code-release-readiness-before')
   await page.getByLabel('选择密钥文件').setInputFiles({ name: 'synthetic.key', mimeType: 'text/plain', buffer: Buffer.from('synthetic-browser-key') })
   await page.getByRole('button', { name: '上传代码密钥' }).click()
   await page.getByLabel('输入当前密码确认替换密钥').fill('synthetic-password')
   await page.getByRole('button', { name: '确认保存' }).click()
   await expect(page.getByText('密钥已保存。保存只证明配置完成', { exact: false })).toBeVisible()
-  await expect(page.getByText('已加密保存。')).toBeVisible()
+  await expect(page.getByText('已配置，可替换', { exact: true })).toBeVisible()
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('synthetic-browser-key')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await screenshot(page, testInfo, 'code-release-readiness-after')
@@ -374,7 +374,7 @@ test('mock HTTP: direct code upload remains available without third-party author
   let submitted = false
   const verify = await installMockApi(page, async (route, path) => {
     if (path.endsWith('/me')) { await ok(route, { ...account, permissionCodes: ['code.version.read', 'code.release.manage'] }); return true }
-    if (path.endsWith('/code-versions')) { await ok(route, { items: [{ versionId, versionLabel: 'source-1', sourceRevision: 'a'.repeat(40), sourceDigest: 'b'.repeat(64), packageSha256: 'c'.repeat(64), packageBytes: 1024, fileCount: 3, storageStatus: 'READY', platformStatus: 'NOT_CONFIGURED', createdAt: '2026-09-29T00:00:00Z', completedAt: '2026-09-29T00:00:00Z', failureCode: '' }], nextCursor: null }); return true }
+    if (path.endsWith('/code-versions')) { await ok(route, { items: [{ versionId, versionLabel: 'source-1', sourceRevision: 'a'.repeat(40), sourceDigest: 'b'.repeat(64), packageSha256: 'c'.repeat(64), packageBytes: 1024, fileCount: 3, storageStatus: 'STORED_UNVERIFIED', platformStatus: 'NOT_CONFIGURED', createdAt: '2026-09-29T00:00:00Z', completedAt: '2026-09-29T00:00:00Z', failureCode: '' }], nextCursor: null }); return true }
     if (path.endsWith('/code-sync-jobs') || path.endsWith('/code-release/reviews')) { await ok(route, { items: [], nextCursor: null }); return true }
     if (path.endsWith('/code-release/uploads')) {
       if (route.request().method() === 'POST') {

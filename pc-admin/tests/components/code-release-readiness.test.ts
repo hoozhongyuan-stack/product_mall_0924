@@ -19,7 +19,7 @@ const readiness = {
     { code: 'SOURCE_PACKAGE', status: 'BLOCKED', title: '代码包', detail: '包内 API 地址仍为本机地址。' },
     { code: 'UPLOAD_KEY', status: 'BLOCKED', title: '代码上传密钥', detail: '尚未上传。' },
     { code: 'APP_SECRET', status: 'UNVERIFIED', title: '审核调用凭据', detail: '已保存，尚未向微信校验。' },
-    { code: 'THIRD_PARTY', status: 'UNVERIFIED', title: '第三方平台授权', detail: '当前系统尚未接入授权验证。' },
+    { code: 'THIRD_PARTY_AUTH', status: 'UNVERIFIED', title: '第三方平台授权', detail: '当前系统尚未接入授权验证。' },
   ],
 }
 const wrappers: ReturnType<typeof mount>[] = []
@@ -46,14 +46,13 @@ async function setup(value = account) {
 describe('code release readiness', () => {
   it('shows passed, blocked, and unverified checks without claiming WeChat approval', async () => {
     const wrapper = await setup()
-    expect(wrapper.text()).toContain('直传开发版本准备')
-    expect(wrapper.text()).toContain('自动提审与发布准备')
-    expect(wrapper.text()).toContain('AppSecret 不参与代码上传')
+    expect(wrapper.text()).toContain('上传准备')
+    expect(wrapper.text()).not.toContain('AppSecret 用于服务端接口')
     expect(wrapper.text()).toContain('已满足')
     expect(wrapper.text()).toContain('未满足')
-    expect(wrapper.text()).toContain('无法验证')
-    expect(wrapper.text()).toContain('第三方平台授权')
-    expect(wrapper.text()).toContain('当前系统尚未接入授权验证')
+    expect(wrapper.text()).toContain('第三方平台提审与发布（选配）')
+    expect(wrapper.get('.release-workflow-advanced').attributes('open')).toBeUndefined()
+    expect(wrapper.get('.release-workflow-advanced').text()).toContain('当前系统尚未接入授权验证。')
     expect(wrapper.text()).not.toContain('可以提审')
   })
 
@@ -84,6 +83,18 @@ describe('code release readiness', () => {
     const wrapper = await setup({ ...account, permissionCodes: ['code.version.read'] })
     expect(wrapper.find('input[type="file"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="begin-key-upload"]').exists()).toBe(false)
+  })
+
+  it('keeps a code package loading failure visible outside collapsed build records', async () => {
+    vi.mocked(api).mockImplementation(async path => {
+      if (path === '/code-release/readiness') return readiness as never
+      if (path === '/code-versions') throw new Error('代码版本读取失败。')
+      return { items: [], nextCursor: null } as never
+    })
+    const wrapper = await setup()
+    const alert = wrapper.findAll('[role="alert"]').find(item => item.text().includes('代码版本'))
+    expect(alert).toBeDefined()
+    expect(alert!.element.closest('details')).toBeNull()
   })
 
   it('clears stale release conditions when a refresh fails', async () => {

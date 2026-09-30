@@ -5,6 +5,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { api, type Account } from './api'
 import { useRoute, useRouter } from 'vue-router'
 import { authorizedSections, canAccessRoute } from './navigation'
+import PasswordDialog from './components/PasswordDialog.vue'
 
 const account = ref<Account | null>(null)
 provide('admin-account', account)
@@ -13,9 +14,11 @@ const password = ref('')
 const busy = ref(false)
 const loading = ref(true)
 const message = ref('')
+const passwordNotice = ref('')
 const route = useRoute()
 const router = useRouter()
 const menuOpen = ref(false)
+const passwordDialogOpen = ref(false)
 const rememberLogin = ref(false)
 const preferenceNotice = ref('')
 const rememberedLoginKey = 'mall.admin.remembered-login'
@@ -36,8 +39,18 @@ watch(rememberLogin, value => {
 function sessionExpired() {
   if (!account.value) return
   account.value = null
+  passwordDialogOpen.value = false
   password.value = ''
   message.value = '会话已失效，请重新登录。'
+}
+
+async function passwordChanged() {
+  passwordDialogOpen.value = false
+  account.value = null
+  password.value = ''
+  message.value = ''
+  passwordNotice.value = '密码已修改，请使用新密码重新登录。'
+  await router.push('/')
 }
 
 onMounted(async () => {
@@ -63,6 +76,7 @@ async function signIn() {
   }
   busy.value = true
   message.value = ''
+  passwordNotice.value = ''
   try {
     account.value = await api<Account>('/auth/login', {
       method: 'POST',
@@ -118,6 +132,7 @@ async function signOut() {
           <el-input id="login-password" v-model="password" type="password" autocomplete="current-password" show-password placeholder="输入密码" size="large" :disabled="busy" />
           <div class="login-options"><label class="remember-account"><input v-model="rememberLogin" type="checkbox" :disabled="busy">记住账号</label><span>仅记住账号，不保存密码</span></div>
           <p v-if="message" class="error" role="alert">{{ message }}</p>
+          <p v-if="passwordNotice" class="help-text" role="status">{{ passwordNotice }}</p>
           <p v-if="preferenceNotice" class="help-text" role="status">{{ preferenceNotice }}</p>
           <el-button type="primary" native-type="submit" size="large" :loading="busy" class="submit">登录</el-button>
         </form>
@@ -130,7 +145,7 @@ async function signOut() {
     <a class="skip-link" href="#main-content">跳到主要内容</a>
     <header class="topbar">
       <div class="shell-brand"><button type="button" class="menu-toggle" aria-label="打开导航菜单" :aria-expanded="menuOpen" @click="menuOpen = true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button><span>商城管理后台</span></div>
-      <div class="identity"><span>{{ account.displayName }}<small>{{ account.kind === 'OWNER' ? '主账号' : '子账号' }}</small></span><el-button text :loading="busy" @click="signOut">退出</el-button></div>
+      <div class="identity"><span>{{ account.displayName }}<small>{{ account.kind === 'OWNER' ? '主账号' : '子账号' }}</small></span><el-button text :disabled="busy" @click="passwordDialogOpen = true">修改密码</el-button><el-button text :loading="busy" @click="signOut">退出</el-button></div>
     </header>
     <aside class="sidebar">
       <nav class="nav" aria-label="后台主导航">
@@ -152,6 +167,7 @@ async function signOut() {
       <section v-if="!canOpenPage" class="page-content" role="alert"><h1>无权访问{{ pageTitle }}</h1><p>当前账号没有此页面的读取权限。</p><RouterLink to="/" class="text-link">返回概览</RouterLink></section>
       <RouterView v-else v-slot="{ Component }"><component :is="Component" :account="account" /></RouterView>
     </main>
+    <PasswordDialog v-if="passwordDialogOpen" @close="passwordDialogOpen = false" @changed="passwordChanged" />
   </div>
   </ElConfigProvider>
 </template>

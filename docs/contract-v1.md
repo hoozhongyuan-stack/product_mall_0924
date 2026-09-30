@@ -60,6 +60,8 @@
 |---|---|---|
 | `POST /api/v1/admin/auth/login` | `loginName`、`password` | `accountId`、`displayName`、`permissionCodes`、会话状态；不返回密码哈希。失败次数与锁定时限在服务端执行。 |
 | `GET /api/v1/admin/me`、`POST /api/v1/admin/auth/logout` | 会话 Cookie | 当前账号、权限；退出使会话失效。高影响操作仍重新确认当前会话。 |
+| `POST /api/v1/admin/auth/password` | `currentPassword`、`newPassword` | 所有已登录管理员均可修改自己的密码，无需账号管理权限；返回 `{accountId,revision,requiresLogin:true}` 并退出当前登录。 |
+| `POST /api/v1/admin/accounts/{id}/password` | 主账号的 `currentPassword`、子账号的 `newPassword`、`expectedRevision` | 仅 OWNER 可重置 STAFF；返回 `{accountId,revision,requiresLogin:false}`，保持主账号登录和子账号原有启停状态。 |
 | `GET/POST /api/v1/admin/accounts`、`PATCH /api/v1/admin/accounts/{id}` | 登录名、状态、权限组 ID、`expectedRevision` | 账号摘要；主账号和子账号权限边界在服务端执行，停用立即失效。凭据重置单独动作并审计。 |
 | `GET/POST /api/v1/admin/permission-groups`、`PATCH /api/v1/admin/permission-groups/{id}` | 组名、`permissionCodes[]`、`expectedRevision` | 权限组及成员数；不能通过自改组提升自己的权限。 |
 | `GET/POST /api/v1/admin/categories`、`PATCH /api/v1/admin/categories/{id}` | `parentId`、名称、排序、状态、`expectedRevision` | 两级分类树；管理端读取时返回关联商品数与在售商品数，停用前检查在售商品。 |
@@ -122,6 +124,8 @@
 启动 GIF 配置独立于页面配置。发布时同样检查草稿修订、素材可用性和权限，生成不可变版本并切换 `startup_publication` 指针；失败时用户端继续读取旧版本和兜底图。
 
 ### 3.3 阶段 A 权限与会话基线
+
+密码修改需 CSRF 与服务端当前密码验证。新密码沿用强度校验（至少 12 个字符、不得与登录名或显示名相似，最长 1024 个字符），不得与目标当前密码相同。连续 5 次当前密码错误锁定 15 分钟；单操作者 15 分钟内最多 20 次成功修改。事务锁定操作者和目标，等待锁后重新核验会话版本；成功递增目标 `revision/auth_version` 并核销其未消费确认，使其全部旧会话失效。审计仅记账号、动作和修订，不含明文或哈希。修订冲突返回 `409 REVISION_CONFLICT`；权限/当前密码错误为 `403`；限流为 `429 RATE_LIMITED`。界面入口为顶栏“修改密码”和主账号的子账号列表“重置密码”。
 
 阶段 A 操作码与接口映射、预设组矩阵及拒绝用例详见[阶段 A 开工准备与评审记录](phase-a-preparation.md#2-阶段-a-权限评审)。后续阶段再增加库存、订单、收款、退款与代码发布的细粒度操作码。主账号可调整组权限，但子账号不能给自己增加权限。
 
@@ -586,9 +590,11 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 #### 发布条件检查与代码上传密钥配置
 
-后台代码版本页增加只读发布条件检查。`GET /api/v1/admin/code-release/readiness` 需要 `code.version.read`，逐项返回 `code/status/title/detail`，并返回运维配置且经公网 IP 格式校验的 `egressIp`，未配置时为 `null`；`status` 仅为 `PASS/BLOCKED/UNVERIFIED`，分别表示本地证据已满足、明确不满足、当前无法验证。页面把目标小程序直传开发版本与第三方平台自动提审发布分别展示。直传不依赖第三方平台授权，也不以 AppSecret 的最近探测结果作为上传闸门；AppSecret 是独立的小程序服务端凭据。检查还包括最新不可变代码包及摘要、包内 AppID 和 API 地址、目标代码上传私钥、第三方平台接入与代码管理授权。AppSecret 检测结果只在当前凭据快照及最近 24 小时内有效；过期或时钟异常显示 `UNVERIFIED` 并提示上次检测时间。HTTPS 地址检查排除本机及常见本地域名，只验证包内静态配置，不证明微信合法域名或真机连通。`egressIp` 仅帮助管理员配置微信代码上传 IP 白名单，不证明当前出口或白名单已获微信接受；该结论只能由真实上传结果支持。第三方平台未配置或未收到验证票据时，平台接入及授权检查显示 `BLOCKED`，但不阻止直传；微信暂不可达时显示 `UNVERIFIED`。页面始终显示各项结果和下一步提示；读取失败时不得显示旧结果为当前结果。
+后台代码版本页增加只读发布条件检查。`GET /api/v1/admin/code-release/readiness` 需要 `code.version.read`，逐项返回 `code/status/title/detail`，并返回运维配置且经公网 IP 格式校验的 `egressIp`，未配置时为 `null`；`status` 仅为 `PASS/BLOCKED/UNVERIFIED`，分别表示本地证据已满足、明确不满足、当前无法验证。页面把目标小程序直传开发版本与第三方平台自动提审发布分别展示。直传不依赖第三方平台授权，也不以 AppSecret 的最近探测结果作为上传闸门；AppSecret 是独立的小程序服务端凭据。检查还包括最新不可变代码包及摘要、包内 AppID 和 API 地址、目标代码上传私钥、第三方平台接入与代码管理授权。AppSecret 检测结果只在当前凭据快照及最近 24 小时内有效；过期或时钟异常显示 `UNVERIFIED` 并提示上次检测时间。HTTPS 地址检查排除本机及常见本地域名，只验证包内静态配置，不证明微信合法域名或真机连通。`egressIp` 仅帮助管理员配置微信代码上传 IP 白名单，不证明当前出口或白名单已获微信接受；该结论只能由真实上传结果支持。第三方平台未配置或未收到验证票据时，平台接入及授权检查显示 `BLOCKED`，但不阻止直传；微信暂不可达时显示 `UNVERIFIED`。默认页面显示直传准备条件和下一步提示；第三方平台条件及失败原因位于“第三方平台提审与发布（选配）”展开区。AppSecret 检测保留在微信接入配置页。构建和同步记录收起，代码包列表读取错误仍在上传表单旁显示；读取失败时不得显示旧结果为当前结果。
 
 `GET /PUT /api/v1/admin/code-release/upload-key` 需要 `code.version.read` 与 `code.release.manage`。GET 仅返回 `{configured,revision,appId}`；PUT 严格接受 `{appId,key,expectedRevision}`，其中 `key` 是不超过 16 KiB 的 PEM RSA 代码上传私钥，须匹配当前小程序 AppID、配置修订及当前密码的 `code.release.upload_key` 动作确认。私钥按独立用途及 AppID 绑定加密保存，仅回显配置状态，不返回原文；保存和轮换写审计。部署密钥缺失或无法解密时，条件检查显示阻断，部署恢复闸门同时报错。代码上传私钥与 AppSecret 是不同凭据，保存成功不证明微信接受，也不触发上传、提审或发布。
+
+代码包选择允许列表的 `STORED_UNVERIFIED`（文件存在、尚未重算摘要）以及详情核验后的 `READY`；`UNAVAILABLE` 不可选。最新代码包仍须通过准备检测，所有提交由服务端再次完整核验，不把列表状态当作微信已接收。
 
 管理台优先提供 `CI_DIRECT` 直传操作：选择已同步到后台的不可变代码版本、微信版本号及说明，凭目标小程序上传私钥和密码确认创建 `POST /api/v1/admin/code-release/uploads` 任务。服务器对所选版本重新核对摘要、AppID、HTTPS API 地址与密钥修订，再由隔离 worker 调用 `miniprogram-ci`；最新版本的只读条件检查不阻止选择其他已就绪版本，所选版本以服务端提交校验为准。直传成功仅表示微信接收开发版本，`reviewAvailable=false`，不得据此开放本系统的第三方平台提审按钮。未知结果禁止自动重试，须核查微信后台后处理。
 

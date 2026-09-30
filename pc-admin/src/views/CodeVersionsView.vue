@@ -65,9 +65,6 @@ const canManageKey = computed(() => props.account.permissionCodes.includes('code
 const canManagePlatform = computed(() => props.account.permissionCodes.includes('wechat.integration.read') && props.account.permissionCodes.includes('wechat.integration.manage'))
 const directCheckCodes = new Set(['APP_ID', 'SOURCE_PACKAGE', 'RELEASE_CONFIG', 'UPLOAD_KEY'])
 const directChecks = computed(() => readiness.value?.checks.filter(check => directCheckCodes.has(check.code)) || [])
-const serviceChecks = computed(() => readiness.value?.checks.filter(check => check.code === 'APP_SECRET') || [])
-const reviewChecks = computed(() => readiness.value?.checks.filter(check =>
-  !directCheckCodes.has(check.code) && check.code !== 'APP_SECRET') || [])
 let versionGeneration = 0
 let jobGeneration = 0
 let detailGeneration = 0
@@ -279,32 +276,23 @@ onUnmounted(() => { ++readinessGeneration; ++keyGeneration; keyPassword.value = 
 <template>
   <section class="page-content code-versions-page">
     <header class="page-heading">
-      <div><h1>代码版本</h1><p>查看服务器构建的小程序源码快照，以及同步到商城后台私有存储的结果。</p></div>
+      <div><h1>代码版本</h1><p>上传密钥，选择代码包，直接上传到微信开发版本。</p></div>
       <button class="secondary-button" type="button" :disabled="versionLoading || jobLoading" @click="refresh">重新读取</button>
     </header>
 
     <section class="code-release-readiness" aria-labelledby="code-release-readiness-title">
-      <div class="code-versions-section-heading"><h2 id="code-release-readiness-title">发布条件检查</h2><span>按操作分别检查</span></div>
-      <p class="code-release-explanation">后台会检查当前配置与最新代码包。上传、提审和发布各有独立的平台结果；保存凭据不代表微信已接受。</p>
+      <div class="code-versions-section-heading"><h2 id="code-release-readiness-title">上传准备</h2><span v-if="readiness?.appId">{{ readiness.appId }}</span></div>
       <p v-if="readinessLoading" role="status">正在检查发布条件…</p>
       <p v-if="readinessError" class="notice" role="alert">{{ readinessError }} <button class="text-button" type="button" @click="loadReadiness">重试</button></p>
       <template v-if="readiness && !readinessLoading && !readinessError">
-        <div class="code-release-check-group"><h3>直传开发版本准备</h3><p>代码包检查针对最新版本；选择其他版本时，服务器会在提交时重新核对。AppSecret 不参与代码上传鉴权。</p>
-          <ul class="code-release-checks"><li v-for="check in directChecks" :key="check.code" :class="`is-${check.status.toLowerCase()}`"><div><h4>{{ check.title }}</h4><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div><p>{{ check.detail }}</p></li></ul>
-        </div>
-        <div v-if="serviceChecks.length" class="code-release-check-group"><h3>小程序服务端接口</h3><p>AppSecret 用于服务端接口调用，其检测状态不影响代码直传。</p>
-          <ul class="code-release-checks"><li v-for="check in serviceChecks" :key="check.code" :class="`is-${check.status.toLowerCase()}`"><div><h4>{{ check.title }}</h4><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div><p>{{ check.detail }}</p></li></ul>
-        </div>
-        <div v-if="reviewChecks.length" class="code-release-check-group"><h3>自动提审与发布准备</h3><p>以下条件只影响第三方平台代开发流程，不阻止目标小程序直传开发版本。</p>
-          <ul class="code-release-checks"><li v-for="check in reviewChecks" :key="check.code" :class="`is-${check.status.toLowerCase()}`"><div><h4>{{ check.title }}</h4><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div><p>{{ check.detail }}</p></li></ul>
-        </div>
-        <p class="code-release-summary" role="status">直传检查：{{ directChecks.filter(check => check.status === 'PASS').length }} 项已满足；自动提审发布检查：{{ reviewChecks.filter(check => check.status === 'PASS').length }} 项已满足。密钥与 IP 白名单是否可用，以微信实际上传结果为准。</p>
+        <ul class="code-release-checks"><li v-for="check in directChecks" :key="check.code" :class="`is-${check.status.toLowerCase()}`"><div><h3>{{ check.title }}</h3><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div><p v-if="check.status !== 'PASS'">{{ check.detail }}</p></li></ul>
+        <p class="code-release-summary" role="status">已满足 {{ directChecks.filter(check => check.status === 'PASS').length }} / {{ directChecks.length }} 项准备条件。密钥与 IP 白名单将在实际上传时由微信验证。</p>
       </template>
     </section>
 
     <section v-if="canManageKey" class="code-release-key panel" aria-labelledby="code-release-key-title">
-      <div class="code-versions-section-heading"><h2 id="code-release-key-title">目标小程序直传密钥</h2><span>{{ readiness?.uploadKey.configured ? '已配置，可替换' : '尚未配置' }}</span></div>
-      <p>此密钥用于从服务器直接上传当前小程序的开发版本。请同时在微信公众平台为服务器出口 IP 配置代码上传白名单；第三方平台流程使用独立密钥。</p>
+      <div class="code-versions-section-heading"><h2 id="code-release-key-title">代码上传密钥</h2><span>{{ readiness?.uploadKey.configured ? '已配置，可替换' : '尚未配置' }}</span></div>
+      <p>在微信公众平台下载 .key 文件，在此加密保存。</p>
       <label for="code-upload-key-file">选择密钥文件</label>
       <input id="code-upload-key-file" ref="keyInput" type="file" accept=".key,text/plain" :disabled="keyBusy || keyNeedsRead || keyConfirming" @change="chooseKey">
       <p v-if="keyError" class="notice" role="alert">{{ keyError }}</p>
@@ -317,11 +305,13 @@ onUnmounted(() => { ++readinessGeneration; ++keyGeneration; keyPassword.value = 
       </form>
     </section>
 
+      <p v-if="versionError" class="notice" role="alert">{{ versionError }} <button class="text-button" type="button" @click="loadVersions()">重试</button></p>
+
     <ReleaseWorkflowPanel :readiness="readinessLoading || readinessError ? null : readiness" :versions="versions" :can-manage="canManageKey" :can-manage-platform="canManagePlatform" @refresh="refresh" />
 
+    <details class="code-release-disclosure code-build-details"><summary>代码包与构建记录</summary>
     <section class="code-versions-section" aria-labelledby="code-versions-title">
       <div class="code-versions-section-heading"><h2 id="code-versions-title">不可变版本</h2><span>最近构建优先</span></div>
-      <p v-if="versionError" class="notice" role="alert">{{ versionError }} <button class="text-button" type="button" @click="loadVersions()">重试</button></p>
       <p v-if="versionLoading" class="loading-inline" role="status">正在读取代码版本…</p>
       <div v-if="!versionLoading && !versionError && !versions.length" class="panel code-versions-empty">暂无代码版本。部署流程完成首次构建与私有存储同步后，记录会出现在这里。</div>
       <div v-if="!versionLoading && !versionError && versions.length" class="panel code-versions-table-wrap">
@@ -333,20 +323,21 @@ onUnmounted(() => { ++readinessGeneration; ++keyGeneration; keyPassword.value = 
     </section>
 
     <section class="code-versions-section" aria-labelledby="code-jobs-title">
-      <div class="code-versions-section-heading"><h2 id="code-jobs-title">同步记录</h2><span>失败不会产生可提审版本</span></div>
+      <div class="code-versions-section-heading"><h2 id="code-jobs-title">同步记录</h2></div>
       <p v-if="jobError" class="notice" role="alert">{{ jobError }} <button class="text-button" type="button" @click="loadJobs()">重试</button></p>
       <p v-if="jobLoading" class="loading-inline" role="status">正在读取同步记录…</p>
       <div v-if="!jobLoading && !jobError && !jobs.length" class="panel code-versions-empty">暂无同步记录。构建由服务器部署流程发起，后台不接收本地上传包。</div>
       <ol v-if="!jobLoading && !jobError && jobs.length" class="code-jobs-list"><li v-for="job in jobs" :key="job.taskId" class="panel"><div><strong>{{ jobLabel(job.status) }}</strong><span>{{ formatTime(job.createdAt) }} → {{ formatTime(job.completedAt) }}</span></div><p v-if="job.failureCode" class="code-jobs-failure">失败代码：{{ job.failureCode }}。请由运维检查构建日志和持久存储后重试部署命令。</p><small>任务 {{ job.taskId }}</small></li></ol>
       <nav v-if="jobs.length && !jobError" class="code-versions-pagination" aria-label="同步记录分页"><button class="secondary-button" type="button" :disabled="jobLoading || !previousJobCursors.length" @click="previousJobPage">上一页</button><button class="secondary-button" type="button" :disabled="jobLoading || !nextJobCursor" @click="nextJobPage">下一页</button></nav>
     </section>
+    </details>
 
     <el-drawer :model-value="!!selectedId" title="代码版本详情" size="min(540px, 94vw)" @close="closeDetail">
       <p v-if="detailLoading" role="status">正在读取版本详情…</p>
       <p v-if="detailError" class="notice" role="alert">{{ detailError }} <button class="text-button" type="button" @click="loadDetail(selectedId)">重试</button></p>
       <div v-if="selected && !detailLoading && !detailError" class="code-version-detail">
         <h2>{{ selected.versionLabel }}</h2>
-        <p class="code-version-detail-status">{{ storageLabel(selected.storageStatus) }} · 微信平台{{ selected.platformStatus === 'NOT_CONFIGURED' ? '未配置' : '状态待核实' }}</p>
+        <p class="code-version-detail-status">{{ storageLabel(selected.storageStatus) }}</p>
         <dl><div><dt>版本 ID</dt><dd>{{ selected.versionId }}</dd></div><div><dt>来源修订</dt><dd>{{ selected.sourceRevision || '未证明' }}</dd></div><div><dt>源码摘要 SHA-256</dt><dd>{{ selected.sourceDigest }}</dd></div><div><dt>包摘要 SHA-256</dt><dd>{{ selected.packageSha256 }}</dd></div><div><dt>包体积</dt><dd>{{ formatSize(selected.packageBytes) }}</dd></div><div><dt>文件数</dt><dd>{{ selected.fileCount }}</dd></div><div><dt>创建时间</dt><dd>{{ formatTime(selected.createdAt) }}</dd></div><div><dt>完成时间</dt><dd>{{ formatTime(selected.completedAt) }}</dd></div><div v-if="selected.failureCode"><dt>失败代码</dt><dd>{{ selected.failureCode }}</dd></div></dl>
         <p class="code-version-detail-note">此版本只证明服务器源码包与商城后台私有存储记录。微信上传、审核和发布均须另外核验平台回执。</p>
       </div>

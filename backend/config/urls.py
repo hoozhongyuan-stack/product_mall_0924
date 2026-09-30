@@ -2,6 +2,7 @@ from django.urls import path, re_path
 
 from accounts import views
 from accounts import audit_read
+from accounts.password_views import password_view
 from catalog import views as catalog_views
 from catalog import media_views
 from pages import views as page_views
@@ -162,11 +163,13 @@ urlpatterns = [
     path("api/v1/app/orders/<uuid:order_id>/cancel", order_views.order_cancel_view),
     path("api/v1/admin/auth/csrf", views.csrf_token),
     path("api/v1/admin/auth/login", views.login_view),
+    path("api/v1/admin/auth/password", password_view),
     path("api/v1/admin/auth/confirm", views.confirm_view),
     path("api/v1/admin/auth/logout", views.logout_view),
     path("api/v1/admin/me", views.me_view),
     path("api/v1/admin/accounts", views.accounts_view),
     path("api/v1/admin/accounts/<uuid:account_id>", views.account_detail_view),
+    path("api/v1/admin/accounts/<uuid:account_id>/password", password_view),
     path("api/v1/admin/permission-groups", views.groups_view),
     path("api/v1/admin/permission-groups/<uuid:group_id>", views.group_detail_view),
     path("api/v1/admin/audit-logs", audit_read.audit_view),

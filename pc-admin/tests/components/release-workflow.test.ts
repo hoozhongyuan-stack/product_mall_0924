@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ReleaseWorkflowPanel from '../../src/views/ReleaseWorkflowPanel.vue'
 import { api, confirmedWrite } from '../../src/api'
 
-vi.mock('../../src/api', () => ({ api: vi.fn(), confirmedWrite: vi.fn() }))
+vi.mock('../../src/api', async original => ({ ...await original<typeof import('../../src/api')>(), api: vi.fn(), confirmedWrite: vi.fn() }))
 
 const appId = 'wx0123456789abcdef'
 const versionId = '11111111-1111-4111-8111-111111111111'
@@ -63,7 +63,7 @@ describe('third-party mini-program release workflow', () => {
         ? { ...check, status: 'BLOCKED' as const } : check) }
     const wrapper = mount(ReleaseWorkflowPanel, {
       props: { readiness: directReadiness,
-        versions: [{ versionId, versionLabel: 'source-1', storageStatus: 'READY' }],
+        versions: [{ versionId, versionLabel: 'source-1', storageStatus: 'STORED_UNVERIFIED' }],
         canManage: true, canManagePlatform: false }, attachTo: document.body,
     })
     wrappers.push(wrapper)

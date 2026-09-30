@@ -5,15 +5,10 @@
 .code-versions-gate span{color:var(--mall-color-text)}
 .code-release-readiness{margin-top:28px}
 .code-release-explanation{max-width:75ch;margin:0 0 18px;color:var(--mall-color-muted);line-height:1.6}
-.code-release-check-group{margin-top:20px}
-.code-release-check-group>h3{margin:0 0 6px;font-size:17px;color:var(--mall-color-text)}
-.code-release-check-group>p{max-width:75ch;margin:0 0 12px;color:var(--mall-color-muted);font-size:14px;line-height:1.6}
-.code-release-checks{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.code-release-checks li{padding:18px 20px;border:1px solid var(--mall-color-border);border-radius:12px;background:var(--mall-color-surface);min-width:0}
-.code-release-checks li.is-pass{border-color:#b8ddc9}
-.code-release-checks li.is-blocked{border-color:#ebd1b3}
+.code-release-checks{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px}
+.code-release-checks li{padding:14px 0;border-bottom:1px solid var(--mall-color-border);min-width:0}
 .code-release-checks li>div{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-.code-release-checks h4{margin:0;font-size:16px;color:var(--mall-color-text)}
+.code-release-checks h3{margin:0;font-size:15px;color:var(--mall-color-text)}
 .code-release-checks p{margin:12px 0 0;color:var(--mall-color-muted);font-size:14px;line-height:1.6}
 .code-release-check-status{font-size:12px;font-weight:700;white-space:nowrap}
 .code-release-check-status.is-pass{color:var(--mall-color-success)}
@@ -64,6 +59,13 @@
 .code-versions-page button:focus-visible{outline:3px solid var(--mall-color-brand);outline-offset:2px}
 .release-workflow{margin-top:38px}
 .release-workflow-advanced{margin-top:38px}
+.code-release-disclosure{border-top:1px solid var(--mall-color-border);padding-top:18px}
+.code-release-disclosure>summary{cursor:pointer;color:var(--mall-color-muted);font-size:14px;font-weight:600;min-height:30px}
+.code-release-disclosure>summary:focus-visible{outline:2px solid var(--mall-color-focus);outline-offset:4px}
+.code-release-disclosure[open]>summary{margin-bottom:18px;color:var(--mall-color-text)}
+.code-build-details{margin-top:24px}
+.code-build-details .code-versions-section:first-of-type{margin-top:0}
+.code-versions-page .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 .release-workflow-card{padding:22px;margin-top:14px;display:grid;gap:14px}
 .release-workflow-card h3{font-size:17px;margin:0;color:var(--mall-color-text)}
 .release-workflow-card p{margin:0;color:var(--mall-color-muted);line-height:1.6}

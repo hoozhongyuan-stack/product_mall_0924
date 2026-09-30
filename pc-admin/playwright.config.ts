@@ -6,7 +6,7 @@ const port = new URL(baseURL).port
 
 export default defineConfig({
   testDir: './tests/browser',
-  testMatch: integration ? '**/integration.spec.ts' : ['**/mocked.spec.ts', '**/inventory-pilot.spec.ts'],
+  testMatch: integration ? '**/integration.spec.ts' : ['**/mocked.spec.ts', '**/inventory-pilot.spec.ts', '**/passwords.spec.ts'],
   outputDir: integration ? './test-results/integration' : './test-results/browser',
   fullyParallel: false,
   workers: 1,

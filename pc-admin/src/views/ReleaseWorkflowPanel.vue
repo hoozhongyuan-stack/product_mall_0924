@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ApiError, api, confirmedWrite } from '../api'
 
-type Check = { code: string; status: 'PASS' | 'BLOCKED' | 'UNVERIFIED' }
+type Check = { code: string; status: 'PASS' | 'BLOCKED' | 'UNVERIFIED'; title?: string; detail?: string }
 type KeyStatus = { configured: boolean; revision: number; appId: string | null }
 type Readiness = { appId: string | null; versionId: string | null; egressIp: string | null; developerAppId: string | null;
   uploadKey: KeyStatus; developerUploadKey: KeyStatus; checks: Check[] }
@@ -53,10 +53,14 @@ let timer: ReturnType<typeof setInterval> | undefined
 const hasPassed = (code: string) => props.readiness?.checks.some(check =>
   check.code === code && check.status === 'PASS') === true
 const selectedVersion = computed(() => props.versions.find(item => item.versionId === selectedVersionId.value))
-const directUploadReady = computed(() => Boolean(props.readiness && selectedVersion.value?.storageStatus === 'READY'
+const directUploadReady = computed(() => Boolean(props.readiness && selectedVersion.value
+  && ['READY', 'STORED_UNVERIFIED'].includes(selectedVersion.value.storageStatus)
   && ['APP_ID', 'UPLOAD_KEY'].every(hasPassed)
   && (selectedVersionId.value !== props.readiness.versionId
     || ['SOURCE_PACKAGE', 'RELEASE_CONFIG'].every(hasPassed))))
+const advancedChecks = computed(() => props.readiness?.checks.filter(check =>
+  ['PLATFORM_INTEGRATION', 'DEVELOPER_UPLOAD_KEY', 'THIRD_PARTY_AUTH'].includes(check.code)) || [])
+const checkLabel = (status: Check['status']) => ({ PASS: '已满足', BLOCKED: '未满足', UNVERIFIED: '无法验证' })[status]
 const uploadReady = computed(() => ['APP_ID', 'SOURCE_PACKAGE', 'RELEASE_CONFIG',
   'PLATFORM_INTEGRATION', 'DEVELOPER_UPLOAD_KEY', 'THIRD_PARTY_AUTH'].every(code =>
   hasPassed(code)))
@@ -299,16 +303,16 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 <template>
   <section class="release-workflow" aria-labelledby="release-workflow-title">
     <div class="code-versions-section-heading"><h2 id="release-workflow-title">上传微信开发版本</h2><button class="secondary-button" type="button" :disabled="!!busy" @click="loadAll">重新读取记录</button></div>
-    <p class="code-release-explanation">选择已同步到后台的代码版本，由服务器上传至当前小程序。需要目标小程序代码上传密钥及服务器出口 IP 白名单；不需要第三方平台授权。上传成功后，仍需另行提审和发布。</p>
+    <p class="code-release-explanation">选择代码包并填写版本号，服务器将自动上传。上传成功后可在微信公众平台设置体验版、提审和发布。</p>
     <p v-if="issue" class="notice" role="alert">{{ issue }}</p>
     <p v-if="notice" class="code-release-key-notice" role="status">{{ notice }}</p>
 
     <section v-if="canManage" class="panel release-workflow-card" aria-labelledby="direct-upload-title">
-      <h3 id="direct-upload-title">从后台上传代码</h3>
-      <p v-if="!directUploadReady">请先完成目标小程序 AppID、代码密钥与所选代码版本的准备条件。所选版本的配置会在提交时由服务器再次核对。</p>
-      <p>服务器出口 IP：<strong>{{ readiness?.egressIp || '尚未由运维配置' }}</strong>。请在微信公众平台的小程序代码上传设置中将其加入白名单。此地址是部署配置值；密钥和 IP 是否被微信接受，以实际上传结果为准。</p>
+      <h3 id="direct-upload-title" class="sr-only">选择代码包并上传</h3>
+      <p v-if="!directUploadReady">请先处理上方未满足的条件，并选择可用代码包。</p>
+      <p>服务器出口 IP：<strong>{{ readiness?.egressIp || '尚未配置' }}</strong>。请加入微信公众平台的代码上传 IP 白名单。</p>
       <form data-test="ci-direct-upload-form" class="release-form-grid" @submit.prevent="submitDirectUpload">
-        <label>不可变代码版本<select v-model="selectedVersionId" data-test="ci-direct-version-id" required><option value="">请选择</option><option v-for="version in versions" :key="version.versionId" :value="version.versionId">{{ version.versionLabel }}{{ version.storageStatus === 'READY' ? '' : '（文件未就绪）' }}</option></select></label>
+        <label>代码包<select v-model="selectedVersionId" data-test="ci-direct-version-id" required><option value="">请选择</option><option v-for="version in versions" :key="version.versionId" :value="version.versionId" :disabled="!['READY', 'STORED_UNVERIFIED'].includes(version.storageStatus)">{{ version.versionLabel }}{{ version.versionId === readiness?.versionId ? '（最新）' : '' }}{{ ['READY', 'STORED_UNVERIFIED'].includes(version.storageStatus) ? '' : '（文件不可用）' }}</option></select></label>
         <label>微信版本号<input v-model.trim="directVersion" data-test="ci-direct-version" maxlength="40" pattern="[0-9A-Za-z][0-9A-Za-z._-]*" required></label>
         <label class="wide">上传说明<input v-model.trim="directDescription" data-test="ci-direct-description" maxlength="100" required></label>
         <label>当前管理员密码<input v-model="directPassword" data-test="ci-direct-password" type="password" autocomplete="current-password" required></label>
@@ -317,8 +321,12 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       <ul class="release-record-list"><li v-for="item in uploads.filter(item => item.channel === 'CI_DIRECT')" :key="item.taskId"><strong>{{ item.version }} · 开发版本</strong><span>{{ uploadStatusLabel(item.status) }}<template v-if="item.failureCode"> · {{ item.failureCode }}</template></span><small>{{ item.taskId }}</small><p v-if="item.resolutionNote">核查记录：{{ item.resolutionNote }}</p><button v-if="item.status === 'UNKNOWN'" class="secondary-button" type="button" @click="resolutionTarget = `upload:${item.taskId}`">核查后关闭未知上传</button><form v-if="resolutionTarget === `upload:${item.taskId}`" class="release-form-grid" @submit.prevent="resolveUnknown('upload', item.taskId)"><label class="wide">微信后台核查说明（至少 20 字）<input v-model="resolutionNote" minlength="20" maxlength="500" required></label><label>当前管理员密码<input v-model="resolutionPassword" type="password" autocomplete="current-password" required></label><button class="secondary-button" type="submit" :disabled="!!busy">关闭未知任务</button></form></li></ul>
     </section>
 
-    <div class="code-versions-section-heading release-workflow-advanced"><h2>自动提审与发布</h2><span>需要微信第三方平台授权</span></div>
+    <details class="code-release-disclosure release-workflow-advanced">
+    <summary>第三方平台提审与发布（选配）</summary>
+    <div class="code-versions-section-heading"><h2>自动提审与发布</h2><span>需要微信第三方平台授权</span></div>
     <p class="code-release-explanation">以下流程使用第三方平台绑定的开发小程序，把代码上传到目标小程序待审核列表；微信审核通过后才能发起发布。</p>
+
+    <ul class="code-release-checks"><li v-for="check in advancedChecks" :key="check.code"><div><h3>{{ check.title || check.code }}</h3><span :class="`code-release-check-status is-${check.status.toLowerCase()}`">{{ checkLabel(check.status) }}</span></div><p v-if="check.status !== 'PASS'">{{ check.detail }}</p></li></ul>
 
     <section class="panel release-workflow-card" aria-labelledby="platform-title">
       <h3 id="platform-title">1. 第三方平台接入</h3>
@@ -379,5 +387,6 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       <ul class="release-record-list"><li v-for="item in reviews" :key="item.taskId"><strong>{{ item.version }} · 审核单 {{ item.auditId || '待核对' }}</strong><span>{{ reviewStatusLabel(item.status) }}<template v-if="item.reason"> · {{ item.reason }}</template></span><small>{{ item.taskId }}</small><p v-if="item.resolutionNote">核查记录：{{ item.resolutionNote }}</p><div v-if="canManage" class="release-inline-action"><button v-if="item.auditId && ['SUBMITTED', 'REVIEWING', 'APPROVED', 'REJECTED'].includes(item.status)" class="secondary-button" type="button" :disabled="!!busy" @click="refreshReview(item)">刷新微信审核状态</button><template v-if="item.status === 'APPROVED'"><label>当前管理员密码<input v-model="releasePassword" data-test="release-password" type="password" autocomplete="current-password"></label><button data-test="publish-reviewed" class="primary-button" type="button" :disabled="!!busy || !releasePassword" @click="publish(item)">发布审核通过版本</button></template><button v-if="['SUBMITTING', 'UNKNOWN', 'RELEASING', 'RELEASE_UNKNOWN', 'RELEASE_REQUESTED', 'APPROVED'].includes(item.status)" class="secondary-button" type="button" @click="resolutionTarget = `review:${item.taskId}`">核查后关闭当前任务</button></div><form v-if="canManage && resolutionTarget === `review:${item.taskId}`" class="release-form-grid" @submit.prevent="resolveUnknown('review', item.taskId)"><label class="wide">微信后台核查说明（至少 20 字）<input v-model="resolutionNote" minlength="20" maxlength="500" required></label><label>当前管理员密码<input v-model="resolutionPassword" type="password" autocomplete="current-password" required></label><button class="secondary-button" type="submit" :disabled="!!busy">关闭当前任务</button></form></li></ul>
       <p v-if="!reviews.length">暂无提审记录。</p>
     </section>
+    </details>
   </section>
 </template>

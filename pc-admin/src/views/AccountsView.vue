@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError, api, confirmedWrite, type Account, type PermissionGroup } from '../api'
+import PasswordDialog from '../components/PasswordDialog.vue'
 
 const props = defineProps<{ account: Account }>()
 const accounts = ref<Account[]>([])
@@ -16,7 +17,21 @@ const newPassword = ref('')
 const groupIds = ref<string[]>([])
 const currentPassword = ref('')
 const disableTarget = ref<Account | null>(null)
+const passwordTarget = ref<Account | null>(null)
 const canManage = computed(() => props.account.permissionCodes.includes('account.manage'))
+const isOwner = computed(() => props.account.kind === 'OWNER')
+
+async function passwordReset() {
+  passwordTarget.value = null
+  ElMessage.success('子账号密码已重置，其现有会话已失效')
+  await load()
+}
+
+async function passwordTargetChanged() {
+  passwordTarget.value = null
+  await load()
+  error.value = '账号已被其他人修改。列表已刷新，请核对后重试。'
+}
 
 async function load() {
   loading.value = true
@@ -128,23 +143,24 @@ function closeForm() {
 
 <template>
   <section class="page-content">
-    <div class="page-heading"><div><h1>子账号</h1><p>查看授权范围，创建或停用后台账号。</p></div>
+    <div class="page-heading"><div><h1>子账号</h1><p>查看授权范围，创建或停用后台账号。主账号可以重置子账号密码。</p></div>
       <button v-if="canManage" class="primary-button" type="button" :disabled="loading || !groups.length" @click="openCreate">创建子账号</button>
     </div>
     <p v-if="canManage && !loading && !groups.length" class="hint">创建账号需要一个可用权限组及权限组读取权限。</p>
     <p v-if="error" class="error notice" role="alert">{{ error }}</p>
     <p v-if="loading" class="loading-inline" role="status">正在加载账号…</p>
     <div v-else class="panel table-wrap">
-      <table><thead><tr><th>登录名</th><th>显示名</th><th>身份</th><th>权限组</th><th>状态</th><th v-if="canManage">操作</th></tr></thead>
+      <table><thead><tr><th>登录名</th><th>显示名</th><th>身份</th><th>权限组</th><th>状态</th><th v-if="canManage || isOwner">操作</th></tr></thead>
         <tbody><tr v-for="item in accounts" :key="item.accountId">
           <td class="strong-cell">{{ item.loginName }}</td><td>{{ item.displayName }}</td>
           <td>{{ item.kind === 'OWNER' ? '主账号' : '子账号' }}</td><td>{{ groupNames(item.groupIds) }}</td>
           <td><span :class="['badge', item.enabled ? 'badge-good' : 'badge-muted']">{{ item.enabled ? '启用' : '停用' }}</span></td>
-          <td v-if="canManage"><button v-if="item.kind === 'STAFF' && item.enabled && item.accountId !== account.accountId" class="text-button danger" type="button" @click="openDisable(item)">停用</button><span v-else>—</span></td>
+          <td v-if="canManage || isOwner"><template v-if="item.kind === 'STAFF' && item.accountId !== account.accountId"><button v-if="isOwner" class="text-button" type="button" @click="passwordTarget = item">重置密码</button><button v-if="canManage && item.enabled" class="text-button danger" type="button" @click="openDisable(item)">停用</button></template><span v-else>—</span></td>
         </tr></tbody></table>
       <p v-if="!accounts.length" class="empty-state">暂无账号。</p>
     </div>
     <button v-if="error && !loading" class="text-button retry" type="button" @click="load">重新加载</button>
+    <PasswordDialog v-if="passwordTarget" :target="passwordTarget" @close="passwordTarget = null" @changed="passwordReset" @stale="passwordTargetChanged" />
 
     <form v-if="formOpen" class="panel action-panel" @submit.prevent="createAccount">
       <div class="panel-heading"><h2>创建子账号</h2><button class="text-button" type="button" @click="closeForm">取消</button></div>
