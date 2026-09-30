@@ -296,7 +296,9 @@ test('mock HTTP: configuration and operations pages show honest capability state
     if (path.endsWith('/subscription-templates')) {
       await ok(route, { sendingAvailable: false, events: ['ORDER_PAID', 'ORDER_SHIPPED', 'REFUND_SUCCEEDED'].map(eventType => ({ eventType, revision: 1, draftAppId: '', draftTemplateId: '', enabled: false, status: 'UNBOUND' })) }); return true
     }
-    if (['/subscription-message-tasks', '/code-versions', '/code-sync-jobs'].some(endpoint => path.endsWith(endpoint))) { await ok(route, { items: [], nextCursor: null }); return true }
+    if (['/subscription-message-tasks', '/code-versions', '/code-sync-jobs', '/code-release/uploads', '/code-release/reviews'].some(endpoint => path.endsWith(endpoint))) { await ok(route, { items: [], nextCursor: null }); return true }
+    if (path.endsWith('/integrations/wechat-open-platform')) { await ok(route, { componentAppId: '', developerAppId: '', redirectUri: '', configured: false, ticketReceived: false, revision: 0 }); return true }
+    if (path.endsWith('/code-release/readiness')) { await ok(route, { appId: null, versionId: null, uploadKey: { configured: false, revision: 0, appId: null }, checks: [{ code: 'THIRD_PARTY_AUTH', status: 'UNVERIFIED', title: '微信第三方授权', detail: '尚未接入微信第三方平台授权和代码管理权限检测。' }] }); return true }
     if (path.endsWith('/payments/offline-policy')) { await ok(route, { instructions: '请确认收款信息后付款', merchantAccountId: 'synthetic-merchant', offlineTimeoutMinutes: 30, wechatTimeoutMinutes: 15, revision: 1, configured: true, availablePaymentMethods: [] }); return true }
     if (path.endsWith('/fulfillment/carriers')) { await ok(route, { items: [{ code: 'SF', name: '顺丰速运', enabled: true, revision: 1 }] }); return true }
     if (path.endsWith('/fulfillment/policy')) { await ok(route, { autoConfirmDays: 7, revision: 1 }); return true }
@@ -306,7 +308,7 @@ test('mock HTTP: configuration and operations pages show honest capability state
     if (path.endsWith('/aftersales')) { await ok(route, { items: [], total: 0, page: 1, pageSize: 20 }); return true }
     return false
   })
-  const pages = [['/subscription-messages', '订阅消息', '发送暂未开通'], ['/subscription-message-tasks', '消息任务', '暂无匹配的消息任务。'], ['/store/code-versions', '代码版本', '微信平台尚未接入'], ['/store/payments', '付款配置', '各支付方式均未开放'], ['/fulfillment/settings', '履约设置', '自动确认收货'], ['/members/rules', '等级与积分规则', '普通会员'], ['/assets', '素材中心', 'browser.png'], ['/audit-logs', '操作日志', '当前条件下没有操作日志。'], ['/aftersales', '售后管理', '暂无']]
+  const pages = [['/subscription-messages', '订阅消息', '发送暂未开通'], ['/subscription-message-tasks', '消息任务', '暂无匹配的消息任务。'], ['/store/code-versions', '代码版本', '上传准备'], ['/store/payments', '付款配置', '各支付方式均未开放'], ['/fulfillment/settings', '履约设置', '自动确认收货'], ['/members/rules', '等级与积分规则', '普通会员'], ['/assets', '素材中心', 'browser.png'], ['/audit-logs', '操作日志', '当前条件下没有操作日志。'], ['/aftersales', '售后管理', '暂无']]
   for (const [path, title, content] of pages) {
     await page.goto(path)
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
@@ -321,6 +323,98 @@ test('mock HTTP: configuration and operations pages show honest capability state
 const wechatConfig = { revision: 0, source: 'ENV', appId: '', secretConfigured: false, keyAvailable: true,
   identityBinding: { status: 'EMPTY', appId: null }, paymentAppIdStatus: 'NOT_CONFIGURED', notificationsStatus: 'NOT_VERIFIED', lastCheck: null }
 const wechatBase = '/api/v1/admin/integrations/wechat-mini-program'
+
+test('mock HTTP: code release checks and key confirmation stay clear on desktop and mobile', async ({ page }, testInfo) => {
+  const appId = 'wx0123456789abcdef'
+  let configured = false
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path.endsWith('/me')) { await ok(route, { ...account, permissionCodes: ['code.version.read', 'code.release.manage'] }); return true }
+    if (['/code-versions', '/code-sync-jobs', '/code-release/uploads', '/code-release/reviews'].some(endpoint => path.endsWith(endpoint))) { await ok(route, { items: [], nextCursor: null }); return true }
+    if (path.endsWith('/integrations/wechat-open-platform')) { await ok(route, { componentAppId: '', developerAppId: '', redirectUri: '', configured: false, ticketReceived: false, revision: 0 }); return true }
+    if (path.endsWith('/code-release/readiness')) {
+      await ok(route, { appId, versionId: null, uploadKey: { configured, revision: Number(configured), appId: configured ? appId : null },
+        checks: [
+          { code: 'APP_ID', status: 'PASS', title: 'AppID', detail: '已配置小程序 AppID。' },
+          { code: 'SOURCE_PACKAGE', status: 'BLOCKED', title: '代码包', detail: '当前没有完整可读取的不可变代码包。' },
+          { code: 'UPLOAD_KEY', status: configured ? 'PASS' : 'BLOCKED', title: '代码上传密钥', detail: configured ? '已加密保存。' : '请上传代码上传私钥。' },
+          { code: 'PLATFORM_INTEGRATION', status: 'BLOCKED', title: '微信第三方平台接入', detail: '当前后台尚未接入微信第三方平台。' },
+          { code: 'THIRD_PARTY_AUTH', status: 'UNVERIFIED', title: '微信第三方授权', detail: '尚未接入授权和权限检测。' },
+        ] }); return true
+    }
+    if (path.endsWith('/auth/confirm')) { await ok(route, { confirmationToken: 'synthetic-token' }); return true }
+    if (path.endsWith('/code-release/upload-key')) {
+      expect(route.request().headers()['x-action-confirmation']).toBe('synthetic-token')
+      expect(JSON.parse(route.request().postData() || '{}')).toMatchObject({ appId, expectedRevision: 0 })
+      configured = true
+      await ok(route, { configured: true, revision: 1, appId }); return true
+    }
+    return false
+  })
+  await page.goto('/store/code-versions')
+  await expect(page.getByRole('heading', { name: '上传准备' })).toBeVisible()
+  await expect(page.getByText('已满足', { exact: true })).toBeVisible()
+  await expect(page.getByText('未满足', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: '自动提审与发布' })).not.toBeVisible()
+  await screenshot(page, testInfo, 'code-release-readiness-before')
+  await page.getByLabel('选择密钥文件').setInputFiles({ name: 'synthetic.key', mimeType: 'text/plain', buffer: Buffer.from('synthetic-browser-key') })
+  await page.getByRole('button', { name: '上传代码密钥' }).click()
+  await page.getByLabel('输入当前密码确认替换密钥').fill('synthetic-password')
+  await page.getByRole('button', { name: '确认保存' }).click()
+  await expect(page.getByText('密钥已保存。保存只证明配置完成', { exact: false })).toBeVisible()
+  await expect(page.getByText('已配置，可替换', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain('synthetic-browser-key')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await screenshot(page, testInfo, 'code-release-readiness-after')
+  verify()
+})
+
+test('mock HTTP: direct code upload remains available without third-party authorization', async ({ page }, testInfo) => {
+  const appId = 'wx0123456789abcdef'
+  const versionId = '11111111-1111-4111-8111-111111111111'
+  let submitted = false
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path.endsWith('/me')) { await ok(route, { ...account, permissionCodes: ['code.version.read', 'code.release.manage'] }); return true }
+    if (path.endsWith('/code-versions')) { await ok(route, { items: [{ versionId, versionLabel: 'source-1', sourceRevision: 'a'.repeat(40), sourceDigest: 'b'.repeat(64), packageSha256: 'c'.repeat(64), packageBytes: 1024, fileCount: 3, storageStatus: 'STORED_UNVERIFIED', platformStatus: 'NOT_CONFIGURED', createdAt: '2026-09-29T00:00:00Z', completedAt: '2026-09-29T00:00:00Z', failureCode: '' }], nextCursor: null }); return true }
+    if (path.endsWith('/code-sync-jobs') || path.endsWith('/code-release/reviews')) { await ok(route, { items: [], nextCursor: null }); return true }
+    if (path.endsWith('/code-release/uploads')) {
+      if (route.request().method() === 'POST') {
+        expect(route.request().postDataJSON()).toMatchObject({ versionId, channel: 'CI_DIRECT', version: '1.0.1' })
+        expect(route.request().headers()['idempotency-key']).toBeTruthy()
+        submitted = true
+        await ok(route, { taskId: '22222222-2222-4222-8222-222222222222', versionId, version: '1.0.1', channel: 'CI_DIRECT', status: 'PENDING', failureCode: '', resolutionNote: '', reviewAvailable: false, createdAt: '2026-09-29T00:00:00Z' }); return true
+      }
+      await ok(route, { items: submitted ? [{ taskId: '22222222-2222-4222-8222-222222222222', versionId, version: '1.0.1', channel: 'CI_DIRECT', status: 'PENDING', failureCode: '', resolutionNote: '', reviewAvailable: false, createdAt: '2026-09-29T00:00:00Z' }] : [], nextCursor: null }); return true
+    }
+    if (path.endsWith('/code-release/readiness')) { await ok(route, { appId, versionId, egressIp: '8.152.204.21', uploadKey: { configured: true, revision: 2, appId }, developerAppId: null, developerUploadKey: { configured: false, revision: 0, appId: null }, checks: [
+      { code: 'APP_ID', status: 'PASS', title: 'AppID', detail: '已配置' },
+      { code: 'SOURCE_PACKAGE', status: 'PASS', title: '代码包', detail: '已准备' },
+      { code: 'RELEASE_CONFIG', status: 'PASS', title: '发布配置', detail: '已准备' },
+      { code: 'UPLOAD_KEY', status: 'PASS', title: '代码上传密钥', detail: '已保存' },
+      { code: 'PLATFORM_INTEGRATION', status: 'BLOCKED', title: '第三方平台', detail: '未授权' },
+    ] }); return true }
+    if (path.endsWith('/code-release/domain-check')) { expect(route.request().postDataJSON()).toEqual({ versionId }); await ok(route, { status: 'BLOCKED', detail: '微信尚未配置所需 request 合法域名。', missingRequestDomains: ['https://api.example.com'], checkedAt: '2026-09-30T00:00:00Z' }); return true }
+    if (path.endsWith('/auth/confirm')) { expect(route.request().postDataJSON()).toMatchObject({ action: 'code.release.upload', objectId: `${appId}:${versionId}`, revision: 2 }); await ok(route, { confirmationToken: 'synthetic-token' }); return true }
+    return false
+  })
+  await page.goto('/store/code-versions')
+  await expect(page.getByText('服务器出口 IP：')).toContainText('8.152.204.21')
+  await expect(page.getByRole('button', { name: '上传到微信开发版本' })).toBeEnabled()
+  await page.getByRole('button', { name: '检查所选代码包的域名' }).click()
+  await expect(page.getByText('请在微信公众平台添加 request 合法域名：')).toContainText('https://api.example.com')
+  await expect(page.getByRole('button', { name: '上传到微信开发版本' })).toBeEnabled()
+  await screenshot(page, testInfo, 'direct-code-upload-ready')
+  await page.locator('[data-test="ci-direct-version"]').fill('1.0.1')
+  await page.locator('[data-test="ci-direct-description"]').fill('开发版验证')
+  await page.locator('[data-test="ci-direct-password"]').fill('synthetic-password')
+  await page.getByRole('button', { name: '上传到微信开发版本' }).click()
+  await expect(page.getByText('开发版本上传任务', { exact: false })).toBeVisible()
+  expect(submitted).toBe(true)
+  await expect(page.getByRole('button', { name: '上传到微信开发版本' })).toBeDisabled()
+  await expect(page.getByText('已有上传任务正在执行')).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await screenshot(page, testInfo, 'direct-code-upload-pending')
+  verify()
+})
 
 test('mock HTTP: WeChat credentials are confirmed, stored without echo, and checked only after save', async ({ page }, testInfo) => {
   let saved: Record<string, unknown> = { ...wechatConfig }

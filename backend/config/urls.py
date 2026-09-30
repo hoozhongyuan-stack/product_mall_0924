@@ -2,6 +2,7 @@ from django.urls import path, re_path
 
 from accounts import views
 from accounts import audit_read
+from accounts.password_views import password_view
 from catalog import views as catalog_views
 from catalog import media_views
 from pages import views as page_views
@@ -27,18 +28,42 @@ from points_exchange import views as exchange_views
 from notifications import views as notification_views
 from notifications import task_views as notification_task_views
 from code_versions import views as code_version_views
+from code_versions import release_views as code_release_views
+from code_versions.domain_check import domain_check_view
+from code_versions import upload_views as code_upload_views
+from code_versions import review_views as code_review_views
 from report_exports import views as export_views
 from wechat_integration import views as integration_views
+from wechat_open_platform import views as open_platform_views
 from config.health import health_view
 
 urlpatterns = [
     path("healthz", health_view),
     path("api/v1/admin/integrations/wechat-mini-program", integration_views.settings_view),
     path("api/v1/admin/integrations/wechat-mini-program/test", integration_views.test_view),
+    path("api/v1/admin/integrations/wechat-open-platform", open_platform_views.component_config_view),
+    path("api/v1/admin/integrations/wechat-open-platform/authorize", open_platform_views.begin_authorization_view),
+    path("api/v1/admin/integrations/wechat-open-platform/authorization/<str:target_app_id>",
+         open_platform_views.authorization_status_view),
+    path("api/v1/wechat/open-platform/authorization-callback", open_platform_views.authorization_callback_view),
+    path("api/v1/wechat/open-platform/events", open_platform_views.encrypted_event_view),
     path("api/v1/admin/exports", export_views.exports_view),
     path("api/v1/admin/exports/<uuid:task_id>", export_views.export_detail_view),
     path("api/v1/admin/exports/<uuid:task_id>/download", export_views.export_download_view),
     path("api/v1/admin/code-versions", code_version_views.versions_view),
+    path("api/v1/admin/code-release/readiness", code_release_views.readiness_view),
+    path("api/v1/admin/code-release/domain-check", domain_check_view),
+    path("api/v1/admin/code-release/upload-key", code_release_views.upload_key_view),
+    path("api/v1/admin/code-release/developer-upload-key", code_release_views.developer_key_view),
+    path("api/v1/admin/code-release/uploads", code_upload_views.uploads_view),
+    path("api/v1/admin/code-release/uploads/<uuid:task_id>", code_upload_views.upload_detail_view),
+    path("api/v1/admin/code-release/uploads/<uuid:task_id>/resolve", code_upload_views.resolve_upload_view),
+    path("api/v1/admin/code-release/categories", code_review_views.categories_view),
+    path("api/v1/admin/code-release/reviews", code_review_views.reviews_view),
+    path("api/v1/admin/code-release/reviews/<uuid:task_id>", code_review_views.review_detail_view),
+    path("api/v1/admin/code-release/reviews/<uuid:task_id>/refresh", code_review_views.refresh_review_view),
+    path("api/v1/admin/code-release/reviews/<uuid:task_id>/release", code_review_views.release_review_view),
+    path("api/v1/admin/code-release/reviews/<uuid:task_id>/resolve", code_review_views.resolve_review_view),
     path("api/v1/admin/code-versions/<uuid:version_id>", code_version_views.version_detail_view),
     path("api/v1/admin/code-sync-jobs", code_version_views.jobs_view),
     path("api/v1/admin/subscription-message-tasks", notification_task_views.tasks_view),
@@ -140,11 +165,13 @@ urlpatterns = [
     path("api/v1/app/orders/<uuid:order_id>/cancel", order_views.order_cancel_view),
     path("api/v1/admin/auth/csrf", views.csrf_token),
     path("api/v1/admin/auth/login", views.login_view),
+    path("api/v1/admin/auth/password", password_view),
     path("api/v1/admin/auth/confirm", views.confirm_view),
     path("api/v1/admin/auth/logout", views.logout_view),
     path("api/v1/admin/me", views.me_view),
     path("api/v1/admin/accounts", views.accounts_view),
     path("api/v1/admin/accounts/<uuid:account_id>", views.account_detail_view),
+    path("api/v1/admin/accounts/<uuid:account_id>/password", password_view),
     path("api/v1/admin/permission-groups", views.groups_view),
     path("api/v1/admin/permission-groups/<uuid:group_id>", views.group_detail_view),
     path("api/v1/admin/audit-logs", audit_read.audit_view),

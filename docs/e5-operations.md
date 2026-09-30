@@ -1,6 +1,6 @@
 # E5 应用部署、备份与恢复
 
-本编排用于单机、单实例商城。`compose.production.yaml` 管理 PostgreSQL、私有媒体卷、E3.1 发布闸门、Django Web、导出 worker、单实例维护调度和管理台反向代理。公开端口只绑定本机 `127.0.0.1:18080`，部署方需在它前面配置受信任的 HTTPS 入口、访问日志与监控；正式域名、证书、外部平台凭据和公网流量未由此文件设置。支付、退款、物流外部通道及积分兑换保持关闭。数据库与所有后台进程保留 `private.internal` 内网；仅 Web 额外接入独立 `egress` 网络供已授权的微信登录／凭据检测调用，出口网络本身不代表平台验收通过，也不是域名级防火墙。管理台沿用原有 `ingress` 网络，不接入其他应用的网络。
+本编排用于单机、单实例商城。`compose.production.yaml` 管理 PostgreSQL、私有媒体卷、E3.1 发布闸门、Django Web、导出 worker、单实例维护调度和管理台反向代理。公开端口只绑定本机 `127.0.0.1:18080`，部署方需在它前面配置受信任的 HTTPS 入口、访问日志与监控；正式域名、证书、外部平台凭据和公网流量未由此文件设置。支付、退款、物流外部通道及积分兑换保持关闭。数据库与普通后台进程保留 `private.internal` 内网；Web 额外接入 `egress` 供已授权的微信调用，显式启用代码发布时两个专用容器也接入 `egress`，其中 Node 不接入 `private`。出口网络本身不代表平台验收通过，也不是域名级防火墙。管理台沿用原有 `ingress` 网络，不接入其他应用的网络。
 
 ## 首次部署
 
@@ -60,7 +60,7 @@ sh scripts/e5-deploy.sh initial
 
 在2核4GB、与其它应用共用主机的 UAT 中复用本编排，不建立第二套应用栈。在同一个 `E5_ENV_FILE` 中设置**单行、不加引号**的 `E5_DEPLOY_PROFILE=uat`。`scripts/e5-compose.sh` 由部署、定时备份、恢复共同读取：缺少该项时默认 production，重复、非法或格式不明的值拒绝；若 shell 也显式设置该项，两处必须相同。读取仅解析此枚举，不执行环境文件内容。cron 继续指向同一份私有环境文件，避免重启时悄悄丢失资源或代理配置。production 默认组合保持原行为。
 
-UAT 组合为 `compose.production.yaml` + `compose.uat.yaml`（资源）+ `compose.uat-edge.yaml`（在线入口），要求 Docker Compose 2.24.4以上。资源覆盖将 Gunicorn 调为1 worker、2 threads；DB/Web/导出worker/scheduler/admin的内存上限分别为384/384/160/128/96MiB，共1152MiB，并设置 CPU、进程数、无额外swap、较小临时目录和每容器2份10MB日志轮转。Nginx请求缓存保留64MiB以容纳既有50MiB视频上传，不缩减原60MiB请求限制。调度周期120秒，数据库降低连接数与内存配置、WAL目标。它们是资源上限，不是性能保证；尤其 WAL 目标不是磁盘硬配额。部署后须核对同机已有服务、实际峰值、OOM/重启、备份体积和磁盘增长，不能因设置了限制就认定4GB内存或5.9GB余量足够。
+UAT 组合为 `compose.production.yaml` + `compose.uat.yaml`（资源）+ `compose.uat-edge.yaml`（在线入口），要求 Docker Compose 2.24.4以上。资源覆盖将 Gunicorn 调为1 worker、2 threads；默认 DB/Web/导出worker/scheduler/admin 的内存上限分别为384/384/160/128/96MiB。代码上传需显式设置 `E5_CODE_RELEASE_ENABLED=1`，另增加 Python 调度 worker 256MiB、Node 上传容器 768MiB 和最多 512MiB 的专用临时卷。Node 容器不挂载数据库、Django/微信加密密钥或媒体卷，不连接 `private` 网络；只读共享临时项目副本，并通过专用 token 接收单次上传任务。备份和升级停写时暂停两个上传服务。Nginx请求缓存保留64MiB以容纳既有50MiB视频上传，不缩减原60MiB请求限制。调度周期120秒，数据库降低连接数与内存配置、WAL目标。它们是资源上限，不是性能保证；尤其 WAL 目标不是磁盘硬配额。启用上传前须核算宿主机内存、磁盘与实际峰值。
 
 `MALL_EDGE_NETWORK` 指向运维预先准备的专用外部网络，只接 Caddy 和本商城 admin；`MALL_EDGE_ALIAS` 为唯一上游别名，不复用其它项目别名。Caddy 的 HTTPS 站点反代到该别名的8080端口，HTTP入口只跳转HTTPS。此覆盖不修改 Caddy 本身，也不创建/连接其它应用网络；DB及Web仍不发布主机端口，外部edge只连接admin，数据库保持internal网络。admin原有主机端口仍只绑定127.0.0.1，供本机诊断。
 
@@ -68,7 +68,13 @@ UAT 组合为 `compose.production.yaml` + `compose.uat.yaml`（资源）+ `compo
 
 ### 小磁盘主机使用预构建镜像
 
-目标机空间有限时，在可信构建机从固定、干净的发布检出构建三张镜像，再通过受控渠道导入目标机：`product-mall-backend:<完整SHA>`、`product-mall-admin:<完整SHA>`、`product-mall-ops:<完整SHA>`。本机为arm64而目标为x86时明确构建 `--platform linux/amd64`；不能直接发送本机架构镜像。镜像构建仍须通过原来源修订检查，标签和 `org.opencontainers.image.revision` 必须一致。
+后端镜像默认使用 Debian 官方软件源。阿里云 UAT 主机若访问该源过慢，可在私有环境文件中设置 `E5_APT_MIRROR=mirrors.aliyun.com`；此变量只影响镜像构建，Dockerfile 仅接受官方源与该镜像源。
+
+目标机空间有限时，在可信构建机从固定、干净的发布检出构建默认三张镜像：`product-mall-backend:<完整SHA>`、`product-mall-admin:<完整SHA>`、`product-mall-ops:<完整SHA>`。仅当 `E5_CODE_RELEASE_ENABLED=1` 时增加独立 Node 镜像 `product-mall-mini-ci:<完整SHA>`。本机为arm64而目标为x86时明确构建 `--platform linux/amd64`；不能直接发送本机架构镜像。标签和 `org.opencontainers.image.revision` 必须与目标提交一致。Node 镜像只复制上传代码和冻结依赖，不复制后端源码或私有文件。冻结的 `miniprogram-ci@2.1.47` 对 `protobufjs@7.5.6` 作跨主版本覆盖，本地依赖审计仍有 12 项 high、0 项 critical（2026-09-29 锁文件）；现已增加官方 SDK 在无网络、只读容器中的真实 JS/WXML/WXSS 编译检查（命令见 `mini-ci-worker/README.md`），该离线检查不调用上传接口；未完成真实账号/IP 白名单、微信上传、提审、发布及真机验收。默认不启动上传服务，镜像构建成功不等于可启用生产上传。
+
+如需在隔离 UAT 中验证代码上传，先用 `secrets.token_urlsafe(48)` 生成至少 32 字符的随机 token，存入检出目录外、UID/GID 10001 且权限 0400 的独立文件。将绝对路径设为 `E5_MINI_CI_DISPATCH_TOKEN_FILE`，并显式设置 `E5_CODE_RELEASE_ENABLED=1`；部署脚本在停写前核验文件格式及容器 UID 10001 的读取权限。部署和备份脚本仅解析环境文件中这两个字段的字面值，确保停写备份会包含上传 worker。运维可在私有环境文件设置 `WECHAT_CODE_UPLOAD_EGRESS_IP`，将经独立网络查询核对的公网出口 IP 显示给后台管理员，供微信小程序代码上传白名单配置；环境值不能证明微信已放行。设置 `MALL_MINIPROGRAM_API_BASE_URL` 为该环境的公开 HTTPS **源站**（例如 `https://uat.example.com`，无路径），部署闸门会依据当前后台小程序 AppID 与该地址从固定 Git 版本生成新的不可变包，原 Git 文件不修改；包摘要覆盖生成后的配置。未设置时使用原始源码，若仍含游客 AppID 或本机地址，发布条件会阻断上传。目标小程序管理员在微信公众平台下载该小程序的代码上传密钥并将出口 IP 加入白名单后，可在 PC 后台加密保存密钥并选择不可变版本直接上传开发版本，无需第三方平台授权或登录服务器。AppSecret 用于小程序服务端接口，不是代码上传私钥，也不作为上传闸门。真实可用性以微信上传结果为准。每次SDK执行分配 `/tmp` 下0700独立cwd/HOME/TMPDIR，源包和根文件系统保持只读；进程退出、超时或启动失败后终止进程组并清理临时目录。不要通过放开源码写权限解决编译缓存问题。
+
+若要在本系统自动提审和发布，第三方平台配置的授权回调路径必须是 `/api/v1/wechat/open-platform/authorization-callback`，微信消息票据回调路径是 `/api/v1/wechat/open-platform/events`；两者需要目标环境的 HTTPS 入口。后台按顺序配置组件凭据、接收验证票据、由目标小程序管理员授权代码管理权限、上传开发小程序代码密钥、选择不可变版本经 `DIRECT_COMMIT` 上传、提审、刷新审核结果、发布。`CI_DIRECT` 上传不作为该链路的可提审版本。对 `UNKNOWN`／`RELEASE_UNKNOWN`，先到微信后台人工核查，再带说明和密码确认关闭任务；关闭不证明平台操作成功。
 
 调用部署或恢复时导出 `E5_IMAGE_MODE=prebuilt`，可选 `E5_IMAGE_PLATFORM=linux/amd64`（默认值）。脚本在停写、迁移前核对三张本机镜像的精确修订与OS/架构；缺失或不符即退出，不自动pull、重新打tag或清理镜像。默认 `E5_IMAGE_MODE=build` 保留原本机构建。ops共享镜像统一由声明build的backup服务构建，restore只消费该镜像，支持全新恢复主机。传输包、旧镜像和备份的留存需要另算磁盘预算，脚本不会prune任何缓存、镜像或卷。
 
@@ -88,7 +94,7 @@ UAT 组合为 `compose.production.yaml` + `compose.uat.yaml`（资源）+ `compo
 
 数据库与媒体配对包**不包含部署密钥**。微信托管凭据密文必须使用原加密 key 才能恢复；三项部署密钥须通过独立受控渠道异机备份，记录与部署／备份版本的对应关系。恢复前从该渠道安装原 key 并运行相同权限预检，不能临时生成替代 key。保护密钥副本与数据备份的访问权限，不能把 key 内容追加到备份 manifest、日志或公开页面。密钥丢失不属于数据库恢复成功；不得对此声称 RPO/RTO 已达标。
 
-`e5-recover.sh` 要求新的 Compose project、新的数据库名、不同的本机管理台端口和此前不存在的 `*_pgdata`、`*_media` 卷。首次部署和恢复都会在build/run/up前查询目标project的所有运行及停止容器，任一存在或查询失败均拒绝，卷保护仍保留。它拒绝与源 project 同名，默认要求检出提交与备份清单的 `release_revision` 完全一致；先校验清单及两个备份文件的大小、哈希、PostgreSQL 归档和媒体路径／类型，再恢复到新库及空媒体卷；最后运行 E3.1 闸门，启动Web和admin供隔离验证，scheduler与导出worker保持停止，避免验证前自动处理备份中的待办。**不要**直接对正在运行的源 project 调用 `restore` 服务。失败的目标卷会保留供排查，需由运维确认后清理。恢复脚本不自动切换公网流量。若明确要在恢复后迁移至较新的兼容提交，单独设置 `E5_ALLOW_FORWARD_MIGRATION=1`；入口还会校验备份提交是目标提交的祖先，兼容性仍须单独确认并记录迁移结果，此时不属于原版本回退演练。
+`e5-recover.sh` 要求新的 Compose project、新的数据库名、不同的本机管理台端口和此前不存在的 `*_pgdata`、`*_media` 卷。首次部署和恢复都会在build/run/up前查询目标project的所有运行及停止容器，任一存在或查询失败均拒绝，卷保护仍保留。它拒绝与源 project 同名，默认要求检出提交与备份清单的 `release_revision` 完全一致；先校验清单及两个备份文件的大小、哈希、PostgreSQL 归档和媒体路径／类型，再恢复到新库及空媒体卷；最后运行 E3.1 闸门，启动Web和admin供隔离验证，scheduler、导出worker与代码上传worker保持停止，避免验证前自动处理备份中的待办或连接微信。**不要**直接对正在运行的源 project 调用 `restore` 服务。失败的目标卷会保留供排查，需由运维确认后清理。恢复脚本不自动切换公网流量。若明确要在恢复后迁移至较新的兼容提交，单独设置 `E5_ALLOW_FORWARD_MIGRATION=1`；入口还会校验备份提交是目标提交的祖先，兼容性仍须单独确认并记录迁移结果，此时不属于原版本回退演练。
 
 恢复组合保留UAT资源覆盖，但不加载在线edge文件，额外加载 `compose.recovery.yaml` 移除Web平台出口。恢复admin没有在线网络或别名，不能被Caddy误选作上游；保持独立localhost端口，不验证真实微信。数据库仍会执行已说明的迁移／源码同步闸门，人工验证也可能产生审计或读配额记录，不能将恢复栈称为完全不变的备份镜像。恢复服务转为正式入口、启用后台任务或开放出网必须按单独切换方案执行，不由恢复脚本隐式完成。
 

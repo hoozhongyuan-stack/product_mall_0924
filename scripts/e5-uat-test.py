@@ -16,13 +16,16 @@ spec.loader.exec_module(fixtures)
 
 
 class UatCompositionTests(unittest.TestCase):
-    def config(self, recovery=False):
+    def config(self, recovery=False, code_release=False):
         env = {**os.environ, 'MALL_RELEASE_REVISION': 'a' * 40, 'MALL_ALLOWED_HOSTS': 'mall.example.com',
                'MALL_CSRF_TRUSTED_ORIGINS': 'https://mall.example.com', 'POSTGRES_DB': 'synthetic',
                'POSTGRES_USER': 'synthetic', 'E5_BACKUP_HOST_DIR': '/tmp/synthetic-backups',
                'E5_WECHAT_CREDENTIAL_KEY_FILE': '/tmp/synthetic-key', 'E5_DEPLOY_PROFILE': 'uat',
-               'MALL_EDGE_NETWORK': 'synthetic-mall-edge', 'MALL_EDGE_ALIAS': 'synthetic-mall'}
-        return json.loads(subprocess.check_output(['docker', 'compose', '--profile', 'ops', '-f',
+               'MALL_EDGE_NETWORK': 'synthetic-mall-edge', 'MALL_EDGE_ALIAS': 'synthetic-mall',
+               'WECHAT_CODE_UPLOAD_EGRESS_IP': '8.152.204.21',
+               'MALL_MINIPROGRAM_API_BASE_URL': 'https://uat.example.com'}
+        profiles = ['--profile', 'ops'] + (['--profile', 'code-release'] if code_release else [])
+        return json.loads(subprocess.check_output(['docker', 'compose', *profiles, '-f',
                           str(ROOT / 'compose.production.yaml'), '-f', str(ROOT / 'compose.uat.yaml'), '-f',
                           str(ROOT / ('compose.recovery.yaml' if recovery else 'compose.uat-edge.yaml')),
                           'config', '--format', 'json'], env=env, text=True))
@@ -33,12 +36,14 @@ class UatCompositionTests(unittest.TestCase):
         self.assertEqual(web['command'][web['command'].index('--workers') + 1], '1')
         self.assertEqual(web['command'][web['command'].index('--threads') + 1], '2')
         resident = ['db', 'web', 'export-worker', 'scheduler', 'admin']
-        self.assertLessEqual(sum(int(rows[name]['mem_limit']) for name in resident), 1280 * 1024 * 1024)
+        self.assertLessEqual(sum(int(rows[name]['mem_limit']) for name in resident), 1792 * 1024 * 1024)
         for name in resident:
             self.assertGreater(float(rows[name]['cpus']), 0)
             self.assertEqual(rows[name]['logging']['options']['max-size'], '10m')
         self.assertEqual(web['environment']['EXCHANGE_ORDER_ENABLED'], '0')
         self.assertEqual(web['environment']['WECHAT_REFUND_ENABLED'], '0')
+        self.assertEqual(web['environment']['WECHAT_CODE_UPLOAD_EGRESS_IP'], '8.152.204.21')
+        self.assertEqual(web['environment']['MALL_MINIPROGRAM_API_BASE_URL'], 'https://uat.example.com')
         cache = next(row for row in rows['admin']['tmpfs'] if row.startswith('/var/cache/nginx:'))
         self.assertGreaterEqual(int(re.search(r'size=(\d+)', cache).group(1)), 60 * 1024 * 1024)
         self.assertGreaterEqual(int(rows['admin']['mem_limit']), 96 * 1024 * 1024)
@@ -52,9 +57,24 @@ class UatCompositionTests(unittest.TestCase):
             self.assertEqual('edge' in row.get('networks', {}), name == 'admin')
         self.assertFalse(cfg['services']['db'].get('ports'))
         self.assertFalse(cfg['services']['web'].get('ports'))
+        self.assertNotIn('code-upload-worker', cfg['services'])
+        self.assertNotIn('mini-ci-adapter', cfg['services'])
         self.assertEqual(cfg['services']['web']['environment']['DJANGO_TRUST_PROXY_HTTPS'], '1')
         self.assertTrue(any(v['target'] == '/etc/nginx/mall-proxy-scheme.conf'
                             and v['read_only'] for v in cfg['services']['admin']['volumes']))
+
+    def test_optional_ci_adapter_cannot_read_backend_secrets_or_reach_private_network(self):
+        rows = self.config(code_release=True)['services']
+        node = rows['mini-ci-adapter']
+        python = rows['code-upload-worker']
+        self.assertEqual(set(node['networks']), {'ci-link', 'egress'})
+        self.assertEqual(set(python['networks']), {'ci-link', 'private', 'egress'})
+        self.assertFalse(node.get('ports'))
+        self.assertEqual([item['source'] for item in node['secrets']], ['mini_ci_dispatch_token'])
+        self.assertTrue(node['read_only'])
+        self.assertTrue(node['security_opt'])
+        self.assertTrue(any(item['target'] == '/var/lib/mini-ci-stage' and item['read_only']
+                            for item in node['volumes']))
 
     def test_recovery_has_resource_limits_but_no_edge_or_web_egress(self):
         cfg = self.config(recovery=True)
@@ -142,7 +162,27 @@ class UatOrchestrationTests(unittest.TestCase):
             for call in calls:
                 if call.startswith('compose '): self.assertIn('compose.uat.yaml', call)
 
-    def test_prebuilt_mode_checks_three_release_images_and_never_builds(self):
+    def test_file_enabled_code_release_is_paused_for_backup_and_preflight_checks_token(self):
+        token = self.root / 'mini-ci-token'
+        token.write_text('A' * 48)
+        token.chmod(0o600)
+        env_file = self.root / 'release.env'
+        env_file.write_text('E5_DEPLOY_PROFILE=uat\nE5_CODE_RELEASE_ENABLED=1\n'
+                            f'E5_MINI_CI_DISPATCH_TOKEN_FILE={token}\n')
+        self.env['E5_ENV_FILE'] = str(env_file)
+        self.env.pop('E5_CODE_RELEASE_ENABLED', None)
+        self.env.pop('E5_MINI_CI_DISPATCH_TOKEN_FILE', None)
+        result, calls = self.run_script('e5-backup-cycle.sh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any('--profile code-release' in call for call in calls))
+        self.assertTrue(any(' stop admin web export-worker mini-ci-adapter code-upload-worker scheduler' in call
+                            for call in calls))
+        self.assertTrue(any('mini-ci-adapter' in call and '--entrypoint sh' in call for call in calls))
+        refused, calls = self.run_script('e5-deploy.sh', ['upgrade'], fail='token')
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertFalse(any(' stop ' in call or ' up ' in call for call in calls))
+
+    def test_prebuilt_mode_checks_only_enabled_release_images_and_never_builds(self):
         self.env['E5_IMAGE_MODE'] = 'prebuilt'
         for script, args in [('e5-deploy.sh', ['upgrade']), ('e5-recover.sh', ['e5-2026-09-28-synthetic'])]:
             result, calls = self.run_script(script, args)
@@ -152,6 +192,22 @@ class UatOrchestrationTests(unittest.TestCase):
             self.assertEqual(len(images), 3)
             for image in ['backend', 'admin', 'ops']:
                 self.assertTrue(any('product-mall-' + image + ':' + fixtures.REVISION in c for c in images))
+
+    def test_code_release_opt_in_requires_private_token_and_checks_isolated_image(self):
+        token = self.root / 'mini-ci-token'
+        token.write_text('A' * 48)
+        token.chmod(0o600)
+        self.env.update({'E5_CODE_RELEASE_ENABLED': '1', 'E5_MINI_CI_DISPATCH_TOKEN_FILE': str(token),
+                         'E5_IMAGE_MODE': 'prebuilt'})
+        result, calls = self.run_script('e5-deploy.sh', ['upgrade'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(any('product-mall-mini-ci:' + fixtures.REVISION in c for c in calls))
+        self.assertTrue(any('--profile code-release' in c for c in calls if c.startswith('compose ')))
+        self.assertTrue(any('mini-ci-adapter code-upload-worker' in c for c in calls))
+        token.chmod(0o644)
+        refused, calls = self.run_script('e5-deploy.sh', ['upgrade'])
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertFalse(any(' stop ' in c or ' up ' in c for c in calls))
 
     def test_recovery_builds_ops_via_the_service_that_defines_its_build(self):
         result, calls = self.run_script('e5-recover.sh', ['e5-2026-09-28-synthetic'])
@@ -180,6 +236,7 @@ class UatOrchestrationTests(unittest.TestCase):
             self.assertIn('compose.recovery.yaml', call)
         started = next(c for c in target_calls if 'up --wait -d web' in c)
         self.assertNotIn('export-worker', started)
+        self.assertNotIn('code-upload-worker', started)
         self.assertNotIn('scheduler', started)
 
     def test_initial_and_recovery_refuse_existing_project_or_unknown_inventory_before_any_build(self):

@@ -58,6 +58,7 @@ if a and a[0]=='inspect':print(os.environ['MALL_RELEASE_REVISION'])
 elif 'config' in a and 'json' in a:print(json.dumps({{'name':'synthetic-source','services':{{'admin':{{'ports':[{{'published':'18080'}}]}}}}}}))
 elif 'ps' in a:print('synthetic-web')
 elif any(x.endswith('e5-preflight.py') for x in a):sys.exit(19 if os.environ.get('E5_TEST_FAIL')=='runtime' else 0)
+elif 'mini-ci-adapter' in a and '--entrypoint' in a:sys.exit(29 if os.environ.get('E5_TEST_FAIL')=='token' else 0)
 ''')
         self.env = {**os.environ, 'PATH': str(self.tools) + ':' + os.environ['PATH'],
                     'MALL_RELEASE_REVISION': REVISION, 'E5_BACKUP_HOST_DIR': str(self.backups),

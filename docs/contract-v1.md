@@ -60,6 +60,8 @@
 |---|---|---|
 | `POST /api/v1/admin/auth/login` | `loginName`、`password` | `accountId`、`displayName`、`permissionCodes`、会话状态；不返回密码哈希。失败次数与锁定时限在服务端执行。 |
 | `GET /api/v1/admin/me`、`POST /api/v1/admin/auth/logout` | 会话 Cookie | 当前账号、权限；退出使会话失效。高影响操作仍重新确认当前会话。 |
+| `POST /api/v1/admin/auth/password` | `currentPassword`、`newPassword` | 所有已登录管理员均可修改自己的密码，无需账号管理权限；返回 `{accountId,revision,requiresLogin:true}` 并退出当前登录。 |
+| `POST /api/v1/admin/accounts/{id}/password` | 主账号的 `currentPassword`、子账号的 `newPassword`、`expectedRevision` | 仅 OWNER 可重置 STAFF；返回 `{accountId,revision,requiresLogin:false}`，保持主账号登录和子账号原有启停状态。 |
 | `GET/POST /api/v1/admin/accounts`、`PATCH /api/v1/admin/accounts/{id}` | 登录名、状态、权限组 ID、`expectedRevision` | 账号摘要；主账号和子账号权限边界在服务端执行，停用立即失效。凭据重置单独动作并审计。 |
 | `GET/POST /api/v1/admin/permission-groups`、`PATCH /api/v1/admin/permission-groups/{id}` | 组名、`permissionCodes[]`、`expectedRevision` | 权限组及成员数；不能通过自改组提升自己的权限。 |
 | `GET/POST /api/v1/admin/categories`、`PATCH /api/v1/admin/categories/{id}` | `parentId`、名称、排序、状态、`expectedRevision` | 两级分类树；管理端读取时返回关联商品数与在售商品数，停用前检查在售商品。 |
@@ -122,6 +124,8 @@
 启动 GIF 配置独立于页面配置。发布时同样检查草稿修订、素材可用性和权限，生成不可变版本并切换 `startup_publication` 指针；失败时用户端继续读取旧版本和兜底图。
 
 ### 3.3 阶段 A 权限与会话基线
+
+密码修改需 CSRF 与服务端当前密码验证。新密码沿用强度校验（至少 12 个字符、不得与登录名或显示名相似，最长 1024 个字符），不得与目标当前密码相同。连续 5 次当前密码错误锁定 15 分钟；单操作者 15 分钟内最多 20 次成功修改。事务锁定操作者和目标，等待锁后重新核验会话版本；成功递增目标 `revision/auth_version` 并核销其未消费确认，使其全部旧会话失效。审计仅记账号、动作和修订，不含明文或哈希。修订冲突返回 `409 REVISION_CONFLICT`；权限/当前密码错误为 `403`；限流为 `429 RATE_LIMITED`。界面入口为顶栏“修改密码”和主账号的子账号列表“重置密码”。
 
 阶段 A 操作码与接口映射、预设组矩阵及拒绝用例详见[阶段 A 开工准备与评审记录](phase-a-preparation.md#2-阶段-a-权限评审)。后续阶段再增加库存、订单、收款、退款与代码发布的细粒度操作码。主账号可调整组权限，但子账号不能给自己增加权限。
 
@@ -572,7 +576,7 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 ### 5.27 E3.0：服务端代码源码快照与私有版本基础
 
-部署流程完成数据库迁移后执行 `python backend/manage.py build_miniprogram_source`。命令从部署拥有的固定 `mini-program/` 源码目录生成确定性 ZIP：固定的根文件和 `assets/components/lib/pages` 目录、排序后的文件名、固定 ZIP 元数据；忽略测试、依赖、隐藏和私有配置，逐级拒绝符号链接与非法文件，受 `STORAGE_CODE_MAX_BYTES` 限制。整树二次读取摘要不一致时拒绝，部署流程仍须在源码更新完成后才启动命令。它是**源码快照**，不是微信编译包。来源身份以实际文件名和内容计算 SHA-256；本片不把未经证明的 Git 提交号写成可信来源修订。
+部署流程完成数据库迁移后执行 `python backend/manage.py build_miniprogram_source`。命令从部署拥有的固定 `mini-program/` 源码目录生成确定性 ZIP：固定的根文件和 `assets/components/lib/pages/styles` 目录、排序后的文件名、固定 ZIP 元数据；忽略测试、依赖、隐藏和私有配置，逐级拒绝符号链接与非法文件，受 `STORAGE_CODE_MAX_BYTES` 限制。整树二次读取摘要不一致时拒绝，部署流程仍须在源码更新完成后才启动命令。打包时还核验 WXSS 中带引号的本地 `@import` 引用是否存在于制品中；引用缺失或越界即失败，避免生成遗漏公共样式的代码包。它是**源码快照**，不是微信编译包。来源身份以实际文件名和内容计算 SHA-256；本片不把未经证明的 Git 提交号写成可信来源修订。
 
 包以 `0600` 权限先写入与持久化媒体根同卷的私有临时文件，完整同步后按摘要无覆盖安装到 `code/`；包和元信息摘要、文件数、字节数写入由数据库触发器禁止 UPDATE／DELETE 的 `CodeVersion`。重复构建同一源码验证既有文件摘要并复用版本，另产生一次构建任务记录；不同内容产生新版本。构建任务先持久化 `STARTED`，成功记 `SUCCEEDED`，可判定错误记 `FAILED` 和安全错误码；进程中断留下的任务在下次运行时转 `INTERRUPTED`。文件已安装而数据库失败时，按内容摘要保留私有文件供下次核验复用，不能由素材清理器删除。数据库完全不可用时命令非零退出；无失败行不能解释为同步成功。数据库版本的 `READY` 记录是构建成功事实；查询列表以文件存在和大小返回 `STORED_UNVERIFIED`，详情完成摘要复核后才返回当前 `READY`，缺失或不匹配返回 `UNAVAILABLE`。这些状态都不表示微信平台已收到。
 
@@ -582,7 +586,31 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 | `GET /api/v1/admin/code-versions/{versionId}` | 需 `code.version.read`；返回该版本的非敏感元数据，无代码包下载或物理路径。 |
 | `GET /api/v1/admin/code-sync-jobs` | 需 `code.version.read`；同样分页，返回最近构建任务及 `STARTED/SUCCEEDED/FAILED` 与安全失败代码。 |
 
-版本 DTO 为 `versionId/versionLabel/sourceRevision/sourceDigest/packageSha256/packageBytes/fileCount/storageStatus/platformStatus/createdAt/completedAt/failureCode`；`sourceRevision` 在没有可验证提交来源时为 `null`，`platformStatus` 本片固定 `NOT_CONFIGURED`。任务 DTO 为 `taskId/versionId/status/failureCode/createdAt/completedAt`。管理台仅查询版本与任务，不提供浏览器上传、构建、预览、提审或发布按钮。接口使用当前后台会话与独立只读权限、私有响应禁止缓存；不返回本地路径、密钥、原始异常或包内容。平台凭据、真实构建／自动上传能力、预览／提审／发布及可信平台回执在后续 E3 切片和真实主体环境分别验收，任何本地 `READY` 都不可作为可提审或已发布状态。
+版本 DTO 为 `versionId/versionLabel/sourceRevision/sourceDigest/packageSha256/packageBytes/fileCount/storageStatus/platformStatus/createdAt/completedAt/failureCode`；`sourceRevision` 在没有可验证提交来源时为 `null`，`platformStatus` 本片固定 `NOT_CONFIGURED`。任务 DTO 为 `taskId/versionId/status/failureCode/createdAt/completedAt`。E3.0 管理台仅查询版本与任务，不提供浏览器代码包上传、构建、预览、提审或发布按钮。接口使用当前后台会话与独立只读权限、私有响应禁止缓存；不返回本地路径、密钥、原始异常或包内容。第三方平台授权、真实自动上传能力、预览／提审／发布及可信平台回执仍需在后续 E3 切片和真实主体环境分别验收，任何本地 `READY` 都不可作为可提审或已发布状态。
+
+#### 发布条件检查与代码上传密钥配置
+
+后台代码版本页增加只读发布条件检查。`GET /api/v1/admin/code-release/readiness` 需要 `code.version.read`，逐项返回 `code/status/title/detail`，并返回运维配置且经公网 IP 格式校验的 `egressIp`，未配置时为 `null`；`status` 仅为 `PASS/BLOCKED/UNVERIFIED`，分别表示本地证据已满足、明确不满足、当前无法验证。页面把目标小程序直传开发版本与第三方平台自动提审发布分别展示。直传不依赖第三方平台授权，也不以 AppSecret 的最近探测结果作为上传闸门；AppSecret 是独立的小程序服务端凭据。检查还包括最新不可变代码包及摘要、包内 AppID 和 API 地址、目标代码上传私钥、第三方平台接入与代码管理授权。AppSecret 检测结果只在当前凭据快照及最近 24 小时内有效；过期或时钟异常显示 `UNVERIFIED` 并提示上次检测时间。HTTPS 地址检查排除本机及常见本地域名，只验证包内静态配置，不证明微信合法域名或真机连通。`egressIp` 仅帮助管理员配置微信代码上传 IP 白名单，不证明当前出口或白名单已获微信接受；该结论只能由真实上传结果支持。第三方平台未配置或未收到验证票据时，平台接入及授权检查显示 `BLOCKED`，但不阻止直传；微信暂不可达时显示 `UNVERIFIED`。默认页面显示直传准备条件和下一步提示；第三方平台条件及失败原因位于“第三方平台提审与发布（选配）”展开区。AppSecret 检测保留在微信接入配置页。构建和同步记录收起，代码包列表读取错误仍在上传表单旁显示；读取失败时不得显示旧结果为当前结果。
+
+`GET /PUT /api/v1/admin/code-release/upload-key` 需要 `code.version.read` 与 `code.release.manage`。GET 仅返回 `{configured,revision,appId}`；PUT 严格接受 `{appId,key,expectedRevision}`，其中 `key` 是不超过 16 KiB 的 PEM RSA 代码上传私钥，须匹配当前小程序 AppID、配置修订及当前密码的 `code.release.upload_key` 动作确认。私钥按独立用途及 AppID 绑定加密保存，仅回显配置状态，不返回原文；保存和轮换写审计。部署密钥缺失或无法解密时，条件检查显示阻断，部署恢复闸门同时报错。代码上传私钥与 AppSecret 是不同凭据，保存成功不证明微信接受，也不触发上传、提审或发布。
+
+代码包选择允许列表的 `STORED_UNVERIFIED`（文件存在、尚未重算摘要）以及详情核验后的 `READY`；`UNAVAILABLE` 不可选。最新代码包仍须通过准备检测，所有提交由服务端再次完整核验，不把列表状态当作微信已接收。
+
+管理台优先提供 `CI_DIRECT` 直传操作：选择已同步到后台的不可变代码版本、微信版本号及说明，凭目标小程序上传私钥和密码确认创建 `POST /api/v1/admin/code-release/uploads` 任务。服务器对所选版本重新核对摘要、AppID、HTTPS API 地址与密钥修订，再由隔离 worker 调用 `miniprogram-ci`；最新版本的只读条件检查不阻止选择其他已就绪版本，所选版本以服务端提交校验为准。直传成功仅表示微信接收开发版本，`reviewAvailable=false`，不得据此开放本系统的第三方平台提审按钮。未知结果禁止自动重试，须核查微信后台后处理。
+
+`POST /api/v1/admin/code-release/domain-check` 需要 `code.version.read` 和 CSRF，限流每分钟10次，接受可选 `{versionId}`，省略时查询最新不可变包。核对所选包摘要、AppID及HTTPS API源站后，以已配置AppSecret获取普通稳定token（不强制刷新、不持久化），调用微信 `getwxadevinfo`。返回 `versionId/appId/checkedAt/status/code/detail/requiredRequestDomains/configuredRequestDomains/missingRequestDomains/platformErrorCode`。缺配置或缺域名为 `BLOCKED`；网络、权限及未知平台结果为 `UNVERIFIED`。域名检查仅反映所选包API所需的 request 域名，不代表图片、下载、业务域名或真机验证，也不作为直传鉴权门槛。用户修改包或AppID后页面清除旧检查结果。微信代码上传IP白名单仍在实际上传时验证。
+
+上传记录追加 `failureStage/sdkCode/platformErrorCode/innerPlatformErrorCode/platformReason/failureMessage/nextAction/completedAt`。错误文本来自服务器固定字典，仅保留白名单中的阶段、短SDK码和有符号微信码，不返回原始异常/请求URL/签名/密钥。微信外层通用错误（如 `-1`）可同时保留完整错误信封内识别出的内部整数码；`platformReason` 仅允许 `IP_NOT_ALLOWED/SIGNATURE_INVALID/PACKAGE_TOO_LARGE/FILE_MISSING/INNER_UPLOAD_FAILED/TICKET_REQUEST_FAILED`，未识别的原因留空，不根据外层码猜测。官方开发者工具定义的内部码 `-80056` 显示为 WXSS 编译失败，提示核对样式引用与重新构建。发送前的确定环境、校验、编译失败及明确微信拒绝记 `FAILED`；回执不确定、网络中断、超时或不可信适配器结果仍记 `UNKNOWN`。页面在存在 PENDING/RUNNING/UNKNOWN 上传任务时禁止重复提交，并显示对应操作指引。历史 UNKNOWN 不因部署迁移而改变，仍需人工核对微信版本再关闭；已关闭任务保留历史码与核查说明，不再显示阻止重试的行动提示。
+
+受信任部署可配置 `MALL_MINIPROGRAM_API_BASE_URL` 为无路径的公开 HTTPS 源站。固定提交的 Git 小程序源码先在检出目录外暂存，再将当前受管 AppID 与该源站写入暂存包；生成后摘要与版本号绑定最终字节，不改写 Git 工作树或已存的旧版本。配置缺失时沿用原始源码，游客 AppID 或本机 API 地址会被发布条件阻断。
+
+#### E3.2 第三方平台代码发布链路
+
+第三方平台组件与开发小程序分别配置。`GET/PUT /api/v1/admin/integrations/wechat-open-platform` 管理组件 AppID、开发小程序 AppID、固定 HTTPS 授权回调地址及加密保存的组件 AppSecret、消息 Token 和 EncodingAESKey；写操作需要微信集成管理权限和密码确认，不回显原文。`POST .../authorize` 生成目标小程序管理员授权链接；微信票据和授权回调经签名、AES、组件 AppID、时效与一次性 state 校验。授权状态向微信实时查询，必须确认目标 AppID、小程序类型、正常账号状态及代码管理权限集 18；网络或平台异常显示 `UNVERIFIED`，不得据已保存令牌显示 `PASS`。
+
+`GET/PUT /api/v1/admin/code-release/developer-upload-key` 独立保存开发小程序的 PEM RSA 上传私钥，不复用目标小程序直传私钥。`POST /api/v1/admin/code-release/uploads` 选择不可变版本、版本号、说明与 `DIRECT_COMMIT` 渠道，需 UUID 幂等键、管理权限和密码确认；调度在专用临时卷重验包摘要、AppID、实时授权与密钥修订，临时覆盖 `project.config.json` 并添加 `ext.json`，交由隔离 Node 容器运行 `miniprogram-ci`。成功仅表示微信接收该待审核版本。超时与不明错误记录 `UNKNOWN`，禁止自动重试；管理员核查后可带说明关闭未知任务，但关闭不标记成功。
+
+仅成功的 `DIRECT_COMMIT` 上传可进入审核。`GET /api/v1/admin/code-release/categories` 读取微信类目；`POST .../reviews` 在外部调用前持久化审核尝试，检查授权和类目、UUID 幂等键、密码确认，成功记录微信 `auditid`。`POST .../reviews/{id}/refresh` 查询审核单，明确审核通过后才允许 `POST .../reviews/{id}/release`。发布前再次核对具体审核单已通过且为微信最新通过版本；平台发布接口不接受审核单号，故仍需排除平台侧并发改版风险。网络结果未知时不自动重复提审或发布，只能人工核查并以说明关闭，不把关闭当作成功。后台 `RELEASE_REQUESTED` 只证明微信接受发布请求，正式线上版本仍需微信后台及真机验收。上述能力在 Compose 中默认关闭上传 worker，真实账号、IP 白名单、合法域名和平台回执未在本地测试中证明。
 
 ### 5.28 E3.1：可信 Git 来源与部署自动同步
 

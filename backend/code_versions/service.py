@@ -18,6 +18,7 @@ from catalog.validation import CatalogError
 from .models import CodeBuildJob, CodeSourceProvenance, CodeVersion
 from .package import PackageError, build_package
 from .trusted_source import REVISION, build_git_package
+from wechat_integration.credentials import CredentialsUnavailable, effective_app_id
 
 
 LOGGER = logging.getLogger(__name__)
@@ -176,6 +177,16 @@ def build_local_version():
 
 def build_trusted_version(repo_root, expected_revision):
     """Build from Git objects after proving the checkout matches expected HEAD."""
-    return _run_build(lambda: build_git_package(repo_root, expected_revision,
-                                                settings.STORAGE_CODE_MAX_BYTES),
+    def package_builder():
+        api_base_url = settings.MALL_MINIPROGRAM_API_BASE_URL
+        if not api_base_url:
+            return build_git_package(repo_root, expected_revision, settings.STORAGE_CODE_MAX_BYTES)
+        try:
+            app_id = effective_app_id()
+        except CredentialsUnavailable as exc:
+            raise PackageError('RELEASE_CONFIG_INVALID') from exc
+        return build_git_package(repo_root, expected_revision, settings.STORAGE_CODE_MAX_BYTES,
+                                 release_app_id=app_id, api_base_url=api_base_url)
+
+    return _run_build(package_builder,
                       expected_revision)

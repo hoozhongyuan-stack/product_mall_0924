@@ -80,7 +80,7 @@ else
         echo 'Running application has no release identity.' >&2
         exit 1
     }
-    compose stop admin web export-worker scheduler
+    compose stop admin web export-worker $e5_code_release_services scheduler
     if ! compose --profile ops run --rm --no-deps -e E5_WRITERS_PAUSED=1 \
             -e MALL_RELEASE_REVISION="$old_revision" backup; then
         echo 'Backup failed. Writers remain stopped; do not continue the upgrade.' >&2
@@ -94,5 +94,5 @@ if ! compose up --no-deps --force-recreate --exit-code-from release release; the
     exit 1
 fi
 
-compose up --wait -d web export-worker scheduler admin
+compose up --wait -d web export-worker $e5_code_release_services scheduler admin
 echo "Release $MALL_RELEASE_REVISION is healthy in the Compose application stack."

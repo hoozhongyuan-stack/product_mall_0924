@@ -1,6 +1,7 @@
 """E3.1 committed-source proof and fail-closed deployment sync."""
 
 import io
+import json
 import os
 import subprocess
 import tempfile
@@ -44,6 +45,43 @@ class GitSourceMixin:
 
 
 class TrustedSourceTests(GitSourceMixin, SimpleTestCase):
+    def test_trusted_git_package_keeps_style_imports(self):
+        (self.source / 'styles').mkdir()
+        (self.source / 'styles' / 'tokens.wxss').write_text(':root { color: red; }', encoding='utf-8')
+        (self.source / 'app.wxss').write_text('@import "styles/tokens.wxss";', encoding='utf-8')
+        git(self.repo, 'add', 'mini-program')
+        git(self.repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+            'commit', '-qm', 'styles')
+        package = build_git_package(self.repo, git(self.repo, 'rev-parse', 'HEAD'), 100_000)
+        with zipfile.ZipFile(io.BytesIO(package.data)) as archive:
+            self.assertIn('styles/tokens.wxss', archive.namelist())
+
+    def test_release_overlay_uses_configured_app_and_https_origin_without_editing_git(self):
+        (self.source / 'project.config.json').write_text('{"appid":"touristappid"}', encoding='utf-8')
+        (self.source / 'app.js').write_text("App({globalData:{apiBaseUrl:'http://127.0.0.1:8000'}})", encoding='utf-8')
+        git(self.repo, 'add', 'mini-program')
+        git(self.repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+            'commit', '-qm', 'local source')
+        revision = git(self.repo, 'rev-parse', 'HEAD')
+        package = build_git_package(self.repo, revision, 100_000,
+                                    release_app_id='wx0123456789abcdef', api_base_url='https://uat.example.com')
+        with zipfile.ZipFile(io.BytesIO(package.data)) as archive:
+            self.assertEqual(json.loads(archive.read('project.config.json'))['appid'],
+                             'wx0123456789abcdef')
+            self.assertIn(b'https://uat.example.com', archive.read('app.js'))
+            self.assertNotIn(b'127.0.0.1', archive.read('app.js'))
+        self.assertIn('touristappid', (self.source / 'project.config.json').read_text())
+        self.assertIn('127.0.0.1', (self.source / 'app.js').read_text())
+        self.assertEqual(package, build_git_package(self.repo, revision, 100_000,
+            release_app_id='wx0123456789abcdef', api_base_url='https://uat.example.com'))
+
+        for bad_origin in ('http://uat.example.com', 'https://127.0.0.1',
+                           'https://a..example.com', 'https://api.local',
+                           'https://uat.example.com/path'):
+            with self.subTest(bad_origin=bad_origin), self.assertRaises(PackageError):
+                build_git_package(self.repo, revision, 100_000,
+                                  release_app_id='wx0123456789abcdef', api_base_url=bad_origin)
+
     def test_package_comes_from_exact_commit_and_is_repeatable(self):
         first = build_git_package(self.repo, self.revision, 100_000)
         second = build_git_package(self.repo, self.revision, 100_000)

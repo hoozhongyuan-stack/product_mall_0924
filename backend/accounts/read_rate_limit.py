@@ -11,7 +11,7 @@ from .models import AdminReadQuota
 from .security import error
 
 
-LIMITS = {"audit": 60, "business": 30, "wechat.integration": 30}
+LIMITS = {"audit": 60, "business": 30, "wechat.integration": 30, "code.release": 10}
 
 
 def read_rate_limit(request, actor, scope):

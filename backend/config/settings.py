@@ -25,6 +25,8 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 0
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "local-only-change-before-deploy")
 WECHAT_MINI_APP_ID = os.environ.get("WECHAT_MINI_APP_ID", "")
 WECHAT_MINI_APP_SECRET = os.environ.get("WECHAT_MINI_APP_SECRET", "")
+WECHAT_CODE_UPLOAD_EGRESS_IP = os.environ.get("WECHAT_CODE_UPLOAD_EGRESS_IP", "")
+MALL_MINIPROGRAM_API_BASE_URL = os.environ.get("MALL_MINIPROGRAM_API_BASE_URL", "")
 MALL_WECHAT_CREDENTIAL_KEY_FILE = os.environ.get("MALL_WECHAT_CREDENTIAL_KEY_FILE", "")
 ORDER_PAYMENT_METHODS_ENABLED = {"WECHAT": False, "OFFLINE": False}
 EXCHANGE_ORDER_ENABLED = os.environ.get("EXCHANGE_ORDER_ENABLED", "0") == "1"
@@ -64,6 +66,7 @@ INSTALLED_APPS = [
     "inventory",
     "customers",
     "wechat_integration",
+    "wechat_open_platform",
     "checkout",
     "orders",
     "fulfillment",
@@ -101,7 +104,8 @@ DATABASES = {
 }
 TEST_RUNNER = "config.test_runner.SeededDiscoverRunner"
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+     "OPTIONS": {"user_attributes": ["login_name", "display_name"]}},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
