@@ -127,6 +127,8 @@ class ReleaseUploadJob(models.Model):
     failure_stage = models.CharField(max_length=16, blank=True)
     sdk_code = models.CharField(max_length=48, blank=True)
     platform_error_code = models.IntegerField(null=True, blank=True)
+    inner_platform_error_code = models.IntegerField(null=True, blank=True)
+    platform_reason = models.CharField(max_length=32, blank=True)
     resolution_note = models.CharField(max_length=500, blank=True)
     lease_token = models.UUIDField(null=True, blank=True)
     lease_until = models.DateTimeField(null=True, blank=True)

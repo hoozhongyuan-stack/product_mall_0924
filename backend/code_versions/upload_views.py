@@ -34,6 +34,8 @@ def _dto(job):
             'status': job.status, 'failureCode': job.failure_code,
             'failureStage': job.failure_stage or None, 'sdkCode': job.sdk_code or None,
             'platformErrorCode': job.platform_error_code,
+            'innerPlatformErrorCode': job.inner_platform_error_code,
+            'platformReason': job.platform_reason or None,
             'failureMessage': failure_message, 'nextAction': next_action,
             'resolutionNote': job.resolution_note,
             'createdAt': job.created_at.isoformat(),

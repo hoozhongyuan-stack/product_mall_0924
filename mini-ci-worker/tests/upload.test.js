@@ -180,3 +180,85 @@ test('does not infer platform rejection from arbitrary error messages or unsafe 
     assert.equal(JSON.stringify(result).includes('secret'), false)
   }
 })
+
+test('unwraps recognized WeChat error envelopes into bounded inner code and fixed reason', async (t) => {
+  const { root, projectPath } = projectFixture(t)
+  const cases = [
+    ['inner upload fail with errcode: -10002, errmsg: invalid ip: 192.0.2.4', -10002, 'IP_NOT_ALLOWED'],
+    ['inner upload fail with errcode: 80082, errmsg: unexplained backend rejection', 80082, 'INNER_UPLOAD_FAILED'],
+    ['get new ticket fail innerCode: 40013', 40013, 'TICKET_REQUEST_FAILED'],
+    ['get new ticket fail: innerCode: -80011', -80011, 'TICKET_REQUEST_FAILED'],
+    ['inner upload fail with errcode: 80082, errmsg: get new ticket fail innerCode: 40013',
+      40013, 'TICKET_REQUEST_FAILED'],
+    ['get new ticket fail innerCode: 40001, innerMsg: invalid signature', 40001, 'SIGNATURE_INVALID'],
+    ['invalid ip: 192.0.2.4', undefined, 'IP_NOT_ALLOWED'],
+    ['ip 192.0.2.4 not in whitelist', undefined, 'IP_NOT_ALLOWED'],
+    ['invalid private key', undefined, 'SIGNATURE_INVALID'],
+    ['signature verification failed', undefined, 'SIGNATURE_INVALID'],
+    ['package size exceeds limit', undefined, 'PACKAGE_TOO_LARGE'],
+    ['main package source size 3439KB exceed max limit 2048KB', undefined, 'PACKAGE_TOO_LARGE'],
+    ['source size 2770KB exceed max limit 2MB', undefined, 'PACKAGE_TOO_LARGE'],
+    ['file app.json not found', undefined, 'FILE_MISSING'],
+    ['error: iconPath=assets/xx.png, file not found', undefined, 'FILE_MISSING'],
+  ]
+  for (const [errMsg, innerPlatformErrorCode, platformReason] of cases) {
+    const ci = { Project: class {}, upload: async () => { throw {
+      code: 20003, message: `Error: ${JSON.stringify({ errCode: -1, errMsg })}`,
+    } } }
+    assert.deepEqual(await uploadWithSdk(input(projectPath), { ci, allowedRoot: root }), {
+      ok: false, code: 'WECHAT_REJECTED', failureStage: 'UPLOAD', sdkCode: '20003',
+      platformErrorCode: -1, platformReason,
+      ...(innerPlatformErrorCode === undefined ? {} : { innerPlatformErrorCode }),
+    })
+  }
+})
+
+test('structured CiError and signature-CGI envelopes use the same safe diagnostics', async (t) => {
+  const { root, projectPath } = projectFixture(t)
+  for (const error of [
+    { code: 20003, errorStage: 'backend', errCode: -1,
+      errMsg: 'inner upload fail with errcode: 80082, errmsg: unrecognized failure' },
+    { code: 20003,
+      message: 'Error: Error: errCode: -1; errMsg: inner upload fail with errcode: 80082, errmsg: unrecognized failure' },
+  ]) {
+    const ci = { Project: class {}, upload: async () => { throw error } }
+    const result = await uploadWithSdk(input(projectPath), { ci, allowedRoot: root })
+    assert.equal(result.platformErrorCode, -1)
+    assert.equal(result.innerPlatformErrorCode, 80082)
+    assert.equal(result.platformReason, 'INNER_UPLOAD_FAILED')
+  }
+})
+
+test('unknown, oversized, or unrecognized error text never invents a reason or exposes text', async (t) => {
+  const { root, projectPath } = projectFixture(t)
+  for (const errMsg of [
+    'PRIVATE KEY and https://secret/?access_token=SECRET',
+    'not an invalid ip error',
+    'inner upload fail with errcode: 0, errmsg: invalid ip',
+    'inner upload fail with errcode: 100000000, errmsg: invalid ip',
+    'get new ticket fail innerCode: 80082 arbitrary text signature',
+    `invalid ip ${'x'.repeat(17000)}`,
+  ]) {
+    const ci = { Project: class {}, upload: async () => { throw {
+      code: 20003, errorStage: 'backend', errCode: -1, errMsg,
+    } } }
+    const result = await uploadWithSdk(input(projectPath), { ci, allowedRoot: root })
+    assert.equal(result.innerPlatformErrorCode, undefined)
+    assert.equal(result.platformReason, undefined)
+    assert.equal(JSON.stringify(result).includes('SECRET'), false)
+    assert.equal(JSON.stringify(result).includes('https://'), false)
+  }
+  const ci = { Project: class {}, upload: async () => { throw {
+    code: 20003, message: 'invalid ip',
+  } } }
+  assert.equal((await uploadWithSdk(input(projectPath), { ci, allowedRoot: root })).code, 'UPLOAD_UNKNOWN')
+})
+
+test('diagnostic sanitizer only permits known reasons and bounded signed inner codes', () => {
+  const { safeDiagnostics } = require('../upload')
+  assert.deepEqual(safeDiagnostics({ innerPlatformErrorCode: -10002, platformReason: 'IP_NOT_ALLOWED' }),
+    { innerPlatformErrorCode: -10002, platformReason: 'IP_NOT_ALLOWED' })
+  assert.deepEqual(safeDiagnostics({ innerPlatformErrorCode: 0, platformReason: 'SECRET' }), {})
+  assert.deepEqual(safeDiagnostics({ innerPlatformErrorCode: 100000000, platformReason: 'https://secret' }), {})
+  assert.deepEqual(safeDiagnostics({ innerPlatformErrorCode: '40013', message: 'secret' }), {})
+})

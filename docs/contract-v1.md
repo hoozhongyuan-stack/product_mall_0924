@@ -600,7 +600,7 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 `POST /api/v1/admin/code-release/domain-check` 需要 `code.version.read` 和 CSRF，限流每分钟10次，接受可选 `{versionId}`，省略时查询最新不可变包。核对所选包摘要、AppID及HTTPS API源站后，以已配置AppSecret获取普通稳定token（不强制刷新、不持久化），调用微信 `getwxadevinfo`。返回 `versionId/appId/checkedAt/status/code/detail/requiredRequestDomains/configuredRequestDomains/missingRequestDomains/platformErrorCode`。缺配置或缺域名为 `BLOCKED`；网络、权限及未知平台结果为 `UNVERIFIED`。域名检查仅反映所选包API所需的 request 域名，不代表图片、下载、业务域名或真机验证，也不作为直传鉴权门槛。用户修改包或AppID后页面清除旧检查结果。微信代码上传IP白名单仍在实际上传时验证。
 
-上传记录追加 `failureStage/sdkCode/platformErrorCode/failureMessage/nextAction/completedAt`。错误文本来自服务器固定字典，仅保留白名单中的阶段、短SDK码和有符号微信码，不返回原始异常/请求URL/签名/密钥。发送前的确定环境、校验、编译失败及明确微信拒绝记 `FAILED`；回执不确定、网络中断、超时或不可信适配器结果仍记 `UNKNOWN`。页面在存在 PENDING/RUNNING/UNKNOWN 上传任务时禁止重复提交，并显示对应操作指引。历史 UNKNOWN 不因部署迁移而改变，仍需人工核对微信版本再关闭。
+上传记录追加 `failureStage/sdkCode/platformErrorCode/innerPlatformErrorCode/platformReason/failureMessage/nextAction/completedAt`。错误文本来自服务器固定字典，仅保留白名单中的阶段、短SDK码和有符号微信码，不返回原始异常/请求URL/签名/密钥。微信外层通用错误（如 `-1`）可同时保留完整错误信封内识别出的内部整数码；`platformReason` 仅允许 `IP_NOT_ALLOWED/SIGNATURE_INVALID/PACKAGE_TOO_LARGE/FILE_MISSING/INNER_UPLOAD_FAILED/TICKET_REQUEST_FAILED`，未识别的原因留空，不根据外层码猜测。发送前的确定环境、校验、编译失败及明确微信拒绝记 `FAILED`；回执不确定、网络中断、超时或不可信适配器结果仍记 `UNKNOWN`。页面在存在 PENDING/RUNNING/UNKNOWN 上传任务时禁止重复提交，并显示对应操作指引。历史 UNKNOWN 不因部署迁移而改变，仍需人工核对微信版本再关闭；已关闭任务保留历史码与核查说明，不再显示阻止重试的行动提示。
 
 受信任部署可配置 `MALL_MINIPROGRAM_API_BASE_URL` 为无路径的公开 HTTPS 源站。固定提交的 Git 小程序源码先在检出目录外暂存，再将当前受管 AppID 与该源站写入暂存包；生成后摘要与版本号绑定最终字节，不改写 Git 工作树或已存的旧版本。配置缺失时沿用原始源码，游客 AppID 或本机 API 地址会被发布条件阻断。
 

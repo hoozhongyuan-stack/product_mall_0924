@@ -155,6 +155,10 @@ class ReleaseUploadTests(TestCase):
         self.assertEqual(resolved.status_code, 200, resolved.content)
         self.assertEqual((resolved.json()['data']['status'], resolved.json()['data']['reviewAvailable']),
                          ('RESOLVED', False))
+        self.assertEqual(resolved.json()['data']['failureCode'], 'RESULT_UNKNOWN')
+        self.assertEqual(resolved.json()['data']['resolutionNote'], note)
+        self.assertEqual(resolved.json()['data']['nextAction'], '')
+        self.assertEqual(self.client.get(url.removesuffix('/resolve')).json()['data']['nextAction'], '')
 
     def test_bad_archive_fails_before_node_invocation(self):
         self.version = self.package(bad_member='../escape.txt')
@@ -241,21 +245,51 @@ class ReleaseUploadTests(TestCase):
         self.assertEqual(self.submit().status_code, 202)
         with patch('code_versions.upload_worker._invoke_adapter', return_value={
             'ok': False, 'code': 'WECHAT_REJECTED', 'failureStage': 'UPLOAD',
-            'sdkCode': '10086', 'platformErrorCode': -61001,
+            'sdkCode': '20003', 'platformErrorCode': -1,
+            'innerPlatformErrorCode': -61001, 'platformReason': 'IP_NOT_ALLOWED',
             'message': 'private SDK error must never be returned',
         }):
             call_command('run_code_upload_jobs', limit=1)
         job = ReleaseUploadJob.objects.get()
         self.assertEqual((job.status, job.failure_code, job.failure_stage, job.sdk_code,
-                          job.platform_error_code),
-                         ('FAILED', 'WECHAT_REJECTED', 'UPLOAD', '10086', -61001))
+                          job.platform_error_code, job.inner_platform_error_code, job.platform_reason),
+                         ('FAILED', 'WECHAT_REJECTED', 'UPLOAD', '20003', -1, -61001, 'IP_NOT_ALLOWED'))
         result = self.client.get(URL + '/' + str(job.pk)).json()['data']
         self.assertEqual((result['failureStage'], result['sdkCode'], result['platformErrorCode'],
+                          result['innerPlatformErrorCode'], result['platformReason'],
                           result['failureMessage'], result['nextAction']),
-                         ('UPLOAD', '10086', -61001,
-                          '微信明确拒绝了代码上传请求。', '检查微信返回的错误码及小程序后台配置，修正后创建新任务。'))
+                         ('UPLOAD', '20003', -1, -61001, 'IP_NOT_ALLOWED',
+                          '微信提示服务器 IP 未获代码上传许可。',
+                          '核对服务器实际出口 IP，并将其加入微信小程序代码上传 IP 白名单；保存后创建新任务。'))
         self.assertIsNotNone(result['completedAt'])
         self.assertNotIn('private SDK error', json.dumps(result))
+
+    def test_untrusted_inner_diagnostics_are_discarded(self):
+        self.assertEqual(self.submit().status_code, 202)
+        with patch('code_versions.upload_worker._invoke_adapter', return_value={
+            'ok': False, 'code': 'WECHAT_REJECTED', 'failureStage': 'UPLOAD',
+            'sdkCode': '20003', 'platformErrorCode': -1,
+            'innerPlatformErrorCode': '-61001 raw secret', 'platformReason': 'secret in errMsg',
+        }):
+            call_command('run_code_upload_jobs', limit=1)
+        result = self.client.get(URL + '/' + str(ReleaseUploadJob.objects.get().pk)).json()['data']
+        self.assertEqual((result['status'], result['innerPlatformErrorCode'], result['platformReason']),
+                         ('FAILED', None, None))
+        self.assertEqual(result['failureMessage'], '微信明确拒绝了代码上传请求。')
+        self.assertNotIn('secret', json.dumps(result))
+
+    def test_direct_platform_reason_is_displayed_without_inner_code(self):
+        self.assertEqual(self.submit().status_code, 202)
+        with patch('code_versions.upload_worker._invoke_adapter', return_value={
+            'ok': False, 'code': 'WECHAT_REJECTED', 'failureStage': 'UPLOAD',
+            'sdkCode': '20003', 'platformErrorCode': -1,
+            'platformReason': 'IP_NOT_ALLOWED',
+        }):
+            call_command('run_code_upload_jobs', limit=1)
+        result = self.client.get(URL + '/' + str(ReleaseUploadJob.objects.get().pk)).json()['data']
+        self.assertEqual((result['innerPlatformErrorCode'], result['platformReason']),
+                         (None, 'IP_NOT_ALLOWED'))
+        self.assertIn('IP', result['failureMessage'])
 
     def test_compile_and_local_failures_are_failed_but_ambiguous_upload_remains_unknown(self):
         self.assertEqual(self.submit().status_code, 202)
@@ -279,11 +313,13 @@ class ReleaseUploadTests(TestCase):
         with patch('code_versions.upload_worker._invoke_adapter', return_value={
             'ok': False, 'code': 'UPLOAD_FAILED', 'failureStage': 'UPLOAD',
             'sdkCode': '20003', 'platformErrorCode': -1,
+            'innerPlatformErrorCode': -61001, 'platformReason': 'IP_NOT_ALLOWED',
         }):
             call_command('run_code_upload_jobs', limit=1)
         latest = ReleaseUploadJob.objects.order_by('-created_at').first()
         self.assertEqual((latest.status, latest.failure_code, latest.platform_error_code),
                          ('UNKNOWN', 'RESULT_UNKNOWN', None))
+        self.assertEqual((latest.inner_platform_error_code, latest.platform_reason), (None, ''))
 
     def test_rejection_without_valid_platform_code_is_unknown_and_never_retried(self):
         self.assertEqual(self.submit().status_code, 202)
@@ -306,14 +342,14 @@ class ReleaseUploadTests(TestCase):
         self.assertEqual(_adapter_outcome({'ok': False, 'code': ['WECHAT_REJECTED'],
             'failureStage': {}, 'sdkCode': 'X' * 100,
             'platformErrorCode': -1}),
-            ('UNKNOWN', 'RESULT_UNKNOWN', 'RESPONSE', '', None))
+            ('UNKNOWN', 'RESULT_UNKNOWN', 'RESPONSE', '', None, None, ''))
         self.assertEqual(_adapter_outcome({'ok': False, 'code': 'WECHAT_REJECTED',
             'failureStage': 'UPLOAD', 'sdkCode': '20003',
             'platformErrorCode': True}),
-            ('UNKNOWN', 'RESULT_UNKNOWN', 'UPLOAD', '20003', None))
+            ('UNKNOWN', 'RESULT_UNKNOWN', 'UPLOAD', '20003', None, None, ''))
         self.assertEqual(_adapter_outcome({'ok': False, 'code': 'COMPILE_FAILED',
             'failureStage': 'COMPILE', 'sdkCode': 'E.COMPILE+STEP-1_2'}),
-            ('FAILED', 'COMPILE_FAILED', 'COMPILE', 'E.COMPILE+STEP-1_2', None))
+            ('FAILED', 'COMPILE_FAILED', 'COMPILE', 'E.COMPILE+STEP-1_2', None, None, ''))
 
     def test_expired_lease_fences_old_worker(self):
         from code_versions.upload_worker import UploadFailure, _finish, _mark_call_started, claim_next, recover_expired

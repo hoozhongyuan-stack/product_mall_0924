@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 const props = defineProps<{ task: { taskId: string; version: string; status: string; channel?: string;
   failureCode?: string; failureStage?: string; sdkCode?: string; platformErrorCode?: number | null;
+  innerPlatformErrorCode?: number | null;
   failureMessage?: string; nextAction?: string; completedAt?: string | null } }>()
 const label = computed(() => ({ PENDING: '等待上传', RUNNING: '正在编译并上传',
   SUCCEEDED: props.task.channel === 'DIRECT_COMMIT' ? '微信已接收待审核版本' : '微信已接收开发版本', FAILED: '上传失败', UNKNOWN: '结果待核查',
@@ -24,6 +25,7 @@ const message = computed(() => props.task.failureMessage || (props.task.status =
         <template v-if="task.failureCode"><dt>结果代码</dt><dd>{{ task.failureCode }}</dd></template>
         <template v-if="task.sdkCode"><dt>SDK 代码</dt><dd>{{ task.sdkCode }}</dd></template>
         <template v-if="task.platformErrorCode != null"><dt>微信错误码</dt><dd>{{ task.platformErrorCode }}</dd></template>
+        <template v-if="task.innerPlatformErrorCode != null"><dt>微信内部错误码</dt><dd>{{ task.innerPlatformErrorCode }}</dd></template>
       </dl>
     </details>
   </div>

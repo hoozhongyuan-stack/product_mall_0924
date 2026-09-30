@@ -14,6 +14,7 @@ type Platform = { componentAppId: string; developerAppId: string; redirectUri: s
 type Upload = { appId?: string; taskId: string; versionId: string; version: string; channel: string; status: string;
   failureCode: string; resolutionNote: string; reviewAvailable: boolean; createdAt: string;
   failureStage?: string; sdkCode?: string; platformErrorCode?: number | null;
+  innerPlatformErrorCode?: number | null; platformReason?: string;
   failureMessage?: string; nextAction?: string; completedAt?: string | null }
 type Review = { taskId: string; uploadTaskId: string; version: string; auditId: number | null;
   status: string; reason: string; failureCode: string; resolutionNote: string; createdAt: string }

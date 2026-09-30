@@ -22,6 +22,7 @@ from wechat_integration.credentials import CredentialsUnavailable, effective_cre
 from wechat_open_platform.service import PlatformStateError, authorization_status, developer_app_id
 from .models import CodeUploadKey, DeveloperUploadKey, ReleaseUploadJob
 from .release_service import UploadKeyUnavailable, decrypt_developer_upload_key, decrypt_upload_key
+from .upload_diagnostics import PLATFORM_REASONS
 from .service import object_status
 
 
@@ -61,9 +62,11 @@ def recover_expired(now=None):
                 job.status, job.failure_code = 'PENDING', ''
                 job.failure_stage = ''
             job.sdk_code, job.platform_error_code = '', None
+            job.inner_platform_error_code, job.platform_reason = None, ''
             job.lease_token = job.lease_until = None
             job.save(update_fields=['status', 'failure_code', 'failure_stage', 'sdk_code',
-                                    'platform_error_code', 'completed_at', 'lease_token', 'lease_until'])
+                                    'platform_error_code', 'inner_platform_error_code',
+                                    'platform_reason', 'completed_at', 'lease_token', 'lease_until'])
 
 
 def claim_next(now=None):
@@ -77,7 +80,8 @@ def claim_next(now=None):
         return job
 
 
-def _finish(job, status, code='', *, failure_stage='', sdk_code='', platform_error_code=None):
+def _finish(job, status, code='', *, failure_stage='', sdk_code='', platform_error_code=None,
+            inner_platform_error_code=None, platform_reason=''):
     with transaction.atomic():
         live = ReleaseUploadJob.objects.select_for_update().get(pk=job.pk)
         if live.status != 'RUNNING' or live.lease_token != job.lease_token:
@@ -85,15 +89,18 @@ def _finish(job, status, code='', *, failure_stage='', sdk_code='', platform_err
         live.status, live.failure_code = status, code
         live.failure_stage, live.sdk_code = failure_stage, sdk_code
         live.platform_error_code = platform_error_code
+        live.inner_platform_error_code = inner_platform_error_code
+        live.platform_reason = platform_reason
         live.lease_token, live.lease_until, live.completed_at = None, None, timezone.now()
         live.save(update_fields=['status', 'failure_code', 'failure_stage', 'sdk_code',
-                                 'platform_error_code', 'lease_token', 'lease_until', 'completed_at'])
+                                 'platform_error_code', 'inner_platform_error_code',
+                                 'platform_reason', 'lease_token', 'lease_until', 'completed_at'])
 
 
 def _adapter_outcome(result):
     """Classify only bounded adapter facts, never arbitrary SDK text or codes."""
     if not isinstance(result, dict):
-        return 'UNKNOWN', 'RESULT_UNKNOWN', 'RESPONSE', '', None
+        return 'UNKNOWN', 'RESULT_UNKNOWN', 'RESPONSE', '', None, None, ''
     sdk_code = result.get('sdkCode')
     sdk_code = sdk_code if isinstance(sdk_code, str) and SAFE_SDK_CODE.fullmatch(sdk_code) else ''
     stage = result.get('failureStage')
@@ -101,16 +108,20 @@ def _adapter_outcome(result):
     code = result.get('code')
     code = code if isinstance(code, str) else ''
     if result.get('ok') is True and code == 'UPLOADED':
-        return 'SUCCEEDED', '', '', '', None
+        return 'SUCCEEDED', '', '', '', None, None, ''
     if result.get('ok') is not False:
-        return 'UNKNOWN', 'RESULT_UNKNOWN', 'RESPONSE', sdk_code, None
+        return 'UNKNOWN', 'RESULT_UNKNOWN', 'RESPONSE', sdk_code, None, None, ''
     if code == 'WECHAT_REJECTED':
         platform_code = result.get('platformErrorCode')
         if type(platform_code) is int and 0 < abs(platform_code) <= 99999999 and stage == 'UPLOAD':
-            return 'FAILED', code, stage, sdk_code, platform_code
+            inner_code = result.get('innerPlatformErrorCode')
+            inner_code = inner_code if type(inner_code) is int and 0 < abs(inner_code) <= 99999999 else None
+            reason = result.get('platformReason')
+            reason = reason if isinstance(reason, str) and reason in PLATFORM_REASONS else ''
+            return 'FAILED', code, stage, sdk_code, platform_code, inner_code, reason
     elif code in EXPLICIT_FAILURE_STAGES and code != 'WECHAT_REJECTED':
-        return 'FAILED', code, EXPLICIT_FAILURE_STAGES[code], sdk_code, None
-    return 'UNKNOWN', 'RESULT_UNKNOWN', stage, sdk_code, None
+        return 'FAILED', code, EXPLICIT_FAILURE_STAGES[code], sdk_code, None, None, ''
+    return 'UNKNOWN', 'RESULT_UNKNOWN', stage, sdk_code, None, None, ''
 
 
 def _mark_call_started(job, staged_digest):
@@ -307,9 +318,10 @@ def run_one(job):
             except (TimeoutError, OSError, http.client.HTTPException):
                 _finish(job, 'UNKNOWN', 'RESULT_UNKNOWN', failure_stage='RESPONSE')
                 return
-            status, code, stage, sdk_code, platform_code = _adapter_outcome(result)
+            status, code, stage, sdk_code, platform_code, inner_code, platform_reason = _adapter_outcome(result)
             _finish(job, status, code, failure_stage=stage, sdk_code=sdk_code,
-                    platform_error_code=platform_code)
+                    platform_error_code=platform_code,
+                    inner_platform_error_code=inner_code, platform_reason=platform_reason)
     except (UploadFailure, OSError) as exc:
         code = exc.code if isinstance(exc, UploadFailure) else 'STORAGE_UNAVAILABLE'
         state = 'UNKNOWN' if job.call_started_at or code == 'RESULT_UNKNOWN' else 'FAILED'

@@ -25,9 +25,30 @@ FAILURE_TEXT = {
                        '先到微信小程序后台核对开发版本与上传记录，确认结果前不要重复上传。'),
 }
 
+PLATFORM_REASONS = {
+    'IP_NOT_ALLOWED': ('微信提示服务器 IP 未获代码上传许可。',
+                       '核对服务器实际出口 IP，并将其加入微信小程序代码上传 IP 白名单；保存后创建新任务。'),
+    'SIGNATURE_INVALID': ('微信提示代码上传签名无效。',
+                          '核对小程序 AppID 与代码上传私钥，更新错误配置后创建新任务。'),
+    'PACKAGE_TOO_LARGE': ('微信提示代码包超过允许大小。',
+                          '检查所选不可变版本的代码包大小，压缩后重新构建并创建新任务。'),
+    'FILE_MISSING': ('微信提示上传文件缺失。',
+                     '重新构建并核验小程序代码包，选择完整版本后创建新任务。'),
+    'INNER_UPLOAD_FAILED': ('微信内部上传阶段返回失败。',
+                            '根据内层错误码核对微信平台状态和小程序配置，排除问题后创建新任务。'),
+    'TICKET_REQUEST_FAILED': ('微信上传票据申请失败。',
+                              '根据内层错误码检查小程序上传权限与微信平台状态，排除问题后创建新任务。'),
+}
+
 
 def public_diagnostic(job):
     if not job.failure_code:
         return '', ''
+    if job.status == 'RESOLVED':
+        return '此前上传结果未确认，任务已按核查说明人工关闭。', ''
+    if job.failure_code == 'WECHAT_REJECTED':
+        detail = PLATFORM_REASONS.get(job.platform_reason)
+        if detail:
+            return detail
     return FAILURE_TEXT.get(job.failure_code, ('上传任务失败，原因待核查。',
                                                '重新读取任务记录并联系管理员核查。'))

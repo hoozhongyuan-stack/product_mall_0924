@@ -40,6 +40,13 @@ describe('upload evidence and domain checks', () => {
     expect(w.text()).toContain('完成时间')
     expect(w.text()).toContain('上传微信')
   })
+  it('shows the inner WeChat code needed to diagnose a generic rejection', () => {
+    const w = mount(UploadTaskResult, { props: { task: { ...task, failureStage: 'UPLOAD',
+      failureCode: 'WECHAT_REJECTED', platformErrorCode: -1, innerPlatformErrorCode: -80011,
+      failureMessage: '微信未能获取代码上传票据。' } } }); wrappers.push(w)
+    expect(w.text()).toContain('微信内部错误码-80011')
+    expect(w.text()).toContain('微信未能获取代码上传票据。')
+  })
   it('shows service credential readiness separately from code upload gates', () => {
     const w = mount(CodeDomainCheck, { props: { appId: 'wx1', versionId: 'v1',
       credentialCheck: { status: 'BLOCKED', detail: '请先配置 AppSecret。' } } }); wrappers.push(w)
