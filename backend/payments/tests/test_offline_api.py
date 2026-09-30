@@ -94,7 +94,7 @@ class OfflineApiTests(TransactionTestCase):
     def test_c1_policy_revision_and_order_snapshot(self):
         o = self._order()
         policy = self.client.get('/api/v1/admin/payments/offline-policy').json()['data']
-        policy.pop('configured'); policy.pop('availablePaymentMethods'); policy['expectedRevision'] = policy.pop('revision')
+        policy.pop('configured'); policy.pop('availablePaymentMethods'); policy.pop('wechatConfigurationStatus'); policy['expectedRevision'] = policy.pop('revision')
         policy['instructions'] = '新的付款说明'; policy['offlineTimeoutMinutes'] = 60
         r = self.client.put('/api/v1/admin/payments/offline-policy', data=json.dumps(policy), content_type='application/json')
         self.assertEqual(r.status_code, 200, r.content)
@@ -208,3 +208,30 @@ class OfflineApiTests(TransactionTestCase):
         self.assertEqual(PaymentReceipt.objects.count(),1)
         from inventory.models import InventoryLedger
         self.assertEqual(InventoryLedger.objects.filter(movement_type='SALE').count(),1)
+
+    @override_settings(ORDER_PAYMENT_METHODS_ENABLED={"WECHAT": False, "OFFLINE": False}, WECHAT_PAY={})
+    def test_admin_can_independently_enable_and_disable_payment_modes(self):
+        from payments.availability import enabled_payment_methods
+        def update(offline, wechat):
+            policy = self.client.get('/api/v1/admin/payments/offline-policy').json()['data']
+            body = {key: policy[key] for key in ['instructions', 'merchantAccountId', 'wechatTimeoutMinutes', 'offlineTimeoutMinutes']}
+            body.update(expectedRevision=policy['revision'], offlineEnabled=offline, wechatEnabled=wechat)
+            return self.client.put('/api/v1/admin/payments/offline-policy', data=json.dumps(body), content_type='application/json')
+        for offline, wechat, methods in [(True, True, ['WECHAT', 'OFFLINE']), (True, False, ['OFFLINE']), (False, True, ['WECHAT']), (False, False, [])]:
+            result = update(offline, wechat)
+            self.assertEqual(result.status_code, 200, result.content)
+            self.assertEqual(enabled_payment_methods(), methods)
+            self.assertEqual(result.json()['data']['wechatConfigurationStatus'], 'NOT_CONFIGURED')
+        self.assertEqual(update(1, False).status_code, 400)
+
+    def test_legacy_payment_policy_update_preserves_enabled_modes(self):
+        policy = OfflinePaymentPolicy.objects.get(pk=1)
+        policy.offline_enabled = True
+        policy.wechat_enabled = False
+        policy.save()
+        body = {'instructions': policy.instructions, 'merchantAccountId': policy.merchant_account_id,
+                'wechatTimeoutMinutes': 45, 'offlineTimeoutMinutes': 600, 'expectedRevision': policy.revision}
+        result = self.client.put('/api/v1/admin/payments/offline-policy', data=json.dumps(body), content_type='application/json')
+        self.assertEqual(result.status_code, 200, result.content)
+        policy.refresh_from_db()
+        self.assertEqual((policy.offline_enabled, policy.wechat_enabled), (True, False))

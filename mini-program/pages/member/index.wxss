@@ -26,3 +26,11 @@
 .guest-prompt button { margin-top: 20rpx; }
 .campaign-entry { width: 100%; margin-bottom: 24rpx; }
 @media(max-width:320px) { .profile-avatar { width: 80rpx; height: 80rpx; } .profile-identity .grade-name { font-size: 29rpx; } .profile-hero { gap: 12rpx; } }
+
+.profile-avatar { overflow: hidden; }
+.profile-avatar image { width: 100%; height: 100%; }
+.profile-editor input { padding: 20rpx; background: var(--mall-canvas); border: 1rpx solid var(--mall-border); border-radius: 8rpx; margin-top: 12rpx; }
+.profile-editor label { display: block; margin-top: 24rpx; }
+.profile-actions { display: flex; gap: 20rpx; }
+.profile-actions button { flex: 1; }
+.logout-entry { width: 100%; margin-bottom: 24rpx; }

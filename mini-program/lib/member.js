@@ -1,3 +1,5 @@
+const api = require('./api')
+function avatarDisplayUrl(url) { return typeof url === 'string' && /^\/api\/v1\/app\/member-avatars\/[0-9a-f-]+\/file$/.test(url) ? `${api.baseUrl()}${url}` : '' }
 const { money } = require('./catalog')
 const { dateLabel } = require('./orders')
 const POINT_LABELS = { GRANT: '积分发放', EARN: '消费奖励', RETURN: '退款返还抵扣积分', CLAWBACK: '退款扣回奖励积分', EXPIRE: '积分到期扣账', RESERVE: '订单冻结积分', RELEASE: '关单释放积分', CONSUME: '付款核销积分' }
@@ -13,7 +15,7 @@ function presentOverview(value) {
   if (!value.rules.grades.every((grade) => grade && typeof grade.name === 'string' && integer(grade.minimumSpendFen))) throw new Error('会员等级规则不完整，请重新加载。')
   const orderCountsLabels = Object.fromEntries(['pendingPayment', 'waitingShipment', 'inTransit', 'waitingRedemption', 'afterSale']
     .map((key) => [key, value.orderCounts && integer(value.orderCounts[key]) ? value.orderCounts[key] : '--']))
-  return { ...value, orderCountsLabels, gradeRuleCopy: value.gradePolicyRevision > 0 ? `会员已启用等级规则版本 ${value.gradePolicyRevision}` : '尚未通过完成订单启用等级规则。', spendLabel: money(value.effectiveSpendFen), gradeDateLabel: dateLabel(value.gradeEffectiveAt),
+  return { ...value, avatarDisplayUrl: avatarDisplayUrl(value.avatarUrl), orderCountsLabels, gradeRuleCopy: value.gradePolicyRevision > 0 ? `会员已启用等级规则版本 ${value.gradePolicyRevision}` : '尚未通过完成订单启用等级规则。', spendLabel: money(value.effectiveSpendFen), gradeDateLabel: dateLabel(value.gradeEffectiveAt),
     points: { ...value.points, nextExpiryLabel: dateLabel(value.points.nextExpiryAt) },
     grades: value.rules.grades.map((grade) => ({ ...grade, minimumLabel: money(grade.minimumSpendFen) })),
     rulesCopy: `有效消费每 ${money(p.earnUnitFen)} 获得 ${p.earnPoints} 积分；${p.deductPoints} 积分可抵 ${money(p.deductFen)}，抵扣上限 ${p.maxPercent}%。`,
@@ -37,4 +39,4 @@ function presentConsumption(row) {
     balanceLabel: money(row.balanceFen), dateLabel: dateLabel(row.createdAt),
     reasonLabel: CAUSE_LABELS[row.sourceRef] || '订单结算调整', gradeLabel: row.gradeBefore.name === row.gradeAfter.name ? `等级保持 ${row.gradeAfter.name}` : `${row.gradeBefore.name} → ${row.gradeAfter.name}` }
 }
-module.exports = { presentOverview, presentPoint, presentList, presentConsumption }
+module.exports = { presentOverview, presentPoint, presentList, presentConsumption, avatarDisplayUrl }

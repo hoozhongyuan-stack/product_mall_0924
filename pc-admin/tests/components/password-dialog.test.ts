@@ -23,6 +23,19 @@ async function fill(wrapper: ReturnType<typeof mount>, repeat = 'New safe passwo
 }
 
 describe('admin password changes', () => {
+  it('accepts six characters and rejects five before submitting', async () => {
+    const wrapper = await setup()
+    expect(wrapper.text()).toContain('至少 6 个字符')
+    await fill(wrapper)
+    const inputs = wrapper.findAll('input[autocomplete="new-password"]')
+    for (const input of inputs) await input.setValue('12345')
+    await wrapper.get('form').trigger('submit')
+    expect(api).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('至少 6 个字符')
+    for (const input of inputs) await input.setValue('123456')
+    await wrapper.get('form').trigger('submit'); await flushPromises()
+    expect(api).toHaveBeenCalledTimes(1)
+  })
   it('requires all fields and clears entered secrets when cancelled', async () => {
     const wrapper = await setup()
     await wrapper.get('form').trigger('submit')

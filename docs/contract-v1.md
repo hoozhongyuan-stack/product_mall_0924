@@ -85,6 +85,8 @@
 | `POST /api/v1/admin/startup/preview`、`POST /api/v1/admin/startup/publish` | 预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另需 `Idempotency-Key` 与绑定 `startup.publish`、对象 `startup`、当前修订的一次性 `X-Action-Confirmation` | 预览返回修订及两张素材的管理端 URL；发布要求两项有效并返回 `versionId/revision/gifUrl/fallbackUrl`，后两项为公开相对路径。同键同修订重试返回原版本；不同键重复发布当前修订返回 409；版本、指针、请求记录和审计同事务提交，失败旧版继续生效。 |
 | `GET /api/v1/app/startup` | 无 | 只返回当前发布版本的 `versionId/revision/gifUrl/fallbackUrl`，素材 URL 为 `/api/v1/app/assets/{id}/file` 相对路径；未发布返回 `404 STARTUP_UNPUBLISHED`。 |
 
+启动页采用自定义导航，发布图片按比例覆盖完整视口，跳过和倒计时叠加在图片上并避开微信胶囊及安全区。
+
 小程序普通冷启动完成启动页后进入首页；明确的分享、扫码或携带有效目标参数的入口仍进入其目标页面。底部“我的”页面向游客开放页面结构和公共入口，订单、积分、收货地址等私人数据须登录后读取；登录成功回到原入口并保留订单筛选，登出、登录失效或账号切换时清除本地私人展示数据。
 | `GET /api/v1/app/home`、`GET /api/v1/app/pages/{id}` | 无；微页面 ID 为 UUID | 只返回当前发布版本的可见组件。首页返回 `versionId/config`，未发布为 `404 HOME_UNPUBLISHED`；微页面返回 `pageId/versionId/name/config`，名称为发布时快照，未发布或非微页面为 `404 PAGE_UNPUBLISHED`；非 UUID 路径由路由层返回 404。`/api/v1/app/bootstrap` 仍待实现。 |
 | `GET /api/v1/app/categories`、`GET /api/v1/app/products`、`GET /api/v1/app/products/{id}` | 商品列表支持 `categoryId`、`keyword`、`page`、`pageSize`；详情以商品 ID 获取 | 分类接口返回启用的两级分类；商品接口只返回启用分类下有主图及在售 SKU 的上架商品。列表保留最低在售 SKU 日常价 `minListPriceFen`，并给 `cartEligible` 与 `availabilityCode`；详情每个 SKU 给 `listPriceFen`、当前 `applicablePriceFen`、`priceSource`、`availableQuantity`、`cartEligible`。有效会员按等级显示适用价，游客显示日常价。库存按默认启用仓对应库存池的 `(账面－预留) ÷ 该 SKU 当前销售单位比例` 计算；共享池 SKU 的展示数量不可相加。即使有库存，`purchasable` 仍为 false，直到订单链路验收；下架后详情及素材返回 404。 |
@@ -130,7 +132,7 @@
 
 ### 3.3 阶段 A 权限与会话基线
 
-密码修改需 CSRF 与服务端当前密码验证。新密码沿用强度校验（至少 12 个字符、不得与登录名或显示名相似，最长 1024 个字符），不得与目标当前密码相同。连续 5 次当前密码错误锁定 15 分钟；单操作者 15 分钟内最多 20 次成功修改。事务锁定操作者和目标，等待锁后重新核验会话版本；成功递增目标 `revision/auth_version` 并核销其未消费确认，使其全部旧会话失效。审计仅记账号、动作和修订，不含明文或哈希。修订冲突返回 `409 REVISION_CONFLICT`；权限/当前密码错误为 `403`；限流为 `429 RATE_LIMITED`。界面入口为顶栏“修改密码”和主账号的子账号列表“重置密码”。
+密码修改需 CSRF 与服务端当前密码验证。新密码为 6 至 1024 个字符，不限制字符组合，创建、修改和重置沿用统一校验，不得与目标当前密码相同。连续 5 次当前密码错误锁定 15 分钟；单操作者 15 分钟内最多 20 次成功修改。事务锁定操作者和目标，等待锁后重新核验会话版本；成功递增目标 `revision/auth_version` 并核销其未消费确认，使其全部旧会话失效。审计仅记账号、动作和修订，不含明文或哈希。修订冲突返回 `409 REVISION_CONFLICT`；权限/当前密码错误为 `403`；限流为 `429 RATE_LIMITED`。界面入口为顶栏“修改密码”和主账号的子账号列表“重置密码”。
 
 阶段 A 操作码与接口映射、预设组矩阵及拒绝用例详见[阶段 A 开工准备与评审记录](phase-a-preparation.md#2-阶段-a-权限评审)。后续阶段再增加库存、订单、收款、退款与代码发布的细粒度操作码。主账号可调整组权限，但子账号不能给自己增加权限。
 
@@ -273,8 +275,8 @@ C1 接入线下服务端与客户端闭环，**公开下单仍按支付方式关
 
 | 接口 | 权限 / 输入 | 输出与语义 |
 | --- | --- | --- |
-| `GET /api/v1/app/payments/offline-policy` | 公开，只读 | `instructions`、`merchantAccountId`、`revision`、`configured`、`wechatTimeoutMinutes`、`offlineTimeoutMinutes`、只读 `availablePaymentMethods`。未配置时为空，不提供虚构账户。 |
-| `GET/PUT /api/v1/admin/payments/offline-policy` | `payment.settings.manage`；PUT 需 CSRF，`expectedRevision` 与上述四个可编辑字段 | 说明最多 4000 字、账户标识最多 80 字；二者同时填写或同时清空；时限为 1—10080 分钟，默认微信 30、线下 1440。修订不符返回 409，成功审计。修改只影响新订单。 |
+| `GET /api/v1/app/payments/offline-policy` | 公开，只读 | `instructions`、`merchantAccountId`、`revision`、`configured`、`wechatTimeoutMinutes`、`offlineTimeoutMinutes`、`offlineEnabled`、`wechatEnabled`、`wechatConfigurationStatus` 与 `availablePaymentMethods`。不提供虚构账户。 |
+| `GET/PUT /api/v1/admin/payments/offline-policy` | `payment.settings.manage`；PUT 需 CSRF，`expectedRevision`、付款说明、账户标识、两种时限及两个独立布尔字段 `offlineEnabled/wechatEnabled`（旧客户端可省略两个字段并保留当前开关） | 说明最多 4000 字、账户标识最多 80 字；二者同时填写或同时清空；时限为 1—10080 分钟，默认微信 30、线下 1440。修订不符返回 409，成功审计。修改只影响新订单。 |
 | `GET /api/v1/app/orders` | 会员 Bearer，本人订单 | `items/page/pageSize/total`；每页 1—100，默认 20。支持状态、方式、`reported=true/false`、订单号 `search`、`orderKind=CASH/POINTS` 及下述 `fulfillment` 待办过滤。列表不含后台流水、确认人或其他会员数据。 |
 | `GET /api/v1/app/orders/{id}` | 本人订单 | 原订单详情增加 `revision`、不可改写的 `paymentInstructions` 快照（说明、账户标识、配置修订、时限分钟）、`paymentReviewStatus` 与 `paymentReports`。核实状态为 `UNREPORTED/PENDING_REVIEW/PAID/CLOSED`，成交仍以订单 `status` 为准。 |
 | `POST /api/v1/app/orders/{id}/payment-report` | 本人；UUID `Idempotency-Key`；`{note}` | 线下待付款、未过期订单可报告，说明 1—500 字，每单最多 20 条；报告不可改写，不生成资金凭证，不改变待付款状态、库存或权益。原键原内容重试复用，改内容拒绝；报告后显示待核实。 |
@@ -695,3 +697,13 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 校验固定 HTTPS POST 微信 stable_token，显式 `force_refresh=false`，TLS验证、禁重定向和环境代理、5秒超时、8 KiB响应上限；不自动重试、不回退其它token接口。平台普通模式仍可能在临近过期时更新token，不承诺永不轮转。token不落库、不回传，校验不创建会员／登录会话／登录code使用记录。平台调用在事务外，回写前再次核对修订、快照及当前权限；并发改配置后丢弃旧结果。微信错误40013/40125/40001归为INVALID_CREDENTIALS，40164为IP_NOT_ALLOWED，89503为ADMIN_CONFIRMATION_REQUIRED，89506/89507为ADMIN_REJECTED，45009/45011为PLATFORM_RATE_LIMITED；其它平台原文不出站。
 
 业务错误：401会话过期；403权限或密码确认失败；405保留Allow；409 `REVISION_CONFLICT`（可附currentRevision）、`APP_ID_LOCKED`、`CREDENTIALS_NOT_CONFIGURED`；503 `CREDENTIALS_UNAVAILABLE`；429 `RATE_LIMITED` 附Retry-After。响应私有禁止缓存，保留请求ID；框架CSRF错误遵循通则。审计只含配置来源、修订及安全状态，不含AppSecret、密文、token、内部指纹或平台原文。网络结果未知时客户端重新GET核对，不能仅凭revision/AppID断言Secret替换成功，不能自动重发或持久化秘密请求体；需要再次操作时重新取得密码确认凭证。
+
+
+## 会员资料与后台交互补充（2026-09-30）
+
+- 会员内部 UUID 保留，展示编号为 `m` + 北京时间创建时刻 `YYYYMMDDHHMMSS` + 三位包含字母和数字的随机后缀；数据库唯一约束及冲突重试保证不重复。已有会员迁移按原创建时间分配，订单与权益关联不变。
+- `GET/PUT/PATCH /api/v1/app/member/profile` 使用会员令牌（原生小程序使用 PUT）；写入精确接受 `{nickname,expectedRevision}`，昵称为 1—40 字。`POST /api/v1/app/member/avatar` 接受 multipart 的单个 `file` 与 `expectedRevision`，图片上限 2 MB，复用素材域实际格式和解码校验。成功返回会员资料及递增的 `profileRevision`；过期修订返回409，失效登录返回401。头像使用不可猜测地址，替换后旧地址失效。公开地址不读取停用会员头像；后台 DTO 使用需 `member.read` 的 `/api/v1/admin/member-avatars/{id}/file` 地址，使管理员可以查看停用会员资料。
+- 后台会员列表、详情和小程序会员摘要提供 `memberNo/nickname/avatarUrl/phone/profileRevision`；手机号只展示既有可信字段，空值显示未绑定，不伪造微信手机号。搜索支持编号、昵称、手机号，并保留 UUID 检索兼容。
+- 小程序个人中心支持头像、昵称编辑及主动退出。退出复用服务端会话撤销接口，清除本地令牌与私人展示；游客可继续访问个人中心公共入口。
+- 付款方式开关保存于付款策略，两个独立字段允许同时启用或停用；未曾配置的字段保留旧环境开关兼容。勾选微信支付不代表平台接通，配置状态 `NOT_CONFIGURED/PENDING_VERIFICATION` 单独显示，缺失商户配置的真实支付请求明确失败。历史订单使用原付款快照。
+- 全后台面包屑与功能页签统一固定于主顶栏下方。库存日期范围复用域内控件，支持今天、近7天、近30天、本月；移动日历有界滚动。原生业务表格样式只作用于表格容器，避免污染官方日历组件。

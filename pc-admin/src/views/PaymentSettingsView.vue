@@ -5,7 +5,7 @@ import { api, ApiError } from '../api'
 import { type PaymentPolicy } from './orders/types'
 import './orders/orders.css'
 const data = ref<PaymentPolicy | null>(null)
-const form = ref({ instructions: '', merchantAccountId: '', wechatTimeoutMinutes: 30, offlineTimeoutMinutes: 1440 })
+const form = ref({ instructions: '', merchantAccountId: '', wechatTimeoutMinutes: 30, offlineTimeoutMinutes: 1440, offlineEnabled: false, wechatEnabled: false })
 const saved = ref('')
 const loading = ref(true)
 const busy = ref(false)
@@ -25,7 +25,7 @@ async function load() {
   loading.value = true; error.value = ''; notice.value = ''
   try {
     data.value = await api<PaymentPolicy>('/payments/offline-policy')
-    form.value = { instructions: data.value.instructions, merchantAccountId: data.value.merchantAccountId, wechatTimeoutMinutes: data.value.wechatTimeoutMinutes, offlineTimeoutMinutes: data.value.offlineTimeoutMinutes }
+    form.value = { instructions: data.value.instructions, merchantAccountId: data.value.merchantAccountId, wechatTimeoutMinutes: data.value.wechatTimeoutMinutes, offlineTimeoutMinutes: data.value.offlineTimeoutMinutes, offlineEnabled: data.value.offlineEnabled ?? data.value.availablePaymentMethods?.includes('OFFLINE') ?? false, wechatEnabled: data.value.wechatEnabled ?? data.value.availablePaymentMethods?.includes('WECHAT') ?? false }
     saved.value = JSON.stringify(form.value); conflict.value = false
   } catch (reason) { error.value = reason instanceof Error ? reason.message : '付款配置读取失败。' }
   finally { loading.value = false }
@@ -37,7 +37,7 @@ async function save() {
   try {
     const result = await api<PaymentPolicy>('/payments/offline-policy', { method: 'PUT', body: JSON.stringify({ ...snapshot, expectedRevision: data.value.revision }) })
     data.value = result; saved.value = JSON.stringify(snapshot)
-    notice.value = '付款配置已保存，后续新订单使用新说明与时限；公开下单仍由支付方式闸门控制。'
+    notice.value = '付款配置已保存，支付方式和付款资料对新订单生效。'
   } catch (reason) { conflict.value = reason instanceof ApiError && reason.status === 409; error.value = reason instanceof Error ? reason.message : '保存失败，请重试。' }
   finally { busy.value = false }
 }
@@ -48,12 +48,18 @@ onBeforeRouteLeave(() => !dirty.value || window.confirm('付款配置尚未保�
 </script>
 <template>
   <section class="page-content orders-page order-settings">
-    <header class="page-heading"><div><h1>付款配置</h1><p>配置线下付款说明与待付款时限，新订单保存当时的内容和时限。</p></div><button class="secondary-button" :disabled="loading || busy" @click="load">重新读取</button></header>
+    <header class="page-heading"><div><h1>付款配置</h1><p>选择可用支付方式，配置付款说明和时限。新订单保存当时的付款资料。</p></div><button class="secondary-button" :disabled="loading || busy" @click="load">重新读取</button></header>
     <p v-if="loading" role="status" class="loading-inline">正在读取付款配置…</p>
     <div v-if="error" class="notice" role="alert">{{ error }} <button v-if="!data || conflict" class="text-button" :disabled="busy" @click="load">重新读取配置</button></div>
     <p v-if="notice" class="order-success" role="status">{{ notice }}</p>
     <form v-if="data && !loading" class="panel order-section" @submit.prevent="save">
-      <h2>线下付款说明</h2><p class="order-note">请由运营人员填写真实、已核实的付款资料，安排到账核对岗位。仅保存资料不会开放下单。</p>
+      <fieldset class="payment-modes"><legend>启用支付方式</legend>
+        <label><input v-model="form.offlineEnabled" type="checkbox" data-payment-method="OFFLINE" :disabled="busy">线下支付</label>
+        <label><input v-model="form.wechatEnabled" type="checkbox" data-payment-method="WECHAT" :disabled="busy">微信支付</label>
+      </fieldset>
+      <p class="order-note">可以同时启用两种方式。取消勾选即停用；两项均未勾选时暂停现金订单提交。</p>
+      <p class="order-note">微信支付：{{ data.wechatConfigurationStatus === 'PENDING_VERIFICATION' ? '商户资料已配置，待真实交易验证' : '未完成商户配置，实际支付暂不可用' }}。商户证书和密钥由服务器安全配置，启用选项不会代替商户配置与到账核验。</p>
+      <h2>线下付款说明</h2><p class="order-note">请由运营人员填写真实、已核实的付款资料，安排到账核对岗位。勾选线下支付后，请确认收款资料完整且准确。</p>
       <label class="policy-field">用户可见付款说明<textarea v-model="form.instructions" rows="7" maxlength="4000" :disabled="busy" placeholder="尚未配置。请填写真实收款资料、付款备注要求与核实说明。"></textarea></label>
       <label class="policy-field">收款账户标识<input v-model="form.merchantAccountId" maxlength="80" autocomplete="off" :disabled="busy" placeholder="与银行或收款渠道账户对应的内部标识"></label>
       <h2>待付款时限</h2><div class="order-form"><label>线下支付（分钟）<input v-model.number="form.offlineTimeoutMinutes" type="number" min="1" max="10080" step="1" :disabled="busy"></label><label>微信支付（分钟）<input v-model.number="form.wechatTimeoutMinutes" type="number" min="1" max="10080" step="1" :disabled="busy"></label></div>
@@ -63,3 +69,10 @@ onBeforeRouteLeave(() => !dirty.value || window.confirm('付款配置尚未保�
     </form>
   </section>
 </template>
+
+<style scoped>
+.payment-modes { display: flex; flex-wrap: wrap; gap: 16px 32px; border: 1px solid var(--mall-color-border); border-radius: 10px; padding: 16px; margin: 0 0 12px; }
+.payment-modes legend { font-weight: 650; padding: 0 6px; }
+.payment-modes label { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; cursor: pointer; }
+.payment-modes input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: var(--mall-color-brand); }
+</style>

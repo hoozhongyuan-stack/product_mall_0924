@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "品牌启动",
+  "navigationStyle": "custom",
   "navigationBarBackgroundColor": "#fff6e9",
   "navigationBarTextStyle": "black",
   "disableScroll": true

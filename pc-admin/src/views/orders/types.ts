@@ -1,5 +1,8 @@
 import type {OrderBenefits} from '../../shared/benefits'
 export interface PaymentPolicy {
+  offlineEnabled?: boolean
+  wechatEnabled?: boolean
+  wechatConfigurationStatus?: 'NOT_CONFIGURED' | 'PENDING_VERIFICATION'
   instructions: string
   merchantAccountId: string
   offlineTimeoutMinutes: number

@@ -169,19 +169,18 @@ class PasswordTests(TestCase):
         self.assertEqual(self.send(self.client, "/auth/password", self.payload(currentPassword="x" * 1025)).status_code, 400)
         self.assertEqual(self.send(self.client, "/auth/password", self.payload(newPassword="x" * 1025)).status_code, 400)
 
-    def test_password_must_not_match_login_name_or_display_name_for_self_or_owner_reset(self):
-        self.staff.login_name = "distinctive-shop-operator-2026"
-        self.staff.display_name = "Distinctive Warehouse Operator"
-        self.staff.save(update_fields=["login_name", "display_name"])
-        staff_client = self.signed_in(self.staff)
-        for password in [self.staff.login_name, self.staff.display_name]:
-            for client, path, extra in [
-                (staff_client, "/auth/password", {}),
-                (self.client, f"/accounts/{self.staff.pk}/password", {"expectedRevision": 1}),
-            ]:
-                with self.subTest(path=path, attribute=password):
-                    result = self.send(client, path, self.payload(newPassword=password, **extra))
-                    self.assertEqual(result.status_code, 400, result.content)
-        self.staff.refresh_from_db()
-        self.assertTrue(self.staff.check_password(OLD_PASSWORD))
-        self.assertEqual((self.staff.revision, self.staff.auth_version), (1, 1))
+    def test_six_character_password_accepted_for_self_and_reset(self):
+        for client, path, extra, target, password in [
+            (self.client, f"/accounts/{self.staff.pk}/password", {"expectedRevision": 1}, self.staff, "123456"),
+            (self.client, "/auth/password", {}, self.owner, "abc123"),
+        ]:
+            result = self.send(client, path, self.payload(newPassword=password, **extra))
+            self.assertEqual(result.status_code, 200, result.content)
+            target.refresh_from_db()
+            self.assertTrue(target.check_password(password))
+
+    def test_five_character_password_rejected_before_change(self):
+        result = self.send(self.client, "/auth/password", self.payload(newPassword="12345"))
+        self.assertEqual(result.status_code, 400)
+        self.owner.refresh_from_db()
+        self.assertTrue(self.owner.check_password(OLD_PASSWORD))

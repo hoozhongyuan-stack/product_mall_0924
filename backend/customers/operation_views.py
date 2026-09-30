@@ -60,7 +60,9 @@ def member_list_view(request):
             # UUID cast is PostgreSQL-only; never search private WeChat identity.
             from django.db.models.functions import Cast
             from django.db.models import CharField
-            query=query.annotate(public_id=Cast('id',output_field=CharField())).filter(public_id__icontains=search)
+            query=query.annotate(public_id=Cast('id',output_field=CharField())).filter(
+                Q(public_id__icontains=search) | Q(member_no__icontains=search) |
+                Q(nickname__icontains=search) | Q(phone__icontains=search))
         if request.GET.get('gradeId'):
             try: grade_id=UUID(request.GET['gradeId'])
             except ValueError: raise ValueError('等级格式不正确。')
@@ -71,7 +73,7 @@ def member_list_view(request):
         total=query.count()
         from catalog.models import MemberGrade
         from .operations import grade_data
-        return offset_response(request,{"items":member_rows(query[(page-1)*size:page*size]),
+        return offset_response(request,{"items":member_rows(query[(page-1)*size:page*size], admin=True),
             "pagination":{"page":page,"pageSize":size,"total":total},
             "grades":[grade_data(row) for row in MemberGrade.objects.filter(enabled=True).order_by("rank")]}, pagination_key='pagination', respond=response)
     except ValueError as exc:return _failure(request,exc)
@@ -91,7 +93,7 @@ def member_detail_view(request,member_id):
     row,bad=_admin_member(request,member_id)
     if bad:return bad
     if request.GET:return error(request,400,'VALIDATION_FAILED','查询参数不正确。')
-    return response(request,{**member_rows([row])[0],'ruleRevision':current_policy()['revision']})
+    return response(request,{**member_rows([row], admin=True)[0],'ruleRevision':current_policy()['revision']})
 
 
 def _events(request,member_id,kind,admin):

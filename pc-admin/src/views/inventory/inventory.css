@@ -457,3 +457,17 @@
     flex-direction:column;
   }
 }
+
+.inventory-date-range.el-date-editor { width:100%; min-width:0; }
+.inventory-date-popover { max-width:calc(100vw - 16px); }
+@media(max-width:600px) {
+  .inventory-date-popover { position:fixed!important; top:50%!important; left:50%!important; right:auto!important; bottom:auto!important; transform:translate(-50%, -50%)!important; }
+  .inventory-date-popover .el-popper__arrow { display:none; }
+  .inventory-date-popover .el-picker-panel { width:min(360px, calc(100vw - 24px)); max-height:65vh; overflow:auto; }
+  .inventory-date-popover .el-picker-panel__body { min-width:0; width:100%; }
+  .inventory-date-popover .el-picker-panel__sidebar { position:static; width:auto; display:flex; flex-wrap:wrap; gap:4px; border-right:0; border-bottom:1px solid var(--mall-color-border); padding:6px; }
+  .inventory-date-popover .el-picker-panel__shortcut { width:auto; padding:6px 10px; }
+  .inventory-date-popover .el-picker-panel__sidebar + .el-picker-panel__body { margin-left:0; }
+  .inventory-date-popover .el-date-range-picker__content { display:block; float:none; width:100%; padding:12px; }
+  .inventory-date-popover .el-date-range-picker__content.is-left { border-right:0; border-bottom:1px solid var(--mall-color-border); }
+}

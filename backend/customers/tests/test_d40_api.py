@@ -65,6 +65,51 @@ class D40ApiTests(TestCase):
         return self.app.get('/api/v1/app/member/' + path, query or {},
                             HTTP_AUTHORIZATION='Bearer ' + self.token)
 
+    def test_member_list_profile_columns_search_and_private_identity(self):
+        self.member.nickname = '资料昵称'
+        self.member.phone = '13800001234'
+        self.member.save(update_fields=['nickname', 'phone'])
+        for search in (self.member.member_no, '资料昵称', '13800001234', str(self.member.id)):
+            result = self.client.get('/api/v1/admin/members', {'search': search})
+            self.assertEqual(result.status_code, 200, result.content)
+            rows = result.json()['data']['items']
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]['memberNo'], self.member.member_no)
+            self.assertEqual(rows[0]['nickname'], '资料昵称')
+            self.assertEqual(rows[0]['phone'], '13800001234')
+            self.assertEqual(rows[0]['avatarUrl'], '')
+            self.assertNotIn(self.member.wechat_openid, result.content.decode())
+        hidden = self.client.get('/api/v1/admin/members', {'search': self.member.wechat_openid})
+        self.assertEqual(hidden.json()['data']['items'], [])
+
+    def test_disabled_member_avatar_requires_admin_member_read(self):
+        from pathlib import Path
+        import tempfile
+        from .test_profile import png
+        with tempfile.TemporaryDirectory() as root, override_settings(MEDIA_ROOT=Path(root)):
+            avatar_id = uuid4()
+            relative = f'member-avatars/{avatar_id}.png'
+            file = Path(root) / relative
+            file.parent.mkdir()
+            file.write_bytes(png())
+            self.member.avatar_id = avatar_id
+            self.member.avatar_path = relative
+            self.member.avatar_content_type = 'image/png'
+            self.member.enabled = False
+            self.member.save(update_fields=['avatar_id', 'avatar_path', 'avatar_content_type', 'enabled'])
+            admin_url = f'/api/v1/admin/member-avatars/{avatar_id}/file'
+            dto = self.client.get(f'/api/v1/admin/members/{self.member.id}').json()['data']
+            self.assertEqual(dto['avatarUrl'], admin_url)
+            delivered = self.client.get(admin_url)
+            self.assertEqual(delivered.status_code, 200)
+            self.assertEqual(b''.join(delivered.streaming_content), png())
+            self.assertEqual(delivered['X-Content-Type-Options'], 'nosniff')
+            self.assertEqual(Client().get(admin_url).status_code, 401)
+            unprivileged = AdminAccount.objects.create_user('avatar-denied', PASSWORD, display_name='无会员权限')
+            denied = self.logged_client(unprivileged.login_name)
+            self.assertEqual(denied.get(admin_url).status_code, 403)
+            self.assertEqual(Client().get(f'/api/v1/app/member-avatars/{avatar_id}/file').status_code, 404)
+
     def test_actual_login_csrf_and_password_required_before_write(self):
         body = self.body()
         no_csrf = self.client.put(RULES, json.dumps(body), content_type='application/json',

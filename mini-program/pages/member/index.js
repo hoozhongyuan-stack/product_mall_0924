@@ -1,9 +1,25 @@
 const { memberPage } = require('../../lib/member-page')
 const { orderFilters } = require('../../lib/order-filters')
 const { presentOverview } = require('../../lib/member')
+const { profileControls } = require('../../lib/member-profile')
 const session = require('../../lib/session')
 const { memberReturnTarget } = require('../../lib/member-route')
-Page({ ...memberPage({ path: '/api/v1/app/member/overview', present: presentOverview }),
+const base = memberPage({ path: '/api/v1/app/member/overview', present: presentOverview })
+Page({ ...base, ...profileControls,
+  data: { ...base.data, editingProfile: false, nicknameDraft: '', profileError: '', profileBusy: false },
+  clearPrivate() { base.clearPrivate.call(this); this.setData({ editingProfile: false, nicknameDraft: '', profileError: '', profileBusy: false }) },
+  avatarError() { if (this.data.member) this.setData({ member: { ...this.data.member, avatarDisplayUrl: '' } }) },
+  async logout() {
+    if (this.data.profileBusy) return
+    const originalToken = wx.getStorageSync('mall.memberToken')
+    this.setData({ profileBusy: true, profileError: '' })
+    try { await session.logout(); this.invalidate(); this.setData({ state: 'auth', error: '' }) }
+    catch (error) {
+      if (originalToken !== wx.getStorageSync('mall.memberToken')) { this.invalidate(); this.setData({ state: 'auth', error: '' }) }
+      else this.setData({ profileError: error.message })
+    }
+    finally { this.setData({ profileBusy: false }) }
+  },
   openPrivate(next, options = {}) {
     const target = memberReturnTarget({ next, ...options })
     if (!target) return

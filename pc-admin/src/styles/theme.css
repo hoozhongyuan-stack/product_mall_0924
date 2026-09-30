@@ -74,10 +74,10 @@ input[type="checkbox"] { accent-color: var(--mall-color-brand); }
 .empty-state { margin: 0; padding: 32px 24px; background: var(--mall-color-surface); border-radius: var(--mall-radius-panel); }
 .retry { margin-top: 12px; }
 .table-wrap { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; text-align: left; min-width: 680px; font-size: 14px; }
-th, td { border-bottom: 1px solid var(--mall-color-border); padding: 14px 16px; vertical-align: top; }
-th { font-size: 13px; color: var(--mall-color-muted); background: #f8f9f9; font-weight: 600; white-space: nowrap; }
-tr:last-child td { border-bottom: 0; }
+.table-wrap table { border-collapse: collapse; width: 100%; text-align: left; min-width: 680px; font-size: 14px; }
+.table-wrap th, .table-wrap td { border-bottom: 1px solid var(--mall-color-border); padding: 14px 16px; vertical-align: top; }
+.table-wrap th { font-size: 13px; color: var(--mall-color-muted); background: #f8f9f9; font-weight: 600; white-space: nowrap; }
+.table-wrap tr:last-child td { border-bottom: 0; }
 .strong-cell { font-weight: 600; color: var(--mall-color-text); }
 .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; color: var(--mall-color-muted); }
 .badge { display: inline-block; border-radius: 5px; padding: 4px 8px; font-size: 12px; font-weight: 600; white-space: nowrap; }

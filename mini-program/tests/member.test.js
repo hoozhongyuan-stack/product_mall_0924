@@ -91,3 +91,46 @@ test('member login validates a return destination and restores the selected orde
  await p.login()
  assert.deepEqual(urls.slice(-1), ['back'])
 })
+
+test('logout revokes session and clears private recovery while keeping cart', async () => {
+ const p = prime(); storage.set('mall.cart.v1', [{ skuId: 'sku' }]); storage.set('mall.checkoutRecovery.v1', ['private']); storage.set('mall.wechatPaymentIntent.v1', {})
+ wx.request = (r) => success(r, {}); await p.logout()
+ assert.equal(storage.get('mall.memberToken'), undefined); assert.equal(storage.get('mall.checkoutRecovery.v1'), undefined); assert.equal(storage.get('mall.wechatPaymentIntent.v1'), undefined); assert.equal(storage.get('mall.cart.v1').length, 1); assert.equal(p.data.state, 'auth')
+})
+test('nickname save uses revision and rejects stale session response', async () => {
+ const p = prime(); p.data.member = { ...overview, nickname: '旧昵称', profileRevision: 2 }; p.editProfile(); p.inputNickname({ detail: { value: '新昵称' } })
+ let r; wx.request = (v) => { r = v }; const pending = p.saveProfile(); assert.equal(r.method, 'PUT'); assert.equal(r.data.expectedRevision, 2)
+ storage.set('mall.memberToken', 'B'); success(r, { nickname: '新昵称', profileRevision: 3 }); await pending; assert.equal(p.data.member, null)
+})
+test('avatar upload sends authenticated multipart revision', async () => {
+ const p = prime(); p.data.member = { ...overview, profileRevision: 4 }; wx.uploadFile = (r) => { assert.equal(r.name, 'file'); assert.equal(r.formData.expectedRevision, '4'); assert.equal(r.header.Authorization, 'Bearer A'); r.success({ statusCode: 200, data: JSON.stringify({ success: true, data: { avatarUrl: '/api/v1/app/member/avatar/file', profileRevision: 5 } }) }) }
+ await p.chooseAvatar({ detail: { avatarUrl: '/tmp/avatar.jpg' } }); assert.match(p.data.member.avatarUrl, /avatar/); assert.equal(p.data.member.profileRevision, 5)
+})
+test('profile rejects empty nickname, reports save failure and prevents overlapping edits', async () => {
+ const p = prime(); p.data.member = { ...overview, profileRevision: 0 }; p.editProfile(); await p.saveProfile(); assert.match(p.data.profileError, /昵称/)
+ p.inputNickname({ detail: { value: '昵称' } }); let r; wx.request = (v) => { r = v }; const a = p.saveProfile(); p.cancelProfile(); assert.equal(p.data.editingProfile, true); await p.chooseAvatar({ detail: {} }); failure(r, 409, '冲突'); await a; assert.match(p.data.profileError, /重新加载/); assert.equal(p.data.nicknameDraft, '昵称'); p.cancelProfile(); assert.equal(p.data.editingProfile, false)
+})
+test('native nickname form submission collects reviewed value and avatar URL is constrained', async () => {
+ const p = prime(); p.data.member = { ...overview, profileRevision: 0 }; wx.request = (r) => { assert.equal(r.data.nickname, '表单昵称'); success(r, { nickname: '表单昵称', profileRevision: 1 }) }; await p.saveProfile({ detail: { value: { nickname: '表单昵称' } } }); assert.equal(p.data.member.nickname, '表单昵称')
+ const { avatarDisplayUrl } = require('../lib/member'); assert.equal(avatarDisplayUrl('https://evil.invalid/avatar'), ''); assert.equal(avatarDisplayUrl('/api/v1/app/member-avatars/abcdef/file'), 'http://127.0.0.1:8000/api/v1/app/member-avatars/abcdef/file')
+})
+test('logout network failure keeps session and offers retry', async () => {
+ const p = prime(); p.data.member = overview; wx.request = (r) => r.fail(); await p.logout(); assert.equal(storage.get('mall.memberToken'), 'A'); assert.match(p.data.profileError, /网络/); assert.equal(p.data.profileBusy, false)
+})
+test('avatar upload malformed response is visible and expired auth clears private data', async () => {
+ const p = prime(); p.data.member = { ...overview, profileRevision: 0 }; wx.uploadFile = (r) => r.success({ statusCode: 200, data: 'invalid' }); await p.chooseAvatar({ detail: { avatarUrl: '/tmp/avatar' } }); assert.match(p.data.profileError, /响应无效/)
+ wx.uploadFile = (r) => r.success({ statusCode: 401, data: JSON.stringify({ success: false, error: { message: '登录失效' } }) }); await p.chooseAvatar({ detail: { avatarUrl: '/tmp/avatar' } }); assert.equal(p.data.member, null); assert.equal(storage.get('mall.memberToken'), undefined); assert.equal(p.data.state, 'auth')
+})
+test('logout of expired session clears page after API has already removed token', async () => {
+ const p = prime(); p.data.member = overview; wx.request = (r) => failure(r, 401, '登录失效'); await p.logout(); assert.equal(p.data.member, null); assert.equal(p.data.state, 'auth')
+})
+test('late logout response cannot delete newly logged in account', async () => {
+ const p = prime(); p.data.member = overview; p.data.rows = [{ id: 'private-A' }]; const generation = p.generation || 0; let r; wx.request = (v) => { r = v }; const a = p.logout(); storage.set('mall.memberToken', 'B'); success(r, {}); await a; assert.equal(storage.get('mall.memberToken'), 'B'); assert.equal(p.data.member, null); assert.deepEqual(p.data.rows, []); assert.equal(p.data.state, 'auth'); assert.ok(p.generation > generation)
+})
+test('avatar save preserves an unsaved nickname draft and keeps editor open', async () => {
+ const p = prime(); p.data.member = { ...overview, nickname: '已保存', profileRevision: 0 }; p.editProfile(); p.inputNickname({ detail: { value: '尚未保存' } }); wx.uploadFile = (r) => r.success({ statusCode: 200, data: JSON.stringify({ success: true, data: { nickname: '已保存', profileRevision: 1 } }) }); await p.chooseAvatar({ detail: { avatarUrl: '/tmp/avatar' } }); assert.equal(p.data.nicknameDraft, '尚未保存'); assert.equal(p.data.editingProfile, true)
+})
+test('failed late logout clears old private account when token changed and preserves new token', async () => {
+ const p = prime(); p.data.member = overview; p.data.rows = [{ id: 'private-A' }]; let r; wx.request = (v) => { r = v }; const pending = p.logout(); storage.set('mall.memberToken', 'B'); r.fail(); await pending
+ assert.equal(storage.get('mall.memberToken'), 'B'); assert.equal(p.data.member, null); assert.deepEqual(p.data.rows, []); assert.equal(p.data.state, 'auth'); assert.equal(p.data.profileError, '')
+})

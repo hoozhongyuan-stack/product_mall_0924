@@ -27,4 +27,13 @@ function login() {
     .then((result) => { wx.setStorageSync('mall.memberToken', result.accessToken); return result })
 }
 
-module.exports = { loggedIn, rememberCheckout, recoverCheckout, login }
+async function logout() {
+  const token = wx.getStorageSync('mall.memberToken')
+  try { await api.post('/api/v1/app/auth/logout', {}) }
+  catch (error) { if (error.statusCode !== 401) throw error }
+  const current = wx.getStorageSync('mall.memberToken')
+  if (current && token !== current) return false
+  for (const key of ['mall.memberToken', RECOVERY_KEY, 'mall.wechatPaymentIntent.v1']) wx.removeStorageSync(key)
+  return true
+}
+module.exports = { loggedIn, rememberCheckout, recoverCheckout, login, logout }

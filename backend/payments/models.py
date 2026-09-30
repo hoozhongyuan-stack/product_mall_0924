@@ -114,6 +114,9 @@ class OfflinePaymentPolicy(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=1)
     instructions = models.TextField(blank=True)
     merchant_account_id = models.CharField(max_length=80, blank=True)
+    # Null preserves the deployment gate for older clients until an explicit admin choice.
+    offline_enabled = models.BooleanField(null=True, default=None)
+    wechat_enabled = models.BooleanField(null=True, default=None)
     wechat_timeout_minutes = models.PositiveIntegerField(default=30)
     offline_timeout_minutes = models.PositiveIntegerField(default=1440)
     revision = models.PositiveIntegerField(default=1)
