@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../../shared/confirm'
+
 import { csvTable } from '../../shared/csv.mjs'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
@@ -264,9 +266,16 @@ function priceRange(row: ProductRow) {
   return row.minListPriceFen === row.maxListPriceFen ? `¥${fenToYuan(row.minListPriceFen)}`
     : `¥${fenToYuan(row.minListPriceFen)}–¥${fenToYuan(row.maxListPriceFen)}`
 }
-function canLeaveEditor() { return !saving.value && !productMediaBusy.value && !createBusy.value && (!hasUnsaved.value || window.confirm('当前商品资料尚未保存，离开后已填写的内容会丢失。确定继续吗？')) }
-function closeEditors(force = false) {
-  if (!force && !canLeaveEditor()) return false
+async function canLeaveEditor() {
+  if (saving.value || productMediaBusy.value || createBusy.value) return false
+  const sequence = productLoadSequence
+  const allowed = !hasUnsaved.value || await confirmAction('当前商品资料尚未保存，离开后已填写的内容会丢失。确定继续吗？', {
+    title: '离开商品编辑', confirmButtonText: '放弃修改并离开', cancelButtonText: '继续编辑',
+  })
+  return allowed && sequence === productLoadSequence && !saving.value && !productMediaBusy.value && !createBusy.value
+}
+async function closeEditors(force = false) {
+  if (!force && !await canLeaveEditor()) return false
   productLoadSequence += 1
   productLoading.value = false
   productLoadError.value = ''
@@ -282,15 +291,15 @@ function closeEditors(force = false) {
   error.value = ''
   return true
 }
-function openCreate() {
-  if (!canLeaveEditor()) return
+async function openCreate() {
+  if (!await canLeaveEditor()) return
   editorTrigger = document.activeElement as HTMLElement | null
   closeEditors(true)
   formOpen.value = true
 }
 
 async function openProduct(id: string) {
-  if (!canLeaveEditor()) return
+  if (!await canLeaveEditor()) return
   editorTrigger = document.activeElement as HTMLElement | null
   closeEditors(true)
   const sequence = ++productLoadSequence
@@ -367,8 +376,8 @@ function specsSaved() {
   void load(activePage.value.page)
 }
 
-function openSku(row: SkuRow, action: SkuAction) {
-  if (!canLeaveEditor()) return
+async function openSku(row: SkuRow, action: SkuAction) {
+  if (!await canLeaveEditor()) return
   editorTrigger = document.activeElement as HTMLElement | null
   closeEditors(true)
   editingSku.value = row
@@ -748,7 +757,7 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
     <section v-if="editorOpen" class="catalog-editor-workspace" aria-label="商品编辑工作区">
     <header class="catalog-workspace-heading"><div><button class="text-button catalog-back" type="button" :disabled="saving || productMediaBusy || createBusy" @click="closeEditors()">返回商品列表</button><h1 ref="workspaceHeading" tabindex="-1">{{ formOpen ? '新建商品' : editingSku ? '编辑 SKU' : '编辑商品' }}</h1><p>{{ editingProduct ? `${editingProduct.productNo} · ${editingProduct.status === 'DRAFT' ? '草稿' : editingProduct.status === 'ON_SALE' ? '在售' : '已下架'}` : editingSku ? editingSku.skuCode : '基础信息、媒体和规格分组管理' }}</p></div><span class="catalog-workspace-note">{{ saving || productMediaBusy || createBusy ? '操作进行中，请稍候' : hasUnsaved ? '有未保存的修改' : '退出前请确认各组资料已保存' }}</span></header>
     <p v-if="error" class="error notice" role="alert">{{ error }}</p>
-    <ProductCreateForm v-if="formOpen" :categories="categories" @created="created" @cancel="closeEditors()" @dirty-change="createDirty = $event" @busy-change="createBusy = $event" />
+    <ProductCreateForm v-if="formOpen" :categories="categories" :grades="grades" @created="created" @cancel="closeEditors()" @dirty-change="createDirty = $event" @busy-change="createBusy = $event" />
     <section v-if="productLoading || productLoadError" class="panel action-panel catalog-editor" aria-label="商品详情加载状态">
       <p v-if="productLoading" role="status">正在加载商品资料与 SKU…</p>
       <template v-else><p class="error notice" role="alert">{{ productLoadError }}</p>

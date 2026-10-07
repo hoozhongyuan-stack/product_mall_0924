@@ -1,3 +1,4 @@
+import { confirmAction } from './confirm'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { api, ApiError, type Account, type Confirmation } from '../api'
@@ -122,8 +123,15 @@ export function usePersistentOperation(options: OperationOptions) {
   function beforeUnload(event: BeforeUnloadEvent) {
     if (options.dirty() || busy.value || pending.value) { event.preventDefault(); event.returnValue = '' }
   }
-  const mayLeave = () => !busy.value && (!(options.dirty() || pending.value)
-    || window.confirm(pending.value ? '操作结果待确认，原请求已保留。确定离开？' : '有未保存修改，确定离开？'))
+  const mayLeave = async () => {
+    const currentEpoch = epoch
+    if (busy.value) return false
+    const allowed = !(options.dirty() || pending.value) || await confirmAction(
+      pending.value ? '操作结果待确认，原请求已保留。确定离开？' : '有未保存修改，确定离开？',
+      { title: '离开当前页面', confirmButtonText: '离开并稍后核查', cancelButtonText: '继续处理' },
+    )
+    return allowed && !busy.value && currentEpoch === epoch
+  }
   onMounted(() => { restore(); window.addEventListener('beforeunload', beforeUnload) })
   onUnmounted(() => { epoch++; password.value = ''; window.removeEventListener('beforeunload', beforeUnload) })
   watch(() => JSON.stringify([options.account().accountId, options.account().permissionCodes, options.target()]), () => {

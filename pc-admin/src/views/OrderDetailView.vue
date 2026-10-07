@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { confirmAction } from '../shared/confirm'
+
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { api, type Account, type Confirmation } from '../api'
 import { amountFen, reconciliationError, sameEvidence, paymentStatus, type ReconciliationForm } from './orders/offline-payment.mjs'
@@ -79,8 +81,21 @@ async function confirmReceipt() {
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || confirmationRequested.value) { event.preventDefault(); event.returnValue = '' } }
 onMounted(() => { void load(); window.addEventListener('beforeunload', beforeUnload) })
 onUnmounted(() => { loadGeneration += 1; window.removeEventListener('beforeunload', beforeUnload) })
-onBeforeRouteUpdate((to) => { if (busy.value) return false; if ((dirty.value || confirmationRequested.value) && !window.confirm('核对尚未完成，确定切换订单？')) return false; form.value = { merchantAccountId: '', externalTradeNo: '', amount: '', paidAt: '', note: '', verified: false }; intent.value = null; requestBody.value = null; requestKey.value = ''; confirmationRequested.value = false; confirmOpen.value = false; password.value = ''; notice.value = ''; resultAnomaly.value = false; void loadId(String(to.params.orderId)) })
-onBeforeRouteLeave(() => !busy.value && (!(dirty.value || confirmationRequested.value) || window.confirm('核对记录尚未完成，离开后请通过订单详情核查实际处理结果。确定离开？')))
+async function mayLeaveOrder(message: string) {
+  if (busy.value) return false
+  const generation = loadGeneration
+  const actor = props.account.accountId
+  const allowed = !(dirty.value || confirmationRequested.value) || await confirmAction(message)
+  return allowed && !busy.value && generation === loadGeneration && actor === props.account.accountId
+}
+onBeforeRouteUpdate(() => mayLeaveOrder('核对尚未完成，确定切换订单？'))
+watch(() => route.params.orderId, id => {
+  form.value = { merchantAccountId: '', externalTradeNo: '', amount: '', paidAt: '', note: '', verified: false }
+  intent.value = null; requestBody.value = null; requestKey.value = ''; confirmationRequested.value = false
+  confirmOpen.value = false; password.value = ''; notice.value = ''; resultAnomaly.value = false
+  void loadId(String(id))
+})
+onBeforeRouteLeave(() => mayLeaveOrder('核对记录尚未完成，离开后请通过订单详情核查实际处理结果。确定离开？'))
 </script>
 <template>
   <section class="page-content orders-page">

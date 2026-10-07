@@ -1,3 +1,5 @@
+import { confirmAction as confirmNavigation } from '../../src/shared/confirm'
+vi.mock('../../src/shared/confirm', () => ({ confirmAction: vi.fn() }))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -11,7 +13,7 @@ const permissions = ['wechat.integration.read', 'wechat.integration.manage']
 const account: Account = { accountId: 'integration-test', loginName: 'operator', displayName: '运营人员', kind: 'STAFF', enabled: true, revision: 1, groupIds: [], permissionCodes: permissions }
 const config = { revision: 2, source: 'MANAGED', appId: 'wx0123456789abcdef', secretConfigured: true, keyAvailable: true, identityBinding: { status: 'EMPTY', appId: null }, paymentAppIdStatus: 'NOT_CONFIGURED', notificationsStatus: 'NOT_VERIFIED', lastCheck: null }
 const wrappers: ReturnType<typeof mount>[] = []
-beforeEach(() => { vi.mocked(api).mockReset(); localStorage.clear(); sessionStorage.clear(); vi.stubGlobal('confirm', vi.fn(() => true)) })
+beforeEach(() => { vi.mocked(api).mockReset(); localStorage.clear(); sessionStorage.clear(); vi.mocked(confirmNavigation).mockReset().mockResolvedValue(true) })
 afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); localStorage.clear(); sessionStorage.clear() })
 async function setup(value = config, permissionCodes = permissions) {
   vi.mocked(api).mockResolvedValue(value as never)

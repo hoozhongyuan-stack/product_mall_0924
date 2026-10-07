@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../../shared/confirm'
+
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError, api, type Account } from '../../api'
@@ -48,7 +50,7 @@ function openEdit(item: Category) {
 
 async function save() {
   const target = editor.value
-  if (!target) return
+  if (!target || saving.value) return
   if (!name.value.trim() || !Number.isInteger(sortOrder.value) || sortOrder.value < 0) {
     error.value = '请填写分类名称和非负整数排序值。'
     return
@@ -58,8 +60,9 @@ async function save() {
       error.value = `该分类影响 ${target.onSaleProductCount} 个在售商品，请先下架后再停用。`
       return
     }
-    if (target.productCount && !window.confirm(`停用后，该分类及下级关联的 ${target.productCount} 个商品将不再展示。确定停用吗？`)) return
+    if (target.productCount && !await confirmAction(`停用后，该分类及下级关联的 ${target.productCount} 个商品将不再展示。确定停用吗？`)) return
   }
+  if (saving.value || editor.value !== target) return
   saving.value = true
   error.value = ''
   try {

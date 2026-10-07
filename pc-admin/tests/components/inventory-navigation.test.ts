@@ -1,3 +1,5 @@
+import { confirmAction } from '../../src/shared/confirm'
+vi.mock('../../src/shared/confirm', () => ({ confirmAction: vi.fn() }))
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
@@ -10,7 +12,7 @@ vi.mock('../../src/api', async original => ({ ...await original<typeof import('.
 const account = { accountId: 'test', permissionCodes: ['inventory.read', 'inventory.manage'] }
 const wrappers: ReturnType<typeof mount>[] = []
 beforeEach(() => {
-  vi.stubGlobal('confirm', vi.fn(() => false))
+  vi.mocked(confirmAction).mockReset().mockResolvedValue(false)
   vi.mocked(api).mockImplementation(async path => path === '/warehouses'
     ? { items: [{ warehouseId: 'w1', name: '中心仓', enabled: true, isDefault: true }] } as never
     : { items: [], total: 0, page: 1, pageSize: 20 } as never)
@@ -41,7 +43,7 @@ it('protects same-component navigation and route leave, retaining cancelled valu
   expect((wrapper.get('input[placeholder="例如 WH-001"]').element as HTMLInputElement).value).toBe('WH-NEW')
   await router.push('/')
   expect(router.currentRoute.value.path).toBe('/inventory/warehouses')
-  vi.mocked(window.confirm).mockReturnValue(true)
+  vi.mocked(confirmAction).mockResolvedValue(true)
   await router.push('/inventory/inbounds')
   await flushPromises()
   expect(wrapper.text()).toContain('创建入库单')
@@ -80,7 +82,7 @@ it('blocks route updates and unload during a write, without discarding a pending
   expect(wrapper.findAll('button').find(b => b.text() === '关闭表单')!.attributes('disabled')).toBeDefined()
   await router.push('/inventory/inbounds')
   expect(router.currentRoute.value.path).toBe('/inventory/warehouses')
-  expect(window.confirm).not.toHaveBeenCalled()
+  expect(confirmAction).not.toHaveBeenCalled()
   const event = new Event('beforeunload', { cancelable: true })
   window.dispatchEvent(event)
   expect(event.defaultPrevented).toBe(true)
@@ -98,10 +100,10 @@ it('blocks browser back for dirty drafts but does not prompt for same-panel filt
   router.back()
   await flushPromises()
   expect(router.currentRoute.value.path).toBe('/inventory/warehouses')
-  expect(window.confirm).toHaveBeenCalledTimes(1)
+  expect(confirmAction).toHaveBeenCalledTimes(1)
   await router.push('/inventory/warehouses?view=all')
   expect(router.currentRoute.value.query.view).toBe('all')
-  expect(window.confirm).toHaveBeenCalledTimes(1)
+  expect(confirmAction).toHaveBeenCalledTimes(1)
 })
 
 const inbound = { inboundId: 'in-1', documentNo: 'IN-1', warehouseId: 'w1', warehouseName: '中心仓', status: 'DRAFT', revision: 1, reason: '采购', createdAt: '2026-09-29T00:00:00Z', createdBy: '库管', itemCount: 1, totalBaseUnits: 1, items: [] }

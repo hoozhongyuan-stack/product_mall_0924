@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../../shared/confirm'
+
 import { computed, ref, onUnmounted } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { api, confirmedWrite, ApiError, type Account } from '../../api'
@@ -38,7 +40,7 @@ try { frozen.value=pendingAcceptance(sessionStorage,props.account.accountId,prop
  } catch(reason) { if(active) { unknown.value=!(reason instanceof ApiError && reason.status<500); error.value=reason instanceof Error?reason.message:'处理结果未知。'; if(unknown.value)dialog.value=false;else { pendingAcceptance(sessionStorage,props.account.accountId,props.item.caseId,null);frozen.value=null;requestKey.value='' } } }
  finally { if(active) { password.value='';setBusy(false) } }
 }
-function leave() { return !busy.value && (!dirty.value || window.confirm('验收尚未提交或结果待核实，确定离开并稍后查询？')) }
+async function leave() { return !busy.value && (!dirty.value || await confirmAction('验收尚未提交或结果待核实，确定离开并稍后查询？')) }
 onBeforeRouteLeave(leave)
 onBeforeRouteUpdate(leave)
 function beforeUnload(event:BeforeUnloadEvent) {if(dirty.value || busy.value){event.preventDefault();event.returnValue=''}}

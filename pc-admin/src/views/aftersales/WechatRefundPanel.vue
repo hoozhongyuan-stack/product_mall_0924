@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../../shared/confirm'
+
 import { computed, ref, onUnmounted } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { api, confirmedWrite, ApiError, type Account } from '../../api'
@@ -27,7 +29,7 @@ async function query(){
  catch(reason){if(active)error.value=reason instanceof Error?reason.message:'查单失败，请稍后再查。'}
  finally{if(active)setBusy(false)}
 }
-const mayLeave=()=>!busy.value && (!unknown.value || window.confirm('退款结果待核实，确定离开并稍后查单？'))
+const mayLeave=async ()=>!busy.value && (!unknown.value || await confirmAction('退款结果待核实，确定离开并稍后查单？'))
 onBeforeRouteLeave(mayLeave)
 onBeforeRouteUpdate(mayLeave)
 function beforeUnload(event:BeforeUnloadEvent){if(busy.value || unknown.value){event.preventDefault();event.returnValue=''}}

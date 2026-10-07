@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../../shared/confirm'
+
 import { computed, ref, onUnmounted } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { confirmedWrite, ApiError, type Account } from '../../api'
@@ -29,7 +31,7 @@ async function confirm(){
  }catch(reason){if(active){unknown.value=!(reason instanceof ApiError && [400,403,404,409,422].includes(reason.status));error.value=reason instanceof Error?reason.message:'处理结果未知，请先刷新查询。';if(unknown.value)dialog.value=false;else{pendingBenefitSettlement(sessionStorage,props.account.accountId,props.item.caseId,null);pending.value=null}}}
  finally{if(active){password.value='';setBusy(false)}}
 }
-const mayLeave=()=>!busy.value && (!(unknown.value||pending.value) || window.confirm('权益处理结果待核实，确定离开并稍后查询？'))
+const mayLeave=async ()=>!busy.value && (!(unknown.value||pending.value) || await confirmAction('权益处理结果待核实，确定离开并稍后查询？'))
 onBeforeRouteLeave(mayLeave);onBeforeRouteUpdate(mayLeave)
 function beforeUnload(event:BeforeUnloadEvent){if(busy.value||unknown.value||pending.value){event.preventDefault();event.returnValue=''}}
 window.addEventListener('beforeunload',beforeUnload)

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import type { Account } from '../api'
@@ -9,8 +11,8 @@ defineProps<{ account: Account }>()
 const tab = ref<'products' | 'categories'>('products')
 const dirtyProducts = ref(false)
 const workspaceOpen = ref(false)
-function confirmLeave() {
-  return !dirtyProducts.value || window.confirm('当前商品资料尚未保存，离开后已填写的内容会丢失。确定继续吗？')
+async function confirmLeave() {
+  return !dirtyProducts.value || await confirmAction('当前商品资料尚未保存，离开后已填写的内容会丢失。确定继续吗？')
 }
 function beforeUnload(event: BeforeUnloadEvent) {
   if (!dirtyProducts.value) return
@@ -21,7 +23,7 @@ onMounted(() => window.addEventListener('beforeunload', beforeUnload))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 onBeforeRouteLeave(() => confirmLeave())
 async function switchTab(value: 'products' | 'categories') {
-  if (value === tab.value || (tab.value === 'products' && !confirmLeave())) return
+  if (value === tab.value || (tab.value === 'products' && !await confirmLeave())) return
   dirtyProducts.value = false
   tab.value = value
   await nextTick()

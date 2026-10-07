@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -69,9 +71,9 @@ function beforeUnload(event: BeforeUnloadEvent) {
   event.preventDefault()
   event.returnValue = ''
 }
-onBeforeRouteLeave(() => !dirty.value || window.confirm('独立微页面有未保存修改，确定离开吗？'))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction('独立微页面有未保存修改，确定离开吗？'))
 onMounted(() => { void loadList(); void loadTargets(); window.addEventListener('beforeunload', beforeUnload) })
-onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
+onUnmounted(() => { detailSequence++; window.removeEventListener('beforeunload', beforeUnload) })
 
 async function loadList(page = 1) {
   listLoading.value = true
@@ -111,27 +113,37 @@ watch(currentPageId, (id) => {
   else { detailSequence++; draft.value = null; editor.value = null; preview.value = null }
 }, { immediate: true })
 
+/** Bind a pending choice to the editor and actor that displayed it, including browser history changes. */
+function captureEditorContext() {
+  const sequence = detailSequence, pageId = currentPageId.value, config = editor.value, currentDraft = draft.value
+  const actor = props.account.accountId, permissions = JSON.stringify(props.account.permissionCodes)
+  return () => sequence === detailSequence && pageId === currentPageId.value && config === editor.value
+    && currentDraft === draft.value && actor === props.account.accountId
+    && permissions === JSON.stringify(props.account.permissionCodes)
+}
 async function selectPage(id: string) {
   if (id === currentPageId.value || busy.value || creating.value) return
-  if (dirty.value && !window.confirm('当前微页面有未保存修改，确定切换吗？')) return
-  draft.value = null
-  editor.value = null
+  const isCurrent = captureEditorContext()
+  if (dirty.value && !await confirmAction('当前微页面有未保存修改，确定切换吗？')) return
+  if (!isCurrent() || busy.value || creating.value) return
   await router.replace({ path: '/pages/micro', query: { pageId: id } })
 }
 async function createPage() {
   if (!canEdit.value || creating.value || busy.value) return
   const title = createName.value.trim()
   if (!title || title.length > 80) { listError.value = '请输入不超过 80 字的页面名称。'; return }
-  if (dirty.value && !window.confirm('当前微页面有未保存修改，确定新建并切换吗？')) return
+  const isCurrent = captureEditorContext()
+  if (dirty.value && !await confirmAction('当前微页面有未保存修改，确定新建并切换吗？')) return
+  if (!isCurrent() || !canEdit.value || creating.value || busy.value) return
   creating.value = true
   listError.value = ''
   try {
     const created = await api<MicroDraft>('/pages', { method: 'POST', body: JSON.stringify({ name: title }) })
+    if (!isCurrent() || !canEdit.value) return
     createName.value = ''
-    draft.value = null
-    editor.value = null
     await loadList(1)
     await loadTargets()
+    if (!isCurrent() || !canEdit.value) return
     await router.replace({ path: '/pages/micro', query: { pageId: created.pageId } })
     ElMessage.success('微页面草稿已创建')
   } catch (reason) { listError.value = message(reason) }
@@ -169,9 +181,13 @@ function bindUploadedAsset(upload: UploadedAssetBinding) {
   editor.value = next
   notice.value = '图片已绑定到原组件，请保存草稿。'
 }
-function removeComponent(id: string) {
-  if (!editor.value || !window.confirm('移除此组件？未保存前可重新读取草稿恢复。')) return
-  updateComponents(editor.value.components.filter((item) => item.componentId !== id))
+async function removeComponent(id: string) {
+  if (!editor.value || !canEdit.value || busy.value || creating.value) return
+  const config = editor.value
+  const isCurrent = captureEditorContext()
+  if (!await confirmAction('移除此组件？未保存前可重新读取草稿恢复。')) return
+  if (!isCurrent() || !canEdit.value || busy.value || creating.value) return
+  updateComponents(config.components.filter((item) => item.componentId !== id))
   if (selectedId.value === id) selectedId.value = 'theme'
 }
 function updateTheme(key: keyof PageConfig['theme'], value: string) {
@@ -311,8 +327,12 @@ async function publish() {
     publishPassword.value = ''
   } finally { busy.value = '' }
 }
-function reloadDraft() {
-  if (draft.value && (!dirty.value || window.confirm('放弃未保存的修改并重新读取草稿？'))) void loadDetail(draft.value.pageId)
+async function reloadDraft() {
+  if (!draft.value || busy.value || creating.value) return
+  const id = draft.value.pageId
+  const isCurrent = captureEditorContext()
+  if (dirty.value && !await confirmAction('放弃未保存的修改并重新读取草稿？')) return
+  if (isCurrent() && !busy.value && !creating.value) void loadDetail(id)
 }
 function rolledBack(result: RollbackResult) {
   if (!draft.value) return

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
@@ -410,7 +412,7 @@ function movementLabel(movement: InventoryLedger['movementType']) {
     REFUND: '未发货退款回库', RETURN: '退货验收回库' } as const)[movement]
 }
 function signedQuantity(value: number) { return `${value > 0 ? '+' : ''}${value}` }
-function confirmDiscard() { return !dirty.value || window.confirm('当前表单尚未保存，离开后已填写的内容会丢失。确定继续吗？') }
+async function confirmDiscard() { return !dirty.value || await confirmAction('当前表单尚未保存，离开后已填写的内容会丢失。确定继续吗？') }
 function discardForms() {
   stocktakeDirty.value = false
   stocktakeBusy.value = false
@@ -425,13 +427,13 @@ function discardForms() {
   outboundDirty.value = false
   outboundFormError.value = ''
 }
-function closeWarehouse() { if (!warehouseSaving.value && confirmDiscard()) discardForms() }
-function closeInbound() { if (!draftSaving.value && confirmDiscard()) discardForms() }
-function closeOutbound() { if (!outboundDraftSaving.value && confirmDiscard()) discardForms() }
+async function closeWarehouse() { if (!warehouseSaving.value && await confirmDiscard() && !writeBusy.value) discardForms() }
+async function closeInbound() { if (!draftSaving.value && await confirmDiscard() && !writeBusy.value) discardForms() }
+async function closeOutbound() { if (!outboundDraftSaving.value && await confirmDiscard() && !writeBusy.value) discardForms() }
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || writeBusy.value) { event.preventDefault(); event.returnValue = '' } }
 const writeBusy = computed(() => warehouseSaving.value || !!warehouseStatusSaving.value || draftSaving.value || outboundDraftSaving.value
   || confirmSaving.value || outboundConfirmSaving.value || stocktakeBusy.value || confirmationPending.value)
-function canNavigate() { return !writeBusy.value && confirmDiscard() }
+async function canNavigate() { return !writeBusy.value && await confirmDiscard() && !writeBusy.value }
 onBeforeRouteLeave(canNavigate)
 onBeforeRouteUpdate((to, from) => to.path === from.path || canNavigate())
 watch(tab, (next) => {
