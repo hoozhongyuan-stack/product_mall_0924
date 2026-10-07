@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { ApiError, api } from '../../api'
-import { yuanToFen, type MemberGrade, type ProductDetail } from './types'
-import { axesMatchDetail, combinationKey, generateCombinations, initialAxes, initialSkus, toSpecPayload, validateAxes,
+import { type MemberGrade, type ProductDetail } from './types'
+import SkuTable from './SkuTable.vue'
+import { confirmAction } from '../../shared/confirm'
+import { axesMatchDetail, combinationKey, generateCombinations, hasDraftSkuInput, initialAxes, initialSkus, toSpecPayload, validateAxes,
   type EditableAxis, type EditableSku } from './spec-editor'
 
 interface PreviewItem { skuId?: string; skuCode: string; gradePriceCount?: number; unitVersionCount?: number }
@@ -18,7 +20,6 @@ const error = ref('')
 const busy = ref(false)
 const showFieldErrors = ref(false)
 const editorElement = ref<HTMLElement | null>(null)
-const enabledGrades = computed(() => props.grades.filter((grade) => grade.enabled))
 const dirty = computed(() => !axesMatchDetail(axes.value, props.product.specAxes)
   || JSON.stringify(skus.value.map(({ label: _label, ...sku }) => sku)) !==
     JSON.stringify(initialSkus(props.product).map(({ label: _label, ...sku }) => sku)))
@@ -35,11 +36,6 @@ function invalidate(regenerate = false) {
   confirmedRemoval.value = false
   error.value = ''
   if (regenerate) generated.value = false
-}
-function codeInvalid(index: number): boolean {
-  const code = skus.value[index].skuCode.trim()
-  return !/^[A-Za-z0-9_-]{1,64}$/.test(code) ||
-    skus.value.some((sku, position) => position !== index && sku.skuCode.trim().toUpperCase() === code.toUpperCase())
 }
 async function reportError(message: string) {
   error.value = message
@@ -73,21 +69,22 @@ function removeOption(axisIndex: number, optionIndex: number) {
     ? { ...axis, options: axis.options.filter((_, itemIndex) => itemIndex !== optionIndex) } : axis)
   invalidate(true)
 }
-function updateSku(index: number, patch: Partial<EditableSku>) {
-  skus.value = skus.value.map((sku, position) => position === index ? { ...sku, ...patch } : sku)
+function updateSkus(value: EditableSku[]) {
+  if (!props.canEdit || busy.value) return
+  skus.value = value
   invalidate()
 }
-function updateGrade(index: number, gradeId: string, value: string) {
-  const sku = skus.value[index]
-  updateSku(index, { gradePrices: { ...sku.gradePrices, [gradeId]: value } })
-}
-function regenerate() {
+async function regenerate() {
+  if (!props.canEdit || busy.value) return
+  const previous = skus.value
+  const currentAxes = axes.value
   const invalid = validateAxes(axes.value)
   if (invalid) { void reportError(invalid); return }
   const next = generateCombinations(axes.value, skus.value)
   const lostNew = skus.value.filter((sku) => !sku.id && !next.some((item) => combinationKey(item.optionKeys) === combinationKey(sku.optionKeys))
-    && (sku.skuCode || sku.priceYuan))
-  if (lostNew.length && !window.confirm(`${lostNew.length} 个尚未保存的 SKU 已填写资料无法对应新组合，继续会丢失这些草稿。`)) return
+    && hasDraftSkuInput(sku))
+  if (lostNew.length && !await confirmAction(`${lostNew.length} 个尚未保存的 SKU 已填写资料无法对应新组合，继续会丢失这些草稿。`)) return
+  if (!props.canEdit || busy.value || skus.value !== previous || axes.value !== currentAxes) return
   skus.value = next
   generated.value = true
   invalidate()
@@ -148,16 +145,8 @@ async function save() {
     <div v-if="skus.length" class="catalog-sku-drafts"><h4>SKU（{{ skus.length }} 个组合）</h4>
       <p v-if="product.status === 'DRAFT'" class="help-text">草稿中的规格组合均未上架；保存规格后，请从商品列表的 SKU 状态操作上架。</p>
       <p v-else class="help-text">已上架或已下架商品的规格暂不能修改；下列 SKU 销售状态为只读。</p>
-      <div v-for="(sku, index) in skus" :key="combinationKey(sku.optionKeys)" class="sku-draft-row"><strong>{{ sku.label || '默认规格' }} <small>{{ sku.id ? '保留现有 SKU' : '新增 SKU' }}</small></strong>
-        <div class="form-grid">
-          <label>SKU 编码<input :value="sku.skuCode" maxlength="64" :disabled="!canEdit || busy" :aria-invalid="showFieldErrors && codeInvalid(index)" required @input="updateSku(index, { skuCode: ($event.target as HTMLInputElement).value })" /></label>
-          <label>日常价（元）<input :value="sku.priceYuan" inputmode="decimal" :disabled="!canEdit || busy" :aria-invalid="showFieldErrors && yuanToFen(sku.priceYuan) === null" required @input="updateSku(index, { priceYuan: ($event.target as HTMLInputElement).value })" /></label>
-          <span class="help-text">销售状态：{{ sku.saleStatus === 'ON_SALE' ? '已上架' : '已下架' }}</span>
-          <label v-for="grade in enabledGrades" :key="grade.id">{{ grade.name }}价（元）<input :value="sku.gradePrices[grade.id] || ''" inputmode="decimal" placeholder="留空沿用日常价" :disabled="!canEdit || busy" :aria-invalid="showFieldErrors && !!sku.gradePrices[grade.id]?.trim() && yuanToFen(sku.gradePrices[grade.id]) === null" @input="updateGrade(index, grade.id, ($event.target as HTMLInputElement).value)" /></label>
-          <label>基本单位<input :value="sku.baseUnit" maxlength="20" :disabled="!canEdit || busy" :aria-invalid="showFieldErrors && !sku.baseUnit.trim()" required @input="updateSku(index, { baseUnit: ($event.target as HTMLInputElement).value })" /></label>
-          <label>销售单位<input :value="sku.saleUnit" maxlength="20" :disabled="!canEdit || busy" :aria-invalid="showFieldErrors && !sku.saleUnit.trim()" required @input="updateSku(index, { saleUnit: ($event.target as HTMLInputElement).value })" /></label>
-          <label>换算比<input :value="sku.ratio" type="number" min="1" step="1" :disabled="!canEdit || busy" :aria-invalid="showFieldErrors && (!Number.isInteger(sku.ratio) || sku.ratio < 1)" required @input="updateSku(index, { ratio: Number(($event.target as HTMLInputElement).value) })" /></label>
-        </div></div></div>
+      <SkuTable :skus="skus" :axes="axes" :grades="grades" :disabled="!canEdit || busy" :show-errors="showFieldErrors" @update:skus="updateSkus" />
+    </div>
     <div v-if="canEdit" class="catalog-spec-save"><button class="secondary-button" type="button" :disabled="busy || !dirty || !generated" @click="requestPreview">{{ busy ? '核对中…' : '核对规格变更影响' }}</button>
       <p v-if="basicDirty" class="help-text">先保存商品基础资料，再保存规格与 SKU。</p></div>
     <div v-if="preview" class="catalog-spec-impact" aria-label="服务端变更预览"><strong>服务端核对：保留 {{ preview.retained.length }} 个、新增 {{ preview.added.length }} 个、移除 {{ preview.removed.length }} 个 SKU</strong>

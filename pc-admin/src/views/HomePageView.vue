@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -74,7 +76,7 @@ function beforeUnload(event: BeforeUnloadEvent) {
   event.preventDefault()
   event.returnValue = ''
 }
-onBeforeRouteLeave(() => !dirty.value || window.confirm('首页草稿尚未保存，确定离开吗？'))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction('首页草稿尚未保存，确定离开吗？'))
 
 function updateTheme(key: keyof PageConfig['theme'], value: string) {
   if (!editor.value) return
@@ -170,8 +172,8 @@ function openPublish() {
   publishOpen.value = true
 }
 function closePublish() { publishOpen.value = false; publishPassword.value = '' }
-function reloadDraft() {
-  if (!dirty.value || window.confirm('放弃未保存的修改并重新读取草稿？')) void loadDraft()
+async function reloadDraft() {
+  if (!dirty.value || await confirmAction('放弃未保存的修改并重新读取草稿？')) void loadDraft()
 }
 function publishStorageKey(base: string) { return `mall-publication-publish:${JSON.stringify([props.account.accountId, base])}` }
 function restorePublishIntent() {

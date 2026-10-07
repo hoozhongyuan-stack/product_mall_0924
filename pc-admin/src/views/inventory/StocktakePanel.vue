@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../../shared/confirm'
+
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, ApiError } from '../../api'
@@ -104,8 +106,8 @@ function resetCreate() {
   createTouched.value = false
   createKey.value = crypto.randomUUID()
 }
-function toggleCreate() {
-  if (creating.value && hasDirtyCreate.value && !window.confirm('放弃尚未保存的盘点范围？')) return
+async function toggleCreate() {
+  if (creating.value && hasDirtyCreate.value && !await confirmAction('放弃尚未保存的盘点范围？')) return
   if (creating.value) resetCreate()
   else { creating.value = true; void searchSkus('') }
 }
@@ -147,7 +149,7 @@ async function loadList(page = 1) {
   finally { if (sequence === listSequence) listLoading.value = false }
 }
 async function loadDetail(id: string, force = false) {
-  if (hasDirtyCount.value && !force && !window.confirm('放弃当前未提交的实盘录入？')) return
+  if (hasDirtyCount.value && !force && !await confirmAction('放弃当前未提交的实盘录入？')) return
   const sequence = ++detailSequence
   detailLoading.value = true
   detailError.value = ''

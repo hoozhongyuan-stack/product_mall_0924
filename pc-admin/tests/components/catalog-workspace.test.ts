@@ -1,3 +1,5 @@
+import { confirmAction } from '../../src/shared/confirm'
+vi.mock('../../src/shared/confirm', () => ({ confirmAction: vi.fn() }))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
@@ -12,7 +14,7 @@ const sku = { skuId: 'sku1', skuCode: 'SKU-1', skuRevision: 3, productId: 'p1', 
 const product = { productId: 'p1', productNo: 'P-1', name: '测试商品', categoryId: 'leaf', fulfillmentKind: 'SHIP', redeemValidUntil: null, status: 'DRAFT', descriptionHtml: '', productRevision: 4, mainImage: null, galleryImages: [], video: null, specAxes: [], skus: [{ ...sku, specOptionIds: [] }] }
 const wrappers: ReturnType<typeof mount>[] = []
 beforeEach(() => {
-  vi.stubGlobal('confirm', vi.fn(() => false))
+  vi.mocked(confirmAction).mockReset().mockResolvedValue(false)
   vi.mocked(api).mockReset()
   vi.mocked(api).mockImplementation(async (path, init) => {
     if (path === '/categories') return categories as never
@@ -113,7 +115,7 @@ describe('focused product workspace', () => {
     const editor = wrapper.getComponent(EditorContent).props('editor')!
     editor.commands.insertContent('<h2>新图文说明</h2><p>商品特点</p>'); await flushPromises()
     await button(wrapper, '返回商品列表').trigger('click')
-    expect(window.confirm).toHaveBeenCalled()
+    expect(confirmAction).toHaveBeenCalled()
     expect(wrapper.get('[aria-label="商品编辑工作区"]').isVisible()).toBe(true)
     await wrapper.get('form.catalog-editor').trigger('submit'); await flushPromises()
     const sent = vi.mocked(api).mock.calls.find(([path, init]) => path === '/products/p1' && init?.method === 'PATCH')!
@@ -130,8 +132,8 @@ describe('focused product workspace', () => {
     await wrapper.get('input[placeholder="请输入商品名称"]').setValue('新建商品')
     await wrapper.get('form.catalog-editor select').setValue('leaf')
     await button(wrapper, '生成 SKU 组合').trigger('click')
-    await wrapper.get('input[placeholder="例如 SKU-001"]').setValue('NEW-SKU')
-    await wrapper.get('input[placeholder="例如 199.00"]').setValue('8.88')
+    await wrapper.get('input[aria-label="SKU 编码 默认规格"]').setValue('NEW-SKU')
+    await wrapper.get('input[aria-label="日常价 NEW-SKU"]').setValue('8.88')
     await wrapper.get('form.catalog-editor').trigger('submit')
     await flushPromises()
     expect((button(wrapper, '返回商品列表').element as HTMLButtonElement).disabled).toBe(true)
@@ -158,10 +160,28 @@ describe('focused product workspace', () => {
     await button(wrapper, '编辑商品').trigger('click')
     await flushPromises()
     await wrapper.get('input[maxlength="120"]').setValue('保留修改')
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    vi.mocked(confirmAction).mockResolvedValue(false)
     await button(wrapper, '返回商品列表').trigger('click')
     expect((wrapper.get('input[maxlength="120"]').element as HTMLInputElement).value).toBe('保留修改')
     expect(wrapper.get('form[role=search]').isVisible()).toBe(false)
+  })
+  it('keeps the editor when a save starts while an earlier leave confirmation is open', async () => {
+    const previous = vi.mocked(api).getMockImplementation()!
+    let finishSave!: (value: unknown) => void
+    vi.mocked(api).mockImplementation((path, init) => path === '/products/p1' && init?.method === 'PATCH'
+      ? new Promise(resolve => { finishSave = resolve }) : previous(path, init))
+    const wrapper = await setup()
+    await button(wrapper, '编辑商品').trigger('click'); await flushPromises()
+    await wrapper.get('input[maxlength="120"]').setValue('正在保存的商品')
+    let allowLeave!: (value: boolean) => void
+    vi.mocked(confirmAction).mockImplementationOnce(() => new Promise(resolve => { allowLeave = resolve }))
+    await button(wrapper, '返回商品列表').trigger('click')
+    await wrapper.get('form.catalog-editor').trigger('submit'); await flushPromises()
+    allowLeave(true); await flushPromises()
+    expect(wrapper.get('[aria-label="商品编辑工作区"]').isVisible()).toBe(true)
+    expect(wrapper.get('form[role=search]').isVisible()).toBe(false)
+    finishSave({ ...product, name: '正在保存的商品', productRevision: 5 }); await flushPromises()
+    expect(wrapper.text()).toContain('编辑商品')
   })
   it('saves basic data with its revision without submitting specifications', async () => {
     const wrapper = await setup()

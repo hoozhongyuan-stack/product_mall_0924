@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { api, ApiError } from '../api'
@@ -21,7 +23,7 @@ const validation = computed(() => {
   return ''
 })
 async function load() {
-  if (dirty.value && !window.confirm('放弃未保存的付款配置并重新读取？')) return
+  if (dirty.value && !await confirmAction('放弃未保存的付款配置并重新读取？')) return
   loading.value = true; error.value = ''; notice.value = ''
   try {
     data.value = await api<PaymentPolicy>('/payments/offline-policy')
@@ -44,7 +46,7 @@ async function save() {
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value) { event.preventDefault(); event.returnValue = '' } }
 onMounted(() => { void load(); window.addEventListener('beforeunload', beforeUnload) })
 onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
-onBeforeRouteLeave(() => !dirty.value || window.confirm('付款配置尚未保存，确定离开？'))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction('付款配置尚未保存，确定离开？'))
 </script>
 <template>
   <section class="page-content orders-page order-settings">

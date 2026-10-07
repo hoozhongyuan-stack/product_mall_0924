@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import 'element-plus/theme-chalk/el-radio.css'
 import 'element-plus/theme-chalk/el-radio-group.css'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -80,7 +82,7 @@ async function submit() {
 function beforeUnload(event: BeforeUnloadEvent) {
   if (dirty.value || busy.value || needsRead.value) { event.preventDefault(); event.returnValue = '' }
 }
-onBeforeRouteLeave(() => !busy.value && (!(dirty.value || needsRead.value) || window.confirm('有未保存输入或未核对的操作结果，确定离开？密钥输入不会保留。')))
+onBeforeRouteLeave(async () => !busy.value && (!(dirty.value || needsRead.value) || await confirmAction('有未保存输入或未核对的操作结果，确定离开？密钥输入不会保留。')))
 watch(() => JSON.stringify([props.account.accountId, props.account.permissionCodes]), () => {
   epoch++; config.value = null; appId.value = ''; secret.value = ''; password.value = ''; confirmation.value = ''
   busy.value = false; loading.value = false; needsRead.value = false; error.value = ''; notice.value = ''

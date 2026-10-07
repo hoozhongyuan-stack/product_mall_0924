@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -67,7 +69,7 @@ function forgetIntent(targetBase: string) {
   try { sessionStorage.removeItem(storageKey(targetBase)) } catch { /* A verified original request remains recoverable. */ }
 }
 async function loadDraft() {
-  if (dirty.value && !window.confirm(`放弃未保存的${title.value}修改并重新读取草稿？`)) return
+  if (dirty.value && !await confirmAction(`放弃未保存的${title.value}修改并重新读取草稿？`)) return
   const current = ++generation
   loading.value = true; error.value = ''; notice.value = ''
   try {
@@ -87,7 +89,7 @@ function beforeUnload(event: BeforeUnloadEvent) {
 }
 onMounted(() => { void loadDraft(); window.addEventListener('beforeunload', beforeUnload) })
 onUnmounted(() => { generation++; window.removeEventListener('beforeunload', beforeUnload); password.value = '' })
-onBeforeRouteLeave(() => !dirty.value || window.confirm(`${title.value}草稿还有未保存的修改，确定离开吗？`))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction(`${title.value}草稿还有未保存的修改，确定离开吗？`))
 watch(() => props.domain, () => { generation++; draft.value = null; config.value = null; intent.value = null; preview.value = null; void loadDraft() })
 function setNavIcon(item: NavigationItem, role: 'iconAssetId' | 'selectedIconAssetId', assetId: string | null) {
   if (!nav.value || !canEdit.value || busy.value) return

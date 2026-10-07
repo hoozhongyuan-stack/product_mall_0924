@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { api, ApiError, type Account } from '../api'
@@ -36,7 +38,7 @@ const hasPending = () => !!busy.value || EVENT_TYPES.some(event => dirty(event) 
 async function load(force = false) {
   if (busy.value) return
   if (!force && !Object.keys(uncertain.value).length && EVENT_TYPES.some(dirty) &&
-      !window.confirm('放弃未保存的消息模板草稿并重新读取？')) return
+      !await confirmAction('放弃未保存的消息模板草稿并重新读取？')) return
   const currentGeneration = ++generation
   const preserveEdits = force && rows.value.length > 0
   loading.value = true
@@ -126,7 +128,7 @@ function beforeUnload(event: BeforeUnloadEvent) {
 }
 onMounted(() => { void load(true); window.addEventListener('beforeunload', beforeUnload) })
 onUnmounted(() => { generation += 1; window.removeEventListener('beforeunload', beforeUnload) })
-onBeforeRouteLeave(() => !hasPending() || window.confirm('消息模板草稿有未保存或未核实的操作，确定离开？'))
+onBeforeRouteLeave(async () => !hasPending() || await confirmAction('消息模板草稿有未保存或未核实的操作，确定离开？'))
 </script>
 
 <template>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -98,8 +100,8 @@ async function loadShippingPolicy() {
   } catch (reason) { shippingError.value = message(reason) }
   finally { shippingLoading.value = false }
 }
-function reloadShippingPolicy() {
-  if (!shippingDirty.value || window.confirm('放弃未保存的运费修改并重新读取配置？')) void loadShippingPolicy()
+async function reloadShippingPolicy() {
+  if (!shippingDirty.value || await confirmAction('放弃未保存的运费修改并重新读取配置？')) void loadShippingPolicy()
 }
 async function saveShippingPolicy() {
   const current = shippingPolicy.value
@@ -138,9 +140,9 @@ function beforeUnload(event: BeforeUnloadEvent) {
   event.preventDefault()
   event.returnValue = ''
 }
-onBeforeRouteLeave(() => !hasUnsavedChanges.value || window.confirm('店铺配置还有未保存的修改，确定离开吗？'))
-function reloadDraft() {
-  if (!dirty.value || window.confirm('放弃未保存的修改并重新读取草稿？')) void loadDraft()
+onBeforeRouteLeave(async () => !hasUnsavedChanges.value || await confirmAction('店铺配置还有未保存的修改，确定离开吗？'))
+async function reloadDraft() {
+  if (!dirty.value || await confirmAction('放弃未保存的修改并重新读取草稿？')) void loadDraft()
 }
 function clearAsset(role: 'gif' | 'fallback') {
   if (!selection.value || !canEdit.value) return

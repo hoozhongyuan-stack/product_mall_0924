@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { api, confirmedWrite, ApiError, type Account } from '../api'
@@ -120,7 +122,7 @@ async function confirm() {
   finally { busy.value = false }
 }
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || busy.value) { event.preventDefault(); event.returnValue = '' } }
-function mayLeave() { return !busy.value && (!dirty.value || window.confirm('处理尚未结束。离开后请从售后详情核查最新记录，确定离开？')) }
+async function mayLeave() { return !busy.value && (!dirty.value || await confirmAction('处理尚未结束。离开后请从售后详情核查最新记录，确定离开？')) }
 onBeforeRouteLeave(mayLeave)
 onBeforeRouteUpdate(mayLeave)
 watch(() => route.params.caseId, id => { resetForm(); void loadId(String(id)) })

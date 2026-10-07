@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {useRoute,useRouter} from 'vue-router'
 import {api,type Account} from '../api'
@@ -13,7 +15,7 @@ const dirty=computed(()=>saved.value!==JSON.stringify([skuId.value,price.value])
 const {pending,busy,error,notice,password,storageError,verified,recover,write}=useExchangeOperation(()=>props.account,()=>target.value,async result=>{const r=result as Offer;confirm.value=false;offer.value=r;assign(r);if(isNew.value)await router.replace(`/exchange-offers/${r.id}`)},()=>dirty.value)
 let generation=0,skuGeneration=0
 function assign(r:Offer){skuId.value=r.skuId;price.value=String(r.pointsPrice);saved.value=JSON.stringify([skuId.value,price.value])}
-async function load(ask=true){if(busy.value)return;if(ask&&dirty.value&&!pending.value&&!window.confirm('刷新将放弃未保存修改，是否继续？'))return;const seq=++generation;loading.value=true;loadError.value='';offer.value=null;try{if(isNew.value){skuId.value='';price.value='';saved.value=JSON.stringify(['','']);return}const r=await api<Offer>(`/exchange-offers/${target.value}`);if(seq===generation)assign(offer.value=r)}catch(e){if(seq===generation)loadError.value=e instanceof Error?e.message:'兑换配置读取失败。'}finally{if(seq===generation)loading.value=false}}
+async function load(ask=true){if(busy.value)return;if(ask&&dirty.value&&!pending.value&&!await confirmAction('刷新将放弃未保存修改，是否继续？'))return;const seq=++generation;loading.value=true;loadError.value='';offer.value=null;try{if(isNew.value){skuId.value='';price.value='';saved.value=JSON.stringify(['','']);return}const r=await api<Offer>(`/exchange-offers/${target.value}`);if(seq===generation)assign(offer.value=r)}catch(e){if(seq===generation)loadError.value=e instanceof Error?e.message:'兑换配置读取失败。'}finally{if(seq===generation)loading.value=false}}
 async function search(reset=true){if(busy.value||pending.value||!canManage.value)return;if(reset)skuPage.value=1;const seq=++skuGeneration;skuLoading.value=true;skuError.value='';try{const r=await api<Page<ExchangeSku>>(`/exchange-sku-options?q=${encodeURIComponent(query.value.trim())}&page=${skuPage.value}&pageSize=20`);if(seq===skuGeneration)skus.value=r}catch(e){if(seq===skuGeneration){skus.value=null;skuError.value=e instanceof Error?e.message:'SKU 查询失败。'}}finally{if(seq===skuGeneration)skuLoading.value=false}}
 async function save(){if(validation.value||(!isNew.value&&!offer.value))return;await write(`/exchange-offers${isNew.value?'':`/${target.value}`}`,isNew.value?'POST':'PUT',offerBody(skuId.value,price.value,isNew.value?undefined:offer.value?.revision))}
 async function availability(){if(!offer.value)return;await write(`/exchange-offers/${target.value}/availability`,'POST',{expectedRevision:offer.value.revision,status:offer.value.status==='ON_SALE'?'OFF_SALE':'ON_SALE'},'exchange.publish','exchange.publish')}

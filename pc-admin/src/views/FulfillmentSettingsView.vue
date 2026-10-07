@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { confirmAction } from '../shared/confirm'
+
 import { computed, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { api, type Account } from '../api'
@@ -74,7 +76,7 @@ async function savePolicy() {
   finally { busy.value = false }
 }
 onMounted(() => void load())
-onBeforeRouteLeave(() => !busy.value && (!dirty.value || window.confirm('履约设置有未保存的修改，确定离开？')))
+onBeforeRouteLeave(async () => !busy.value && (!dirty.value || await confirmAction('履约设置有未保存的修改，确定离开？')))
 </script>
 
 <template>

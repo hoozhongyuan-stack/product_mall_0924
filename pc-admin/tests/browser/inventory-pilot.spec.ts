@@ -1,6 +1,100 @@
 /** Exercise the real selective component registration in main.ts, with synthetic HTTP only. */
 import { expect, test } from '@playwright/test'
-import { account, asset, installMockApi, ok, screenshot } from './fixtures'
+import { account, asset, campaign, ids, installMockApi, ok, screenshot, sku } from './fixtures'
+
+for (const readonly of [false, true]) {
+  test(`SKU table preserves combinations and ${readonly ? 'published readonly limits' : 'selected price updates'}`, async ({ page }, testInfo) => {
+    const axes = [{ id: 'degree', name: '度数', options: [{ id: 'd53', value: '53°' }, { id: 'd43', value: '43°' }] }, { id: 'pack', name: '包装', options: [{ id: 'bottle', value: '单瓶' }, { id: 'case', value: '整箱' }] }]
+    const codes = ['SKU-53-BOTTLE', 'SKU-53-CASE', 'SKU-43-BOTTLE', 'SKU-43-CASE']
+    const items = codes.map((code, index) => ({ ...sku, skuId: `sku-${index}`, skuCode: code, listPriceFen: 10000 + index * 1000, specOptionIds: [index < 2 ? 'd53' : 'd43', index % 2 ? 'case' : 'bottle'], unit: { ...sku.unit, baseUnit: '瓶', saleUnit: index % 2 ? '箱' : '瓶', ratio: index % 2 ? 6 : 1 } }))
+    const verify = await installMockApi(page, async (route, path) => {
+      if (path === '/api/v1/admin/member-grades') { await ok(route, [{ id: 'normal', code: 'NORMAL', name: '普通会员', enabled: true }, { id: 'gold', code: 'GOLD', name: '金卡', enabled: true }]); return true }
+      if (path !== '/api/v1/admin/products/product-a') return false
+      await ok(route, { productId: 'product-a', productNo: 'BROWSER_PRODUCT', name: '多规格商品', categoryId: 'leaf', fulfillmentKind: 'SHIP', redeemValidUntil: null, status: readonly ? 'ON_SALE' : 'DRAFT', descriptionHtml: '', productRevision: 4, mainImage: null, galleryImages: [], video: null, specAxes: axes, skus: items })
+      return true
+    })
+    await page.goto('/catalog')
+    await page.getByRole('button', { name: '编辑商品', exact: true }).click()
+    const table = page.getByRole('table', { name: 'SKU 明细', exact: true })
+    await expect(table.getByRole('row')).toHaveCount(5)
+    await expect(table.getByRole('columnheader', { name: '度数', exact: true })).toBeVisible()
+    await expect(table.getByRole('columnheader', { name: '包装', exact: true })).toBeVisible()
+    await expect(table).toContainText('1 箱＝6 瓶')
+    const price = page.getByRole('textbox', { name: '日常价 SKU-53-BOTTLE', exact: true })
+    if (readonly) {
+      await expect(price).toBeDisabled()
+      await expect(page.getByRole('checkbox', { name: '选择全部 SKU', exact: true })).toHaveCount(0)
+    } else {
+      await page.getByRole('checkbox', { name: '选择 SKU SKU-53-BOTTLE', exact: true }).check()
+      await page.getByRole('textbox', { name: '批量价格（元）', exact: true }).fill('199.00')
+      await page.getByRole('button', { name: '应用到所选 SKU', exact: true }).click()
+      await page.locator('.el-message-box').getByRole('button', { name: '确认继续', exact: true }).click()
+      await expect(price).toHaveValue('199.00')
+      await expect(page.getByRole('textbox', { name: '日常价 SKU-53-CASE', exact: true })).toHaveValue('110.00')
+      await page.getByRole('combobox', { name: '批量价格字段', exact: true }).selectOption('gold')
+      await page.getByRole('textbox', { name: '批量价格（元）', exact: true }).fill('189.00')
+      await page.getByRole('button', { name: '应用到所选 SKU', exact: true }).click()
+      await expect(page.getByRole('textbox', { name: '金卡价 SKU-53-BOTTLE', exact: true })).toHaveValue('189.00')
+      await expect(page.getByRole('textbox', { name: '金卡价 SKU-53-CASE', exact: true })).toHaveValue('')
+    }
+    const scroller = page.getByLabel('SKU 明细表，可横向滚动', { exact: true })
+    expect(await scroller.evaluate(el => getComputedStyle(el).overflowX)).toBe('auto')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await screenshot(page, testInfo, readonly ? 'sku-readonly-table' : 'sku-edit-price-table')
+    verify()
+  })
+}
+
+test('coupon activity table fills its container and keeps readable cell spacing', async ({ page }, testInfo) => {
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path !== '/api/v1/admin/coupon-campaigns') return false
+    await ok(route, { items: [{ ...campaign(ids.a), title: '国庆节指定商品满减优惠券活动', status: 'PUBLISHED', issuedQuantity: 1, remainingQuantity: 99 }], pagination: { page: 1, pageSize: 20, total: 1 } })
+    return true
+  })
+  await page.goto('/coupons')
+  const table = page.getByRole('table')
+  const pageSize = page.locator('.el-pagination__sizes .el-select')
+  await expect(pageSize).toContainText('20')
+  expect((await pageSize.boundingBox())!.width).toBeGreaterThanOrEqual(120)
+  await expect(table).toBeVisible()
+  const metrics = await table.evaluate(el => {
+    const th = el.querySelector('th')!
+    return { width: el.getBoundingClientRect().width, parent: el.parentElement!.clientWidth, padding: parseFloat(getComputedStyle(th).paddingLeft) }
+  })
+  expect(metrics.width).toBeGreaterThanOrEqual(metrics.parent - 2)
+  expect(metrics.padding).toBeGreaterThanOrEqual(12)
+  await expect(table).toContainText('国庆节指定商品满减优惠券活动')
+  await expect(table).toContainText('99')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await screenshot(page, testInfo, 'coupon-readable-table')
+  verify()
+})
+
+test('unsaved product confirmation is an application dialog centered in the viewport', async ({ page }, testInfo) => {
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path !== '/api/v1/admin/products/product-a') return false
+    await ok(route, { productId: 'product-a', productNo: 'BROWSER_PRODUCT', name: '经典干红葡萄酒 750ml', categoryId: 'leaf', fulfillmentKind: 'SHIP', redeemValidUntil: null, status: 'DRAFT', descriptionHtml: '', productRevision: 4, mainImage: null, galleryImages: [], video: null, specAxes: [], skus: [{ ...sku, specOptionIds: [] }] })
+    return true
+  })
+  const nativeDialogs: string[] = []
+  page.on('dialog', dialog => { nativeDialogs.push(dialog.type()); void dialog.dismiss() })
+  await page.goto('/catalog')
+  await page.getByRole('button', { name: '编辑商品', exact: true }).click()
+  await page.getByLabel('商品名称', { exact: true }).fill('保留未保存资料')
+  await page.getByRole('button', { name: '返回商品列表', exact: true }).click()
+  const dialog = page.locator('.el-message-box')
+  await expect(dialog).toBeVisible()
+  await expect(page.locator('.el-overlay-message-box')).toHaveCSS('transform', 'none')
+  const bounds = (await dialog.boundingBox())!
+  const viewport = page.viewportSize()!
+  expect(Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2)).toBeLessThan(3)
+  expect(Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2)).toBeLessThan(3)
+  await screenshot(page, testInfo, 'centered-unsaved-confirmation')
+  await dialog.getByRole('button').filter({ hasText: /继续编辑|取消|返回/ }).first().click()
+  await expect(page.getByLabel('商品名称', { exact: true })).toHaveValue('保留未保存资料')
+  expect(nativeDialogs).toEqual([])
+  verify()
+})
 
 test('inventory pilot: production-mounted SKU dialog renders, pages and retains selected specifications', async ({ page }, testInfo) => {
   const runtimeErrors: string[] = []

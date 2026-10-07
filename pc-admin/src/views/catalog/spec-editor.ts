@@ -17,6 +17,13 @@ export interface EditableSku {
   ratio: number
 }
 
+// A fresh generated row has only default units. Protect every user-entered field
+// before removing a new combination, including unit-only and conversion-only drafts.
+export function hasDraftSkuInput(sku: EditableSku): boolean {
+  return Boolean(sku.skuCode || sku.priceYuan || Object.values(sku.gradePrices).some(value => value.trim())
+    || sku.baseUnit !== '件' || sku.saleUnit !== '件' || sku.ratio !== 1)
+}
+
 export function combinationKey(keys: string[]): string { return [...keys].sort().join('|') || 'single' }
 
 export function initialAxes(detail: ProductDetail): EditableAxis[] {
