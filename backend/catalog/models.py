@@ -44,6 +44,7 @@ class Product(models.Model):
     fulfillment_kind = models.CharField(max_length=6, choices=Fulfillment.choices)
     redeem_valid_until = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.DRAFT)
+    unit_conversion = models.JSONField(null=True, blank=True, default=None)
     ever_on_sale = models.BooleanField(default=False)
     manually_off_sale = models.BooleanField(default=False)
     description_html = models.TextField(blank=True)

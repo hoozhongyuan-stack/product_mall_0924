@@ -580,6 +580,10 @@ def sku_change(request, sku_id, operation):
                                          values.get("saleStatus"), "sku.status.update")
             return response(request, sku_data(sku))
         with transaction.atomic():
+            if operation == "unit":
+                product_id = Sku.objects.filter(id=sku_id).values_list("product_id", flat=True).first()
+                if product_id:
+                    Product.objects.select_for_update().get(pk=product_id)
             sku = Sku.objects.select_for_update(of=("self",)).select_related("product", "current_unit").filter(id=sku_id).first()
             if not sku:
                 raise CatalogError("SKU 不存在。", "NOT_FOUND", 404)
@@ -604,7 +608,11 @@ def sku_change(request, sku_id, operation):
                 after = {"gradePrices": [{"gradeId": str(item.grade_id), "priceFen": item.price_fen}
                                          for item in SkuGradePrice.objects.filter(sku=sku, active=True)]}
             else:
+                if sku.product.unit_conversion is not None:
+                    raise CatalogError("多单位商品请在商品规格中修改单位换算。", "UNIT_SPEC_MANAGED", 409)
                 unit = parse_unit(values.get("unit"))
+                from .unit_conversion import validate_single_unit
+                validate_single_unit(unit, sku.current_unit)
                 previous = sku.current_unit
                 if (sku.id in referenced_sku_ids([sku.id]) and
                         (not previous or previous.base_unit != unit["base_unit"])):

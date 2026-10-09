@@ -433,6 +433,8 @@ class CatalogFlowTests(TestCase):
         _, reader = self.staff_client("unit_reader", {"catalog.read"})
         self.assertEqual(self.send(reader, "put", path, change).status_code, 403)
         _, writer = self.staff_client("unit_writer", {"catalog.read", "sku.unit.write"})
+        self.assertEqual(self.send(writer, "put", path, change).status_code, 400)
+        change["unit"] = {"baseUnit": "件", "saleUnit": "件", "ratio": 1}
         updated = self.send(writer, "put", path, change)
         self.assertEqual(updated.status_code, 200, updated.content)
         self.assertEqual(self.send(writer, "put", path, change).status_code, 409)

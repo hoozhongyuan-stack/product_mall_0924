@@ -63,7 +63,9 @@ export interface ProductPage { rows: ProductRow[]; page: number; pageSize: numbe
 export interface ProductSku extends SkuRow { specOptionIds: string[] }
 export interface SpecOption { id?: string; clientKey?: string; value: string; sortOrder: number }
 export interface SpecAxis { id?: string; clientKey?: string; name: string; sortOrder: number; options: SpecOption[] }
+export interface UnitConversion { axisKey: string; baseOptionKey: string; ratios: { optionKey: string; ratio: number }[] }
 export interface ProductDetail {
+  unitConversion?: UnitConversion | null
   productId: string
   productNo: string
   name: string

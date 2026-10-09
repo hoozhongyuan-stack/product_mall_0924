@@ -82,7 +82,8 @@ def parse_prices(raw, enabled_grades):
     return prices
 
 
-def parse_skus(raw_skus, axes, option_by_key):
+def parse_skus(raw_skus, axes, option_by_key, conversion=None, raw_axes=None):
+    from .unit_conversion import derived_unit
     enabled_grades = set(MemberGrade.objects.filter(enabled=True).values_list("id", flat=True))
     skus = []
     codes = set()
@@ -112,14 +113,14 @@ def parse_skus(raw_skus, axes, option_by_key):
             "price": number_field(raw.get("listPriceFen"), "日常价", 0, 2**53 - 1),
             "status": status,
             "grade_prices": parse_prices(raw.get("gradePrices", []), enabled_grades),
-            "unit": parse_unit(raw.get("unit")),
+            "unit": derived_unit(conversion, raw_axes or [], option_keys, raw.get("unit")),
         })
     return skus
 
 
 def create_product(request, actor, body):
     allowed = {"productNo", "name", "categoryId", "fulfillmentKind", "status", "descriptionHtml",
-               "specAxes", "skus", "mainImageAssetId", "galleryAssetIds", "videoAssetId", "redeemValidUntil"}
+               "specAxes", "skus", "unitConversion", "mainImageAssetId", "galleryAssetIds", "videoAssetId", "redeemValidUntil"}
     if set(body) - allowed:
         raise CatalogError("商品请求含有不支持的字段。")
     product_no = code_field(body.get("productNo"), "商品编号")
@@ -132,7 +133,13 @@ def create_product(request, actor, body):
         raise CatalogError("新商品必须先保存为草稿。")
     document = parse_description(body.get("descriptionHtml", ""))
     axes, option_by_key = parse_axes(body.get("specAxes", []))
-    skus = parse_skus(body.get("skus"), axes, option_by_key)
+    from .unit_conversion import parse_conversion, persisted_conversion, grouped_rows
+    conversion = parse_conversion(body.get("unitConversion"), body.get("specAxes", []))
+    skus = parse_skus(body.get("skus"), axes, option_by_key, conversion, body.get("specAxes", []))
+    if conversion is None:
+        from .unit_conversion import validate_single_unit
+        for item in skus:
+            validate_single_unit(item["unit"])
     if any(item["status"] == Sku.SaleStatus.ON_SALE for item in skus):
         raise CatalogError("新商品须先保存为草稿，再从 SKU 列表上架。")
     with transaction.atomic():
@@ -157,8 +164,10 @@ def create_product(request, actor, body):
             set_gallery(product, gallery)
             set_description_images(product, document.asset_ids)
             options = {}
+            axis_ids = {}
             for key, axis_name, order, option_rows in axes:
                 axis = SpecAxis.objects.create(product=product, name=axis_name, sort_order=order)
+                axis_ids[key] = axis.id
                 for option_key, value, option_order in option_rows:
                     options[option_key] = SpecOption.objects.create(axis=axis, value=value, sort_order=option_order)
             created_skus = []
@@ -178,8 +187,15 @@ def create_product(request, actor, body):
                     for grade_id, price in item["grade_prices"]
                 ])
                 created_skus.append(sku)
+            if conversion:
+                from inventory.pool_access import configure_unit_groups
+                product.unit_conversion = persisted_conversion(conversion, axis_ids, {key: option.id for key, option in options.items()})
+                product.save(update_fields=["unit_conversion"])
+                rows = [{"sku": sku, "selection": [(options[key].axis_id, options[key].id) for key in item["option_keys"]]}
+                        for sku, item in zip(created_skus, skus)]
+                configure_unit_groups(product.unit_conversion, grouped_rows(product.unit_conversion, rows))
             audit(request, "product.create", "product", product.id, actor,
-                  after={"productNo": product_no, "skuIds": [str(item.id) for item in created_skus],
+                  after={"productNo": product_no, "unitConversion": product.unit_conversion, "skuIds": [str(item.id) for item in created_skus],
                          "mainImageAssetId": str(main_image.id) if main_image else None,
                          "galleryAssetIds": [str(asset.id) for asset in gallery],
                          "descriptionImageAssetIds": [str(identifier) for identifier in document.asset_ids],

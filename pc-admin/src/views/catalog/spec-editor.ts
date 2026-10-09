@@ -1,4 +1,4 @@
-import type { MemberGrade, ProductDetail, SpecAxis } from './types'
+import type { MemberGrade, ProductDetail, SpecAxis, UnitConversion } from './types'
 import { fenToYuan, yuanToFen } from './types'
 
 export interface EditableOption { id?: string; clientKey: string; value: string }
@@ -54,18 +54,21 @@ export function validateAxes(axes: EditableAxis[]): string | null {
   return null
 }
 
-export function generateCombinations(axes: EditableAxis[], previous: EditableSku[]): EditableSku[] {
+export function generateCombinations(axes: EditableAxis[], previous: EditableSku[], conversion: UnitConversion | null = null): EditableSku[] {
   const old = new Map(previous.map((sku) => [combinationKey(sku.optionKeys), sku]))
   const combinations = axes.reduce<{ optionKeys: string[]; label: string }[]>((items, axis) =>
     items.flatMap((item) => axis.options.map((option) => ({ optionKeys: [...item.optionKeys, option.clientKey],
       label: [...(item.label ? [item.label] : []), option.value.trim()].join(' / ') }))),
   [{ optionKeys: [], label: '' }])
-  return combinations.map((item) => ({ id: undefined, expectedSkuRevision: undefined, skuCode: '', priceYuan: '',
+  return deriveSkuUnits(axes, combinations.map((item) => ({ id: undefined, expectedSkuRevision: undefined, skuCode: '', priceYuan: '',
     saleStatus: 'OFF_SALE', gradePrices: {}, baseUnit: '件', saleUnit: '件', ratio: 1,
-    ...old.get(combinationKey(item.optionKeys)), ...item }))
+    ...old.get(combinationKey(item.optionKeys)), ...item })), conversion)
 }
 
-export function toSpecPayload(axes: EditableAxis[], skus: EditableSku[], grades: MemberGrade[], expectedRevision: number) {
+export function toSpecPayload(axes: EditableAxis[], skus: EditableSku[], grades: MemberGrade[], expectedRevision: number, unitConversion: UnitConversion | null = null) {
+  const conversionError = validateUnitConversion(axes, unitConversion)
+  if (conversionError) throw new Error(conversionError)
+  skus = deriveSkuUnits(axes, skus, unitConversion)
   const axisError = validateAxes(axes)
   if (axisError) throw new Error(axisError)
   const enabledGrades = new Set(grades.filter((grade) => grade.enabled).map((grade) => grade.id))
@@ -83,7 +86,7 @@ export function toSpecPayload(axes: EditableAxis[], skus: EditableSku[], grades:
       if (input.trim() && enabledGrades.has(gradeId) && yuanToFen(input) === null) throw new Error(`SKU ${sku.skuCode} 的等级价格式无效。`)
     }
   }
-  return { expectedRevision,
+  return { expectedRevision, unitConversion,
     specAxes: axes.map((axis, axisIndex) => ({ ...(axis.id ? { id: axis.id } : {}), clientKey: axis.clientKey,
       name: axis.name.trim(), sortOrder: axisIndex, options: axis.options.map((option, optionIndex) =>
         ({ ...(option.id ? { id: option.id } : {}), clientKey: option.clientKey,
@@ -99,4 +102,27 @@ export function toSpecPayload(axes: EditableAxis[], skus: EditableSku[], grades:
 export function axesMatchDetail(axes: EditableAxis[], original: SpecAxis[]): boolean {
   return JSON.stringify(axes.map((axis) => [axis.id, axis.name, axis.options.map((option) => [option.id, option.value])])) ===
     JSON.stringify(original.map((axis) => [axis.id, axis.name, axis.options.map((option) => [option.id, option.value])]))
+}
+
+export function validateUnitConversion(axes: EditableAxis[], conversion: UnitConversion | null): string | null {
+  if (!conversion) return null
+  const axis = axes.find(item => item.clientKey === conversion.axisKey)
+  if (!axis || !axis.options.some(item => item.clientKey === conversion.baseOptionKey)) return '请选择有效的基本单位。'
+  if (axis.options.some(option => !option.value.trim() || option.value.trim().length > 30)) return '单位名称不能为空，且最长 30 个字符。'
+  const ratios = new Map(conversion.ratios.map(item => [item.optionKey, item.ratio]))
+  if (conversion.ratios.length !== axis.options.length || ratios.size !== axis.options.length
+    || ratios.get(conversion.baseOptionKey) !== 1 || axis.options.some(option => !Number.isSafeInteger(ratios.get(option.clientKey)) || ratios.get(option.clientKey)! < 1 || ratios.get(option.clientKey)! > 1_000_000_000)) return '每个单位须配置正整数换算比，基本单位的换算比为 1。'
+  return null
+}
+
+export function deriveSkuUnits(axes: EditableAxis[], skus: EditableSku[], conversion: UnitConversion | null): EditableSku[] {
+  if (!conversion) return skus
+  const axis = axes.find(item => item.clientKey === conversion.axisKey)
+  const base = axis?.options.find(item => item.clientKey === conversion.baseOptionKey)
+  if (!axis || !base) return skus
+  return skus.map(sku => {
+    const option = axis.options.find(item => sku.optionKeys.includes(item.clientKey))
+    const ratio = conversion.ratios.find(item => item.optionKey === option?.clientKey)?.ratio
+    return option && ratio !== undefined ? { ...sku, baseUnit: base.value.trim(), saleUnit: option.value.trim(), ratio } : sku
+  })
 }

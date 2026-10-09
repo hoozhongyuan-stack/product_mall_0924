@@ -17,7 +17,7 @@ from inventory.sku_guards import referenced_sku_ids
 from .models import (MemberGrade, Product, Sku, SkuGradePrice, SkuSpecSelection,
                      SkuUnitVersion, SpecAxis, SpecOption)
 from .presentation import product_data
-from .service import parse_prices, parse_unit
+from .service import parse_prices
 from .validation import CatalogError, code_field, list_field, number_field, object_field, text_field, uuid_field
 
 
@@ -43,13 +43,14 @@ def reject_inventory_rewrites(plan):
         if sku.id in protected_ids:
             raise CatalogError(f"SKU {sku.sku_code} 已有关联库存单据或余额，不能移除规格组合。",
                                "SKU_INVENTORY_REFERENCED", 409)
-        if not pool_change_allowed(sku.id, removing=True):
+        if not plan.get("automatic_groups") and not pool_change_allowed(sku.id, removing=True):
             raise CatalogError(f"SKU {sku.sku_code} 已有共享库存池或历史记录，不能移除规格组合。",
                                "SKU_INVENTORY_REFERENCED", 409)
     for row in plan["skus"]:
         sku = row["matched"]
         if (sku and sku.id not in protected_ids and sku.current_unit and
                 sku.current_unit.base_unit != row["unit"]["base_unit"] and
+                not plan.get("automatic_groups") and
                 not pool_change_allowed(sku.id, new_base_unit=row["unit"]["base_unit"])):
             raise CatalogError(f"SKU {sku.sku_code} 的共享库存池不能修改基础单位。",
                                "POOL_UNIT_MISMATCH", 409)
@@ -137,7 +138,7 @@ def parse_axes(product, raw_axes):
 
 
 def parse_plan(product, values, current_skus):
-    if set(values) - {"expectedRevision", "specAxes", "skus", "previewToken"}:
+    if set(values) - {"expectedRevision", "specAxes", "skus", "previewToken", "unitConversion"}:
         raise CatalogError("规格编辑请求含有不支持的字段。")
     revision = number_field(values.get("expectedRevision"), "预期修订号", 1)
     if product.revision != revision:
@@ -145,6 +146,13 @@ def parse_plan(product, values, current_skus):
     if product.status != Product.Status.DRAFT:
         raise CatalogError("仅草稿商品可编辑规格与 SKU。", "PRODUCT_NOT_DRAFT", 409)
     axes, option_by_key, old_axes, old_options = parse_axes(product, values.get("specAxes"))
+    from .unit_conversion import parse_conversion, persisted_conversion, derived_unit, grouped_rows
+    raw_conversion = values.get("unitConversion")
+    if "unitConversion" not in values and product.unit_conversion is not None:
+        raise CatalogError("多单位商品编辑须提交单位换算配置。")
+    conversion = parse_conversion(raw_conversion, values.get("specAxes", []))
+    axis_map = {raw['clientKey']: axis['id'] for raw, axis in zip(values['specAxes'], axes)}
+    persisted = persisted_conversion(conversion, axis_map, {key: option_id for key, (_, option_id) in option_by_key.items()})
     current_by_key = {sku.spec_key: sku for sku in current_skus}
     enabled_grades = set(MemberGrade.objects.filter(enabled=True).values_list("id", flat=True))
     planned, used_codes, used_keys, matched_ids = [], set(), set(), set()
@@ -184,7 +192,12 @@ def parse_plan(product, values, current_skus):
                         "price": number_field(raw.get("listPriceFen"), "日常价", 0, 2**53 - 1),
                         "status": status,
                         "grade_prices": parse_prices(raw.get("gradePrices", []), enabled_grades),
-                        "unit": parse_unit(raw.get("unit"))})
+                        "unit": derived_unit(conversion, values["specAxes"], keys, raw.get("unit"))})
+    if persisted is None:
+        from .unit_conversion import validate_single_unit
+        for row in planned:
+            previous = row["matched"].current_unit if row["matched"] and product.unit_conversion is None else None
+            validate_single_unit(row["unit"], previous)
     removed = [sku for sku in current_skus if sku.id not in matched_ids]
     # A code may be reused from a SKU explicitly removed in this same edit.
     collisions = (Sku.objects.annotate(normalized_code=Upper("sku_code"))
@@ -194,7 +207,26 @@ def parse_plan(product, values, current_skus):
         raise CatalogError("SKU 编码已存在。", "SKU_CODE_DUPLICATE", 409)
     plan = {"axes": axes, "options": option_by_key, "old_axes": old_axes,
             "old_options": old_options, "skus": planned, "removed": removed,
-            "snapshot": sku_snapshot(current_skus)}
+            "snapshot": sku_snapshot(current_skus), "unit_conversion": persisted,
+            "automatic_groups": product.unit_conversion is not None or persisted is not None}
+    if plan['automatic_groups']:
+        from inventory.pool_access import validate_unit_groups, stock_history_ids
+        groups = grouped_rows(persisted, planned)
+        try:
+            from .unit_conversion import same_conversion
+            if not same_conversion(product.unit_conversion, persisted) and stock_history_ids(
+                    [sku.id for sku in current_skus]):
+                raise PoolBindingError('已有库存或单据的商品不能修改单位换算配置。')
+            validate_unit_groups(groups)
+            if stock_history_ids([sku.id for sku in removed]):
+                raise PoolBindingError('已有库存或单据的规格不能移除。')
+            # A removed member may have no own history but its anchor can have it.
+            from inventory.pool_access import resolve_anchor_id
+            if stock_history_ids([resolve_anchor_id(sku.id) for sku in removed]):
+                raise PoolBindingError('已有库存或单据的单位规格组合不能移除。')
+        except PoolBindingError as exc:
+            raise CatalogError(str(exc), 'SKU_INVENTORY_REFERENCED', 409) from exc
+        plan['groups'] = groups
     reject_inventory_rewrites(plan)
     return plan
 
@@ -247,6 +279,10 @@ def validate_token(actor, product, values, plan):
 
 
 def replace_draft_data(product, plan):
+    if plan['automatic_groups']:
+        from inventory.pool_access import release_empty_product_groups
+        release_empty_product_groups(product.id)
+    saved_skus = {}
     # Current draft-only removals have no transaction history yet. Preserve an
     # impact snapshot in audit, then delete all dependent current records.
     for sku in plan["removed"]:
@@ -308,7 +344,9 @@ def replace_draft_data(product, plan):
             SkuGradePrice.objects.bulk_create([
                 SkuGradePrice(sku=sku, grade_id=grade_id, price_fen=price)
                 for grade_id, price in row["grade_prices"]])
+            saved_skus = {**saved_skus, row["spec_key"]: sku}
             continue
+        saved_skus = {**saved_skus, row["spec_key"]: sku}
         changed = (sku.sku_code != row["code"] or sku.list_price_fen != row["price"] or
                    sku.sale_status != row["status"])
         sku.sku_code, sku.list_price_fen, sku.sale_status = row["code"], row["price"], row["status"]
@@ -330,8 +368,13 @@ def replace_draft_data(product, plan):
             sku.revision += 1
             sku.save(update_fields=["sku_code", "list_price_fen", "sale_status",
                                     "current_unit", "revision", "updated_at"])
+    product.unit_conversion = plan['unit_conversion']
+    if plan['automatic_groups']:
+        from inventory.pool_access import configure_unit_groups
+        configure_unit_groups(plan['unit_conversion'], [
+            [{"sku": saved_skus[row['spec_key']], "selection": row['selection']} for row in group] for group in plan['groups']])
     product.revision += 1
-    product.save(update_fields=["revision", "updated_at"])
+    product.save(update_fields=["revision", "unit_conversion", "updated_at"])
 
 
 def save_specs(request, actor, product_id, values):
@@ -344,10 +387,12 @@ def save_specs(request, actor, product_id, values):
                            .filter(product=product).order_by("id"))
             plan = parse_plan(product, values, current)
             validate_token(actor, product, values, plan)
-            impact = preview_data(plan)
+            impact = {**preview_data(plan), "unitConversion": plan["unit_conversion"]}
+            before_conversion = product.unit_conversion
             replace_draft_data(product, plan)
             audit(request, "product.specs.update", "product", product.id, actor,
-                  before={"skuIds": [str(sku.id) for sku in current]}, after=impact)
+                  before={"skuIds": [str(sku.id) for sku in current],
+                          "unitConversion": before_conversion}, after=impact)
         return product_data(product)
     except (IntegrityError, ProtectedError, PoolBindingError) as exc:
         raise CatalogError("规格或 SKU 与当前数据冲突，请刷新后重试。", "CATALOG_CONFLICT", 409) from exc

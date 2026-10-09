@@ -100,10 +100,15 @@
 | 对象 | 请求字段 | 校验 |
 |---|---|---|
 | 商品 | `productNo`、`name`、`categoryId`、`fulfillmentKind`、`status`、`descriptionHtml`、`mainImageAssetId`、`galleryAssetIds[]`、可选 `videoAssetId` | 新建状态为 `DRAFT`；编号 1—64 字符且大小写不重复，名称最多 120 字符；分类为已启用二级分类；履约类型固定为发货或核销；富文本净化；主图计入图片总数，合计最多 9 张、视频最多 1 条。 |
+| 单位配置 | `unitConversion: null` 或 `{axisKey,baseOptionKey,ratios:[{optionKey,ratio}]}` | `axisKey`、`baseOptionKey`、`optionKey` 对应本次规格请求的 clientKey；基本规格值比例固定 1；单位轴所有选项各有一个比例，正整数且不超过 1000000000，单位名最多 30 字。详情使用持久化轴／选项 UUID 作为键。单位轴计入既有规格上限。 |
 | 规格项 | `specAxes[{clientKey,name,sortOrder,options:[{clientKey,value,sortOrder}]}]` | 每商品最多 2 项、每项最多 20 值；同项内值不重复，排序唯一。`clientKey` 只用于单次请求关联，不进入业务编号。 |
-| SKU | `skus[{id?,skuCode,specOptionKeys[],listPriceFen,saleStatus,gradePrices:[{gradeId,priceFen}],unit:{baseUnit,saleUnit,ratio}}]` | 最多 100 个不同组合；规格值必须来自本商品；编码 1—64 字符且大小写不重复，金额非负、换算比为正整数；等级 ID 必须存在且启用。规格组合唯一键使用服务端稳定 ID，不信任客户端名称。 |
+| SKU | `skus[{id?,skuCode,specOptionKeys[],listPriceFen,saleStatus,gradePrices:[{gradeId,priceFen}],unit:{baseUnit,saleUnit,ratio}}]` | 最多 100 个不同组合；规格值必须来自本商品；编码 1—64 字符且大小写不重复，金额非负、换算比为正整数；开启多单位换算时，服务端按单位选项派生 `unit`，客户端如提供不一致的 `unit` 则拒绝；每个非单位组合必须有基本单位 SKU。等级 ID 必须存在且启用。规格组合唯一键使用服务端稳定 ID，不信任客户端名称。 |
 
-创建响应返回 `productId`、`productRevision`、每个 `clientKey` 对应的服务端规格 ID、每个 SKU 的 `skuId` 和 `skuRevision`。规格修改请求同时带 `expectedRevision`，已有 SKU 带 `id` 与 `expectedSkuRevision`；新增 SKU 无 `id`。当前仅允许修改草稿商品，订单与库存流水尚未接入；以后若已有 SKU 被交易或库存引用，数据库保护关系须阻止移除，并在业务层给出具体影响和可恢复的错误。商品规格及其 SKU 的一次保存要么全部成功，要么全部失败。
+创建响应返回 `productId`、`productRevision`、每个 `clientKey` 对应的服务端规格 ID、每个 SKU 的 `skuId` 和 `skuRevision`。规格修改请求同时带 `expectedRevision`，已有 SKU 带 `id` 与 `expectedSkuRevision`；新增 SKU 无 `id`。当前仅允许修改草稿商品；已有 SKU 被交易或库存单据引用时，数据库保护关系与业务守卫阻止移除或重组，并给出可恢复的错误。商品规格及其 SKU 的一次保存要么全部成功，要么全部失败。
+
+多单位规则（2026-10-09 用户确认）：商品创建与规格预览／保存接收 `unitConversion`。按商品和除单位之外的规格组合自动建立实物库存关系，优先且要求使用该组合的基本单位 SKU 为内部锚点；同组不同单位 SKU 指向同一余额。库存配置和规格、SKU、单位版本在一个事务内保存；前端不提供“共享／独立”模式和人工绑定。未开启的普通商品沿用原有规格处理。新建请求省略该字段等同关闭换算，只接受相同基本／销售单位且比例为 1。旧未配置商品的规格编辑仅允许原样保留已有单位关系，不允许新增旧式换算；已有多单位商品不得通过省略字段绕过配置保护。配置变更计入预览摘要和修订校验。
+
+无库存及单据证据的草稿允许自动重建关系；只要受影响组存在余额（包括零余额）、入出库或盘点草稿、占用、交易或流水，拒绝改变其库存关系／基本单位／换算含义。既有单据继续使用原单位版本。单 SKU 单位写口和人工绑定写口不能绕过商品多单位配置；本次不迁移或合并历史余额。
 
 当前已实现的创建接口返回商品和 SKU ID/修订号；规格稳定 ID 可从商品详情读取。商品 PATCH 支持名称、分类、履约类型、净化后的描述及 `mainImageAssetId`、`galleryAssetIds`、`videoAssetId`，拒绝独立修改 `status`；素材字段可传 `null` 或空数组移除。已有草稿商品的完整规格矩阵与 SKU 通过 `/specs/preview` 和 `/specs` 原子修改；草稿规格保存不直接上架 SKU。
 
@@ -150,7 +155,7 @@
 
 | 表/实体 | 必须保存的字段 | 强约束 |
 |---|---|---|
-| `warehouse`、`inventory_stock_pool`、`inventory_stock_pool_sku`、`inventory_balance` | 仓库及唯一默认仓；库存池的锚 SKU、基本单位、销售 SKU 显式映射；余额的 `(warehouse_id, sku_id)`、`on_hand_base_units`、`reserved_base_units` | 余额行中的 `sku_id` 是库存池锚 SKU，业务唯一口径为仓库×库存池；未映射 SKU 使用自身独立库存。`0 <= reserved <= on_hand`。已付款待履约数量单独统计，不再减一次账面库存。现有余额不自动合并。 |
+| `warehouse`、`inventory_stock_pool`、`inventory_stock_pool_sku`、`inventory_balance` | 仓库及唯一默认仓；库存池的内部锚 SKU、基本单位、自动生成的销售 SKU 映射；余额的 `(warehouse_id, sku_id)`、`on_hand_base_units`、`reserved_base_units` | 余额行中的 `sku_id` 是库存池锚 SKU，业务唯一口径为仓库×库存池；多单位商品按非单位规格组合自动映射；普通未映射 SKU 使用自身库存。`0 <= reserved <= on_hand`。已付款待履约数量单独统计，不再减一次账面库存。现有余额不自动合并。 |
 | `inventory_reservation`、`inventory_ledger` | 订单项、仓库、SKU、基本单位数量、换算版本、占用/确认/释放状态；不可变流水及业务编号 | 一个订单项在同一仓的有效占用唯一；流水不直接修改或删除，纠错写反向流水。 |
 | `customer_identity`、`member` | 微信身份标识与站内会员 ID、等级及状态 | 手机号不是唯一身份或自动合并依据；用户私有资源按会员 ID 校验归属。 |
 | `order`、`order_item` | 订单号、会员、固定支付方式、支付状态、超时快照、金额；商品/SKU/规格/单位/数量/价格/分摊/仓库/履约类型快照 | 订单号唯一；订单项成交快照不可随商品编辑改变；金额分摊之和等于订单金额。 |
@@ -164,7 +169,7 @@
 |---|---|---|
 | `POST /api/v1/app/checkout/quotes` | `{items:[{skuId,quantity,seenPriceFen?}],addressId?,couponId?,pointsToUse?}`；最多 50 个不同 SKU，数量 1—9999；券 ID 为本人可用券，积分为非负整数 | 返回 `quoteId/expiresAt/lines/goodsTotalFen/shippingFeeFen/couponDiscountFen/pointsDiscountFen/payableFen/availableCoupons/availablePoints/selectedCouponId/pointsToUse/ready/confirmRequired/addressRequired/availablePaymentMethods/orderSubmissionAvailable`。`availablePaymentMethods` 只列服务端已开放方式，当前 `[]`；布尔字段表示至少一种方式已开放，不替代商品、地址、价格及会员校验。报价不占库存或权益，提交时重新校验。 |
 | `GET /api/v1/admin/inventory/pool-product-options` | `keyword` 可按商品名、商品编号或 SKU 编码搜索，最多返回 20 个商品及 SKU 数 | 需 `inventory.read`，只返回绑定选择所需商品身份，不附带价格或商品素材；库存岗位无需 `catalog.read`。 |
-| `GET/POST /api/v1/admin/inventory/pool-bindings` | GET `productId` 返回同商品 SKU、修订号、单位和池绑定；POST `{skuId,poolId,expectedSkuRevision}` 或 `{skuId,anchorSkuId,expectedSkuRevision}` | 读取需 `inventory.read`，绑定需 `inventory.manage`。只允许同 SPU、相同基本单位的 SKU 显式共享；目标尚无池时可用锚 SKU 建池。已有余额、占用、流水或交易证据的源 SKU 拒绝改绑，不搬迁或合并历史库存；修订冲突与绑定冲突返回 409。 |
+| `GET/POST /api/v1/admin/inventory/pool-bindings` | GET `productId` 返回同商品 SKU、修订号、单位和池绑定；POST `{skuId,poolId,expectedSkuRevision}` 或 `{skuId,anchorSkuId,expectedSkuRevision}` | 读取需 `inventory.read`，绑定需 `inventory.manage`。GET 保留内部只读诊断，不再提供后台操作面板。POST 已退役，返回 409 提示在商品规格中配置多单位换算，任何商品均不允许人工改绑，不产生库存副作用。库存关系仅由商品规格保存事务自动建立。 |
 | `GET/PUT /api/v1/admin/settlement/shipping-policy` | 需 `settlement.shipping.manage`；写入 `{feeFen,deliveryScope:'NATIONWIDE',expectedRevision}` | 首版每笔含快递商品的订单收取一次固定运费，纯核销单为零；初始化金额 1000 分，全国配送。金额 0—1000000 分，修订冲突返回 409；写入审计。 |
 | `POST /api/v1/app/orders` | `{quoteId,paymentMethod}` 和 `Idempotency-Key` UUID 请求头；优惠选择固定在报价中 | 提交按 `paymentMethod` 独立校验开放条件，关闭方式返回 `SETTLEMENT_NOT_READY`，当前两种均关闭。隔离测试路径重验售价、库存、运费及权益；同事务创建订单与占用、保存优惠分摊。应付大于零为待付款，零元直接结算且不生成虚构资金收据；零元公开提交也受方式闸门保护。 |
 | `GET /api/v1/app/orders/{id}` | 登录用户与订单 ID | 只返回本人订单；明确支付、履约、优惠及异常状态，客户端超时后以此查询最终结果。 |

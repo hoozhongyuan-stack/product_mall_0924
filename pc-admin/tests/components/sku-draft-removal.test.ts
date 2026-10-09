@@ -11,7 +11,7 @@ afterEach(() => { wrappers.splice(0).forEach(w => w.unmount()); vi.clearAllMocks
 const product: ProductDetail = { productId: 'p1', productNo: 'P1', name: '草稿', categoryId: 'c1', fulfillmentKind: 'SHIP', redeemValidUntil: null, status: 'DRAFT', manuallyOffSale: false, descriptionHtml: '', productRevision: 1, mainImage: null, galleryImages: [], video: null, specAxes: [], skus: [] }
 function button(wrapper: ReturnType<typeof mount>, text: string) { return wrapper.findAll('button').find(b => b.text() === text)! }
 describe.each(['create', 'edit'] as const)('protects unit-only SKU drafts in %s form', form => {
-  it.each(['基本单位', '销售单位', '换算比'])('confirms removal when only %s changed and preserves input on cancel', async field => {
+  it.each(['单位'])('confirms removal when only %s changed and preserves input on cancel', async field => {
     vi.mocked(confirmAction).mockResolvedValue(false)
     const wrapper = form === 'create'
       ? mount(ProductCreateForm, { props: { categories: [] }, global: { provide: { 'admin-account': ref({ permissionCodes: ['catalog.write'] }) }, stubs: { ProductMediaEditor: true, ProductDescriptionEditor: true } } })

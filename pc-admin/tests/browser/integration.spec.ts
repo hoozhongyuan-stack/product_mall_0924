@@ -3,7 +3,7 @@ import { expect, test, type APIResponse, type Response } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { openSection, screenshot } from './fixtures'
 
-test('real isolated database: one SPU row expands to independently priced SKUs', async ({ page }, testInfo) => {
+test('real isolated database: unit specifications automatically use one stock identity and persist after reload', async ({ page }, testInfo) => {
   await page.goto('/')
   await page.getByLabel('账号', { exact: true }).fill(process.env.MALL_E2E_OWNER!)
   await page.getByLabel('密码', { exact: true }).fill(process.env.MALL_E2E_OWNER_PASSWORD!)
@@ -23,9 +23,10 @@ test('real isolated database: one SPU row expands to independently priced SKUs',
     data: { parentId: parent.id, name: `${unique} 二级`, status: 'ACTIVE', sortOrder: 1 } }))
   await created(await page.request.post('/api/v1/admin/products', { headers, data: {
     productNo: unique, name: `${unique} 商品`, categoryId: leaf.id, fulfillmentKind: 'SHIP',
-    descriptionHtml: '', specAxes: [{ clientKey: 'pack', name: '包装', sortOrder: 0, options: [
-      { clientKey: 'single', value: '单件', sortOrder: 0 },
-      { clientKey: 'box', value: '整箱', sortOrder: 1 },
+    descriptionHtml: '', unitConversion: { axisKey: 'pack', baseOptionKey: 'single', ratios: [{ optionKey: 'single', ratio: 1 }, { optionKey: 'box', ratio: 6 }] },
+    specAxes: [{ clientKey: 'pack', name: '单位', sortOrder: 0, options: [
+      { clientKey: 'single', value: '件', sortOrder: 0 },
+      { clientKey: 'box', value: '箱', sortOrder: 1 },
     ] }], skus: [
       { skuCode: `${unique}_S`, specOptionKeys: ['single'], listPriceFen: 100,
         saleStatus: 'OFF_SALE', gradePrices: [], unit: { baseUnit: '件', saleUnit: '件', ratio: 1 } },
@@ -47,19 +48,43 @@ test('real isolated database: one SPU row expands to independently priced SKUs',
   await page.getByRole('button', { name: 'SKU 批量管理' }).click()
   await expect(page.getByLabel('SKU 批量管理列表，可横向滚动').locator('tbody tr')).toHaveCount(2)
   await page.goto('/inventory')
-  const poolPanel = page.getByRole('region', { name: '库存池绑定' })
-  await expect(poolPanel).toBeVisible()
-  await poolPanel.getByPlaceholder('输入商品名称或编码').fill(unique)
-  await poolPanel.getByRole('button', { name: '查询商品' }).click()
-  await poolPanel.getByRole('button', { name: new RegExp(`${unique} 商品`) }).click()
-  await poolPanel.getByLabel('待绑定 SKU').selectOption({ label: `${unique}_B（件）` })
-  await poolPanel.getByLabel('目标锚 SKU').selectOption({ label: `${unique}_S（件 · 待建池）` })
-  await poolPanel.getByRole('button', { name: '核对并绑定' }).click()
-  const post = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/admin/inventory/pool-bindings'
-    && response.request().method() === 'POST')
-  await page.getByRole('button', { name: '确认绑定' }).click()
-  expect((await post).status()).toBe(200)
-  await expect(poolPanel).toContainText(`与 ${unique}_S 共享`)
+  await expect(page.getByRole('region', { name: '库存池绑定' })).toHaveCount(0)
+  const rows = await page.request.get(`/api/v1/admin/product-rows?keyword=${unique}`)
+  expect(rows.status()).toBe(200)
+  const productId = (await rows.json()).data.rows[0].productId
+  const read = await page.request.get(`/api/v1/admin/products/${productId}`)
+  expect(read.status()).toBe(200)
+  const detail = (await read.json()).data
+  expect(detail.unitConversion.ratios.map((row: { ratio: number }) => row.ratio).sort()).toEqual([1, 6])
+  const pools = await page.request.get(`/api/v1/admin/inventory/pool-bindings?productId=${productId}`)
+  expect(pools.status()).toBe(200)
+  const bindings = (await pools.json()).data
+  expect(new Set(bindings.items.map((row: { anchorSkuId: string }) => row.anchorSkuId)).size).toBe(1)
+
+  await page.goto('/catalog')
+  await page.getByPlaceholder('名称或编号').fill(unique)
+  await page.getByRole('button', { name: '查询', exact: true }).click()
+  await page.getByRole('row').filter({ hasText: unique }).getByRole('button', { name: '编辑商品', exact: true }).click()
+  await expect(page.getByLabel('开启多单位换算', { exact: true })).toBeChecked()
+  await expect(page.getByLabel('单位名称 2', { exact: true })).toHaveValue('箱')
+  await page.getByLabel('单位换算比 2', { exact: true }).fill('8')
+  await page.getByRole('button', { name: '生成 / 更新 SKU 组合', exact: true }).click()
+  await expect(page.getByRole('table', { name: 'SKU 明细', exact: true })).toContainText('1 箱＝8 件')
+  const previewed = page.waitForResponse(response => new URL(response.url()).pathname === `/api/v1/admin/products/${productId}/specs/preview`)
+  await page.getByRole('button', { name: '核对规格变更影响', exact: true }).click()
+  expect((await previewed).status()).toBe(200)
+  const saved = page.waitForResponse(response => new URL(response.url()).pathname === `/api/v1/admin/products/${productId}/specs` && response.request().method() === 'PUT')
+  await page.getByRole('button', { name: '确认保存规格与 SKU', exact: true }).click()
+  expect((await saved).status()).toBe(200)
+  const afterSave = await page.request.get(`/api/v1/admin/products/${productId}`)
+  const updated = (await afterSave.json()).data
+  expect(updated.skus.map((row: { skuId: string }) => row.skuId).sort()).toEqual(detail.skus.map((row: { skuId: string }) => row.skuId).sort())
+  expect(updated.skus.find((row: { skuCode: string }) => row.skuCode === `${unique}_B`).unit).toEqual({ baseUnit: '件', saleUnit: '箱', ratio: 8 })
+  await page.reload()
+  await page.getByRole('row').filter({ hasText: unique }).getByRole('button', { name: '编辑商品', exact: true }).click()
+  await expect(page.getByLabel('单位换算比 2', { exact: true })).toHaveValue('8')
+  await screenshot(page, testInfo, 'automatic-unit-specifications')
+
 })
 
 test('real isolated database: login and create a persisted coupon draft', async ({ page }, testInfo) => {

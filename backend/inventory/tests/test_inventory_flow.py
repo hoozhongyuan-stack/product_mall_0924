@@ -173,7 +173,7 @@ class InventoryFlowTests(TestCase):
         with self.assertRaises(PoolBindingError):
             bind_sku_to_pool(other.id, uuid.UUID(pool_id), other.revision)
 
-    def test_first_pool_binding_api_is_idempotent(self):
+    def test_manual_pool_binding_api_retired_without_side_effects(self):
         sibling = Sku.objects.create(product=self.sku.product, sku_code="SKU-FIRST-ALIAS",
                                      spec_key="first-alias", list_price_fen=1200)
         unit = SkuUnitVersion.objects.create(sku=sibling, base_unit="瓶", sale_unit="提", ratio=2)
@@ -183,16 +183,12 @@ class InventoryFlowTests(TestCase):
                    "expectedSkuRevision": sibling.revision}
         path = "/api/v1/admin/inventory/pool-bindings"
         first = self.post(self.owner, path, payload)
-        self.assertEqual(first.status_code, 200, first.content)
-        self.assertTrue(first.json()["data"]["changed"])
-        second = self.post(self.owner, path, payload)
-        self.assertEqual(second.status_code, 200, second.content)
-        self.assertFalse(second.json()["data"]["changed"])
+        self.assertEqual(first.status_code, 409, first.content)
+        self.assertEqual(first.json()['error']['code'], 'POOL_BINDING_REMOVED')
+        self.assertEqual(resolve_anchor_id(sibling.id), sibling.id)
         listed = self.owner.get(f"{path}?productId={self.sku.product_id}")
         self.assertEqual(listed.status_code, 200, listed.content)
-        items = listed.json()["data"]["items"]
-        self.assertEqual(len(items), 2)
-        self.assertEqual({item["poolId"] for item in items}, {first.json()["data"]["poolId"]})
+        self.assertTrue(all(item['poolId'] is None for item in listed.json()['data']['items']))
 
     def test_binding_rejects_stale_or_incompatible_sku_and_rebinds_unused_pool(self):
         anchor_pool = ensure_independent_pool(self.sku)

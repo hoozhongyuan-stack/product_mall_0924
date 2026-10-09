@@ -68,6 +68,7 @@ def product_data(product):
         "mainImage": asset_data(product.main_image) if product.main_image_id else None,
         "galleryImages": [asset_data(row.asset) for row in product.gallery_images.select_related("asset").order_by("position")],
         "video": asset_data(product.video) if product.video_id else None,
+        "unitConversion": product.unit_conversion,
         "specAxes": [{"id": str(axis.id), "name": axis.name, "sortOrder": axis.sort_order,
                       "options": [{"id": str(option.id), "value": option.value,
                                    "sortOrder": option.sort_order} for option in axis.options.all()]}
