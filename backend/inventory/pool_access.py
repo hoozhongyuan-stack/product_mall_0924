@@ -2,7 +2,7 @@
 
 from django.db import transaction
 
-from catalog.models import Sku
+from catalog.models import Product, Sku
 from orders.models import OrderLine
 
 from .models import (InboundLine, InventoryBalance, InventoryLedger,
@@ -120,7 +120,11 @@ def bind_sku_to_pool(sku_id, pool_id, expected_sku_revision):
     This deliberately refuses stock merges and historical reinterpretation.
     """
     with transaction.atomic():
-        sku = Sku.objects.select_for_update(of=("self",)).select_related("current_unit").get(pk=sku_id)
+        product_id = Sku.objects.values_list("product_id", flat=True).get(pk=sku_id)
+        Product.objects.select_for_update().get(pk=product_id)
+        sku = Sku.objects.select_for_update(of=("self",)).select_related("current_unit", "product").get(pk=sku_id)
+        if sku.product.unit_conversion is not None:
+            raise PoolBindingError("多单位商品的库存关系由规格自动确定，不能手动绑定。")
         if sku.revision != expected_sku_revision:
             raise PoolBindingError("SKU 已被修改，请刷新后重试。")
         pool = StockPool.objects.select_for_update().select_related("anchor_sku").get(pk=pool_id)
@@ -144,3 +148,64 @@ def bind_sku_to_pool(sku_id, pool_id, expected_sku_revision):
         else:
             StockPoolSku.objects.create(sku=sku, pool=pool)
         return pool, True
+
+
+def stock_history_ids(sku_ids):
+    """Batch history projection, including zero balances and draft documents."""
+    identifiers = set(sku_ids)
+    if not identifiers:
+        return set()
+    sources = (InventoryBalance, InventoryLedger, OrderLine, InboundLine, OutboundLine, StocktakeLine)
+    result = set().union(*(set(model.objects.filter(sku_id__in=identifiers)
+                              .values_list('sku_id', flat=True)) for model in sources))
+    return result | set(InventoryReservation.objects.filter(balance__sku_id__in=identifiers)
+                        .values_list('balance__sku_id', flat=True))
+
+
+def validate_unit_groups(groups):
+    """Reject changing any physical identity after its first inventory/order reference."""
+    ids = {row['matched'].id for group in groups for row in group if row['matched']}
+    bindings = dict(StockPoolSku.objects.filter(sku_id__in=ids).values_list('sku_id', 'pool_id'))
+    members = {}
+    for pool_id, sku_id in StockPoolSku.objects.filter(pool_id__in=set(bindings.values())).values_list('pool_id', 'sku_id'):
+        members.setdefault(pool_id, set()).add(sku_id)
+    history = stock_history_ids(ids | set().union(*members.values()) if members else ids)
+    for group in groups:
+        matched = [row['matched'] for row in group if row['matched']]
+        for sku in matched:
+            previous = members.get(bindings.get(sku.id), {sku.id})
+            if not previous & history:
+                continue
+            if {item.id for item in matched} != previous or len(matched) != len(group):
+                raise PoolBindingError('已有库存或单据的单位规格组合不能修改库存关系。')
+            for row in group:
+                current = row['matched'].current_unit
+                if not current or (current.base_unit, current.sale_unit, current.ratio) != (
+                        row['unit']['base_unit'], row['unit']['sale_unit'], row['unit']['ratio']):
+                    raise PoolBindingError('已有库存或单据的单位换算关系不能修改。')
+
+
+def release_empty_product_groups(product_id):
+    """Release only history-free groups before a complete draft specification rewrite."""
+    pools = list(StockPool.objects.select_for_update().filter(anchor_sku__product_id=product_id))
+    members = {}
+    for pool_id, sku_id in StockPoolSku.objects.filter(pool_id__in=[pool.id for pool in pools]).values_list('pool_id', 'sku_id'):
+        members.setdefault(pool_id, set()).add(sku_id)
+    history = stock_history_ids(set().union(*members.values()) if members else set())
+    empty_ids = [pool.id for pool in pools if not members.get(pool.id, set()) & history]
+    StockPoolSku.objects.filter(pool_id__in=empty_ids).delete()
+    StockPool.objects.filter(id__in=empty_ids).delete()
+
+
+def configure_unit_groups(config, groups):
+    """Assign one base-unit stock identity per non-unit specification combination."""
+    existing_ids = set(StockPoolSku.objects.filter(sku_id__in=[row['sku'].id for group in groups for row in group])
+                       .values_list('sku_id', flat=True))
+    for group in groups:
+        if any(row['sku'].id in existing_ids for row in group):
+            # A history-bearing group was validated and retained intact.
+            continue
+        base_id = config['baseOptionKey'] if config else None
+        anchor = next((row['sku'] for row in group if base_id in [str(option) for _, option in row['selection']]), group[0]['sku'])
+        pool = StockPool.objects.create(anchor_sku=anchor, base_unit=anchor.current_unit.base_unit)
+        StockPoolSku.objects.bulk_create([StockPoolSku(sku=row['sku'], pool=pool) for row in group])

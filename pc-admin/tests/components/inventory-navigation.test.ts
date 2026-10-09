@@ -174,3 +174,10 @@ it('locks stale selection while loading and accepts a cleared date range', async
   expect(wrapper.text()).toContain('已选 0 条')
   expect((wrapper.get('tbody input[type="checkbox"]').element as HTMLInputElement).disabled).toBe(false)
 })
+
+it('inventory query has no manual stock pool binding workflow', async () => {
+  const { wrapper } = await setup('/inventory')
+  expect(wrapper.text()).not.toContain('库存池绑定')
+  expect(wrapper.find('[placeholder="输入商品名称或编码"]').exists()).toBe(false)
+  expect(api).not.toHaveBeenCalledWith(expect.stringContaining('/pool-product-options'), expect.anything())
+})

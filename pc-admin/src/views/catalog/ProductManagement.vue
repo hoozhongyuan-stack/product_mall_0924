@@ -25,7 +25,6 @@ interface CategoryBatchPreview {
   items: { productId: string; productNo: string; selectedSkuCount: number; totalSkuCount: number;
     productRevision: number; canChange: boolean; reason?: string }[]
 }
-interface PoolBinding { skuId: string; skuCode: string; skuRevision: number; poolId: string | null; anchorSkuId: string; poolAnchorSkuCode: string | null; baseUnit: string | null; poolBaseUnit: string | null; shared: boolean }
 const props = defineProps<{ account: Account }>()
 const emit = defineEmits<{ dirtyChange: [dirty: boolean]; workspaceChange: [open: boolean] }>()
 const permissions = computed(() => props.account.permissionCodes)
@@ -35,7 +34,6 @@ const canStatus = computed(() => permissions.value.includes('sku.status.write'))
 const canProductSale = computed(() => canWrite.value && canStatus.value)
 const canPrice = computed(() => permissions.value.includes('sku.price.write'))
 const canUnit = computed(() => permissions.value.includes('sku.unit.write'))
-const canSeeInventory = computed(() => permissions.value.includes('inventory.read') || permissions.value.includes('inventory.manage'))
 const canCreate = computed(() => canWrite.value && canStatus.value && canPrice.value && canUnit.value)
 const canEditSpecs = computed(() => canCreate.value && editingProduct.value?.status === 'DRAFT')
 const categories = ref<Category[]>([])
@@ -47,8 +45,6 @@ const expandedProductId = ref('')
 const productDetails = ref<Record<string, ProductDetail>>({})
 const detailLoadingId = ref('')
 const detailErrors = ref<Record<string, string>>({})
-const poolBindings = ref<Record<string, PoolBinding>>({})
-const poolErrors = ref<Record<string, string>>({})
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
@@ -245,17 +241,8 @@ async function loadProductDetail(id: string) {
     const detail = await api<ProductDetail>(`/products/${id}`)
     productDetails.value = { ...productDetails.value, [id]: detail }
     initializeGradeDrafts(detail.skus)
-    if (canSeeInventory.value) void loadPoolBindings(id)
   } catch (reason) { detailErrors.value = { ...detailErrors.value, [id]: reason instanceof Error ? reason.message : '规格加载失败。' } }
   finally { detailLoadingId.value = '' }
-}
-async function loadPoolBindings(id: string) {
-  poolErrors.value = { ...poolErrors.value, [id]: '' }
-  try {
-    const bindings = await api<{ items: PoolBinding[] }>(`/inventory/pool-bindings?productId=${encodeURIComponent(id)}`)
-    poolBindings.value = { ...poolBindings.value,
-      ...Object.fromEntries(bindings.items.map((item) => [item.skuId, item])) }
-  } catch (reason) { poolErrors.value = { ...poolErrors.value, [id]: reason instanceof Error ? reason.message : '库存池资料加载失败。' } }
 }
 function toggleProduct(id: string) {
   expandedProductId.value = expandedProductId.value === id ? '' : id
@@ -378,6 +365,15 @@ function specsSaved() {
 
 async function openSku(row: SkuRow, action: SkuAction) {
   if (!await canLeaveEditor()) return
+  if (action === 'unit') {
+    if (!canUnit.value) return
+    const sequence = ++productLoadSequence
+    try {
+      const detail = await api<ProductDetail>(`/products/${row.productId}`)
+      if (sequence !== productLoadSequence || !canUnit.value) return
+      if (detail.unitConversion || row.unit.ratio !== 1 || row.unit.baseUnit !== row.unit.saleUnit) { ElMessage.info('请在商品规格中统一设置单位和换算比例。'); return }
+    } catch (reason) { if (sequence === productLoadSequence) error.value = reason instanceof Error ? reason.message : '商品单位配置读取失败，请重试。'; return }
+  }
   editorTrigger = document.activeElement as HTMLElement | null
   closeEditors(true)
   editingSku.value = row
@@ -417,11 +413,9 @@ async function saveSku() {
     path = `/skus/${row.skuId}/grade-prices`; method = 'PUT'
     body = { gradePrices, expectedRevision: row.skuRevision }
   } else {
-    if (!baseUnit.value.trim() || !saleUnit.value.trim() || !Number.isInteger(ratio.value) || ratio.value < 1) {
-      error.value = '请填写单位；换算比须为正整数。'; return
-    }
+    if (!baseUnit.value.trim()) { error.value = '请填写单位。'; return }
     path = `/skus/${row.skuId}/unit`; method = 'PUT'
-    body = { unit: { baseUnit: baseUnit.value.trim(), saleUnit: saleUnit.value.trim(), ratio: ratio.value }, expectedRevision: row.skuRevision }
+    body = { unit: { baseUnit: baseUnit.value.trim(), saleUnit: baseUnit.value.trim(), ratio: 1 }, expectedRevision: row.skuRevision }
   }
   saving.value = true
   error.value = ''
@@ -695,7 +689,7 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
             <td><span :class="['badge', row.status === 'ON_SALE' ? 'badge-good' : 'badge-muted']">{{ row.status === 'DRAFT' ? '草稿' : row.status === 'ON_SALE' ? '在售' : '下架' }}</span><small v-if="row.manuallyOffSale" class="catalog-product-meta">商品手动下架，SKU 状态已保留</small></td>
             <td class="catalog-actions"><button class="text-button" type="button" :aria-expanded="expandedProductId === row.productId" :aria-controls="`sku-detail-${row.productId}`" @click="toggleProduct(row.productId)">{{ expandedProductId === row.productId ? '收起规格' : '展开规格' }}</button><button v-if="canWrite" class="text-button" type="button" :disabled="productLoading" @click="openProduct(row.productId)">编辑商品</button><button v-if="canProductSale && row.status !== 'ON_SALE'" class="text-button" type="button" :disabled="productSaleBusy" @click="startProductSale('ON_SALE', row)">上架商品</button><button v-if="canProductSale && row.status === 'ON_SALE'" class="text-button" type="button" :disabled="productSaleBusy" @click="startProductSale('OFF_SALE', row)">下架商品</button></td>
           </tr><tr v-if="expandedProductId === row.productId" :id="`sku-detail-${row.productId}`" class="catalog-expanded-row"><td colspan="7"><p v-if="detailLoadingId === row.productId" role="status">正在加载 SKU…</p><p v-else-if="detailErrors[row.productId]" class="error" role="alert">{{ detailErrors[row.productId] }} <button class="text-button" type="button" @click="loadProductDetail(row.productId)">重试</button></p>
-              <div v-else-if="productDetails[row.productId]" class="catalog-sku-details"><p>该商品有 {{ row.skuCount }} 个 SKU。{{ row.matchedSkuIds.length ? `搜索命中 ${row.matchedSkuIds.length} 个 SKU，已标出。` : '' }}库存以库存管理中的实际余额为准。<span v-if="canSeeInventory && poolErrors[row.productId]" class="catalog-inline-error" role="alert">库存池资料读取失败：{{ poolErrors[row.productId] }} <button class="text-button" type="button" @click="loadPoolBindings(row.productId)">重试</button></span></p><div v-for="sku in productDetails[row.productId].skus" :key="sku.skuId" :class="['catalog-sku-card', { 'catalog-sku-match': row.matchedSkuIds.includes(sku.skuId) }]"><div><strong>{{ sku.specs.length ? sku.specs.map((spec) => `${spec.name}：${spec.value}`).join(' · ') : '默认规格' }}</strong><small class="catalog-product-meta">{{ sku.skuCode }}<span v-if="row.matchedSkuIds.includes(sku.skuId)"> · 搜索命中</span> · {{ sku.unit.ratio }} {{ sku.unit.baseUnit }}／{{ sku.unit.saleUnit }}</small><small v-if="canSeeInventory && poolBindings[sku.skuId]" class="catalog-product-meta">{{ poolBindings[sku.skuId].poolId ? `库存池 ${poolBindings[sku.skuId].poolId}` : '尚未建立库存池' }} · {{ poolBindings[sku.skuId].shared ? `共享实物（基准 SKU ${poolBindings[sku.skuId].poolAnchorSkuCode || poolBindings[sku.skuId].anchorSkuId}）` : '独立实物' }}</small><small v-if="canSeeInventory && !poolBindings[sku.skuId]" class="catalog-product-meta">库存池资料请到库存管理核对</small></div><div>日常价 ¥{{ fenToYuan(sku.listPriceFen) }}<small class="catalog-product-meta">{{ sku.saleStatus === 'ON_SALE' ? 'SKU 上架' : 'SKU 下架' }}</small></div><div class="catalog-grade-cell"><div v-if="grades.some((grade) => grade.enabled)" class="catalog-grade-list"><label v-for="grade in grades.filter((item) => item.enabled)" :key="grade.id"><span>{{ grade.name }}</span><input :value="inlineGradeDrafts[sku.skuId]?.[grade.id] || ''" inputmode="decimal" :aria-label="`${sku.skuCode} ${grade.name}等级价（元）`" placeholder="—" :disabled="!canPrice || savingGradeSku === sku.skuId" @input="updateInlineGrade(sku.skuId, grade.id, ($event.target as HTMLInputElement).value)" /></label></div><span v-else>暂无启用的等级</span><small v-if="inlineErrors[sku.skuId]" class="catalog-inline-error" role="alert">{{ inlineErrors[sku.skuId] }}</small></div><div class="catalog-actions"><button v-if="canStatus" class="text-button" type="button" @click="openSku(sku, 'status')">SKU 状态</button><button v-if="canPrice" class="text-button" type="button" @click="openSku(sku, 'price')">日常价</button><button v-if="canPrice" class="text-button" type="button" :disabled="!inlineGradeChanged(sku) || savingGradeSku === sku.skuId" @click="saveInlineGrade(sku)">保存等级价</button><button v-if="canUnit" class="text-button" type="button" @click="openSku(sku, 'unit')">单位</button></div></div><p v-if="!productDetails[row.productId].skus.length" class="empty-state">尚无 SKU。</p></div>
+              <div v-else-if="productDetails[row.productId]" class="catalog-sku-details"><p>该商品有 {{ row.skuCount }} 个 SKU。{{ row.matchedSkuIds.length ? `搜索命中 ${row.matchedSkuIds.length} 个 SKU，已标出。` : '' }}库存以库存管理中的实际余额为准。</p><div v-for="sku in productDetails[row.productId].skus" :key="sku.skuId" :class="['catalog-sku-card', { 'catalog-sku-match': row.matchedSkuIds.includes(sku.skuId) }]"><div><strong>{{ sku.specs.length ? sku.specs.map((spec) => `${spec.name}：${spec.value}`).join(' · ') : '默认规格' }}</strong><small class="catalog-product-meta">{{ sku.skuCode }}<span v-if="row.matchedSkuIds.includes(sku.skuId)"> · 搜索命中</span> · {{ sku.unit.ratio }} {{ sku.unit.baseUnit }}／{{ sku.unit.saleUnit }}</small></div><div>日常价 ¥{{ fenToYuan(sku.listPriceFen) }}<small class="catalog-product-meta">{{ sku.saleStatus === 'ON_SALE' ? 'SKU 上架' : 'SKU 下架' }}</small></div><div class="catalog-grade-cell"><div v-if="grades.some((grade) => grade.enabled)" class="catalog-grade-list"><label v-for="grade in grades.filter((item) => item.enabled)" :key="grade.id"><span>{{ grade.name }}</span><input :value="inlineGradeDrafts[sku.skuId]?.[grade.id] || ''" inputmode="decimal" :aria-label="`${sku.skuCode} ${grade.name}等级价（元）`" placeholder="—" :disabled="!canPrice || savingGradeSku === sku.skuId" @input="updateInlineGrade(sku.skuId, grade.id, ($event.target as HTMLInputElement).value)" /></label></div><span v-else>暂无启用的等级</span><small v-if="inlineErrors[sku.skuId]" class="catalog-inline-error" role="alert">{{ inlineErrors[sku.skuId] }}</small></div><div class="catalog-actions"><button v-if="canStatus" class="text-button" type="button" @click="openSku(sku, 'status')">SKU 状态</button><button v-if="canPrice" class="text-button" type="button" @click="openSku(sku, 'price')">日常价</button><button v-if="canPrice" class="text-button" type="button" :disabled="!inlineGradeChanged(sku) || savingGradeSku === sku.skuId" @click="saveInlineGrade(sku)">保存等级价</button><span v-if="productDetails[row.productId].unitConversion" class="help-text">单位由商品换算配置管理</span><button v-else-if="canUnit" class="text-button" type="button" @click="openSku(sku, 'unit')">单位</button></div></div><p v-if="!productDetails[row.productId].skus.length" class="empty-state">尚无 SKU。</p></div>
             </td></tr></tbody></table><p v-if="!pageData.rows.length" class="empty-state">没有匹配的商品。可调整筛选；有编辑权限时先创建商品草稿。</p>
       </div>
       <div v-else class="panel table-wrap catalog-goods-table" tabindex="0" aria-label="SKU 批量管理列表，可横向滚动">
@@ -790,9 +784,7 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
       <label v-else-if="skuAction === 'price'">日常价（元）<input v-model="dailyPriceYuan" inputmode="decimal" required /></label>
       <template v-else-if="skuAction === 'prices'"><p>日常价 ¥{{ fenToYuan(editingSku.listPriceFen) }}。留空的已启用等级不设专属价；已停用等级的原价格会保留。</p>
         <div class="form-grid"><label v-for="grade in grades.filter((item) => item.enabled)" :key="grade.id">{{ grade.name }}价格（元）<input :value="gradeInputs[grade.id] || ''" inputmode="decimal" placeholder="留空沿用日常价" @input="updateGrade(grade.id, ($event.target as HTMLInputElement).value)" /></label></div></template>
-      <div v-else class="form-grid"><label>基本单位<input v-model="baseUnit" maxlength="20" required /></label>
-        <label>销售单位<input v-model="saleUnit" maxlength="20" required /></label>
-        <label>换算比<input v-model.number="ratio" type="number" min="1" step="1" required /></label></div>
+      <div v-else class="form-grid"><label>单位<input v-model="baseUnit" maxlength="20" required /></label><p class="help-text">多单位销售请在商品规格中开启多单位换算。</p></div>
       <button class="primary-button" type="submit" :disabled="saving">{{ saving ? '保存中…' : '保存 SKU' }}</button>
     </form>
     </section>

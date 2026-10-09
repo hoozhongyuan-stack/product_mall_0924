@@ -199,3 +199,30 @@ describe('focused product workspace', () => {
     expect(wrapper.get('[aria-label="商品编辑工作区"]').text()).toContain('修订 5')
   })
 })
+
+it('converted products hide standalone unit editing and the SKU-mode action checks current configuration', async () => {
+  const original = vi.mocked(api).getMockImplementation()!
+  vi.mocked(api).mockImplementation((path, init) => path === '/products/p1' && !init?.method
+    ? Promise.resolve({ ...product, unitConversion: { axisKey: 'unit', baseOptionKey: 'b', ratios: [{ optionKey: 'b', ratio: 1 }] } }) as never
+    : original(path, init))
+  const wrapper = await setup()
+  await button(wrapper, '展开规格').trigger('click'); await flushPromises()
+  expect(wrapper.text()).toContain('单位由商品换算配置管理')
+  expect(wrapper.get('.catalog-sku-card').findAll('button').some(b => b.text() === '单位')).toBe(false)
+  await button(wrapper, 'SKU 批量管理').trigger('click'); await flushPromises()
+  await button(wrapper, '单位').trigger('click'); await flushPromises()
+  expect(wrapper.text()).not.toContain('编辑 SKU SKU-1')
+  expect(vi.mocked(api).mock.calls.some(([path]) => path.endsWith('/unit'))).toBe(false)
+})
+it('unconverted standalone unit editor sends one unit with ratio one', async () => {
+  const original = vi.mocked(api).getMockImplementation()!
+  vi.mocked(api).mockImplementation((path, init) => path === '/skus/sku1/unit' ? Promise.resolve({}) : original(path, init))
+  const wrapper = await setup()
+  await button(wrapper, 'SKU 批量管理').trigger('click'); await flushPromises()
+  await button(wrapper, '单位').trigger('click'); await flushPromises()
+  const label = wrapper.findAll('label').find(l => l.text() === '单位')!
+  await label.get('input').setValue('支')
+  await wrapper.get('form.catalog-editor').trigger('submit'); await flushPromises()
+  const call = vi.mocked(api).mock.calls.find(([path]) => path === '/skus/sku1/unit')!
+  expect(JSON.parse(call[1]!.body as string).unit).toEqual({ baseUnit: '支', saleUnit: '支', ratio: 1 })
+})

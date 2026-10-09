@@ -5,7 +5,7 @@ import { combinationKey, type EditableAxis, type EditableSku } from './spec-edit
 import { yuanToFen, type MemberGrade } from './types'
 import './sku-table.css'
 
-const props = defineProps<{ skus: EditableSku[]; axes: EditableAxis[]; grades: MemberGrade[]; disabled: boolean; showErrors: boolean }>()
+const props = defineProps<{ skus: EditableSku[]; axes: EditableAxis[]; grades: MemberGrade[]; disabled: boolean; showErrors: boolean; derivedUnits?: boolean }>()
 const emit = defineEmits<{ 'update:skus': [skus: EditableSku[]] }>()
 const selected = ref<string[]>([])
 const field = ref('list')
@@ -60,21 +60,20 @@ async function batchPrice() {
       <button class="secondary-button" data-action="batch-price" type="button" :disabled="!selected.length || confirming" @click="batchPrice">{{ confirming ? '确认中…' : '应用到所选 SKU' }}</button>
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <p class="help-text">会员价留空沿用日常价。表格可横向滚动；单位及换算关系逐行设置。</p>
+    <p class="help-text">会员价留空沿用日常价。表格可横向滚动；{{ derivedUnits ? '单位及换算关系由上方配置自动生成。' : '未开启多单位换算时，每个 SKU 只设置一个单位。' }}</p>
     <div class="sku-table-scroll" tabindex="0" aria-label="SKU 明细表，可横向滚动">
       <table class="sku-edit-table" aria-label="SKU 明细">
         <thead><tr><th class="sku-select-cell"><input v-if="!disabled" type="checkbox" aria-label="选择全部 SKU" :checked="allSelected" :indeterminate="selected.length > 0 && !allSelected" :disabled="confirming" @change="selected = ($event.target as HTMLInputElement).checked ? [...keys] : []" /><span v-else>序号</span></th>
           <th class="sku-identity-cell">SKU 编码</th><th v-for="axis in axes" :key="axis.clientKey">{{ axis.name || '规格' }}</th><th v-if="!axes.length">规格</th>
-          <th>日常价（元）</th><th v-for="grade in grades" :key="grade.id">{{ grade.name }}价（元）</th><th>基本单位</th><th>销售单位</th><th>换算比／关系</th><th>销售状态</th></tr></thead>
+          <th>日常价（元）</th><th v-for="grade in grades" :key="grade.id">{{ grade.name }}价（元）</th><th v-if="!derivedUnits">单位</th><th>换算比／关系</th><th>销售状态</th></tr></thead>
         <tbody><tr v-for="(sku, index) in skus" :key="combinationKey(sku.optionKeys)">
           <td class="sku-select-cell"><input v-if="!disabled" type="checkbox" :aria-label="`选择 SKU ${label(sku)}`" :checked="selected.includes(combinationKey(sku.optionKeys))" :disabled="confirming" @change="select(combinationKey(sku.optionKeys), ($event.target as HTMLInputElement).checked)" /><span v-else>{{ index + 1 }}</span></td>
           <td class="sku-identity-cell"><input :value="sku.skuCode" :aria-label="`SKU 编码 ${sku.label || '默认规格'}`" maxlength="64" required :disabled="disabled || confirming" :aria-invalid="showErrors && codeInvalid(index)" @input="update(index, { skuCode: ($event.target as HTMLInputElement).value })" /><small>{{ sku.id ? '保留现有 SKU' : '新增 SKU' }}</small></td>
           <td v-for="axis in axes" :key="axis.clientKey" class="sku-option-cell">{{ optionValue(axis, sku) }}</td><td v-if="!axes.length">默认规格</td>
           <td><input :value="sku.priceYuan" :aria-label="`日常价 ${label(sku)}`" class="sku-price-input" inputmode="decimal" required :disabled="disabled || confirming" :aria-invalid="showErrors && yuanToFen(sku.priceYuan) === null" @input="update(index, { priceYuan: ($event.target as HTMLInputElement).value })" /></td>
           <td v-for="grade in grades" :key="grade.id"><input :value="sku.gradePrices[grade.id] || ''" :aria-label="`${grade.name}价 ${label(sku)}`" class="sku-price-input" inputmode="decimal" placeholder="沿用日常价" :disabled="disabled || confirming" :aria-invalid="showErrors && !!sku.gradePrices[grade.id]?.trim() && yuanToFen(sku.gradePrices[grade.id]) === null" @input="update(index, { gradePrices: { ...sku.gradePrices, [grade.id]: ($event.target as HTMLInputElement).value } })" /></td>
-          <td><input :value="sku.baseUnit" :aria-label="`基本单位 ${label(sku)}`" maxlength="20" required :disabled="disabled || confirming" :aria-invalid="showErrors && !sku.baseUnit.trim()" @input="update(index, { baseUnit: ($event.target as HTMLInputElement).value })" /></td>
-          <td><input :value="sku.saleUnit" :aria-label="`销售单位 ${label(sku)}`" maxlength="20" required :disabled="disabled || confirming" :aria-invalid="showErrors && !sku.saleUnit.trim()" @input="update(index, { saleUnit: ($event.target as HTMLInputElement).value })" /></td>
-          <td class="sku-conversion-cell"><input :value="sku.ratio" :aria-label="`换算比 ${label(sku)}`" type="number" min="1" step="1" required :disabled="disabled || confirming" :aria-invalid="showErrors && (!Number.isInteger(sku.ratio) || sku.ratio < 1)" @input="update(index, { ratio: Number(($event.target as HTMLInputElement).value) })" /><small>1 {{ sku.saleUnit || '销售单位' }}＝{{ sku.ratio }} {{ sku.baseUnit || '基本单位' }}</small></td>
+          <td v-if="!derivedUnits"><input v-if="sku.ratio === 1 && sku.baseUnit === sku.saleUnit" :value="sku.baseUnit" :aria-label="`单位 ${label(sku)}`" maxlength="20" required :disabled="disabled || confirming" :aria-invalid="showErrors && !sku.baseUnit.trim()" @input="update(index, { baseUnit: ($event.target as HTMLInputElement).value, saleUnit: ($event.target as HTMLInputElement).value, ratio: 1 })" /><span v-else>请在商品规格中设置单位换算</span></td>
+          <td class="sku-conversion-cell"><span :class="{ error: showErrors && (!Number.isSafeInteger(sku.ratio) || sku.ratio < 1) }">1 {{ sku.saleUnit || '单位' }}＝{{ sku.ratio }} {{ sku.baseUnit || '单位' }}</span></td>
           <td><span class="sku-sale-state">{{ sku.saleStatus === 'ON_SALE' ? '已上架' : '已下架' }}</span></td>
         </tr></tbody>
       </table>

@@ -11,10 +11,9 @@ from accounts.security import error, parse_json, require, response
 from accounts.security import audit
 from catalog.models import Product, Sku
 from .selection import selection_page
-from .pool_access import (PoolBindingError, bind_sku_to_pool, ensure_independent_pool, pool_info_for_skus,
-                          resolve_anchor_id)
+from .pool_access import pool_info_for_skus, resolve_anchor_id
 
-from .models import InboundDocument, InventoryBalance, InventoryLedger, OutboundDocument, StockPool, StockPoolSku, StocktakeDocument, Warehouse
+from .models import InboundDocument, InventoryBalance, InventoryLedger, OutboundDocument, StockPoolSku, StocktakeDocument, Warehouse
 from .outbound_service import confirm_outbound, create_outbound, outbound_data
 from .service import (InventoryError, confirm_inbound, create_inbound,
                       create_warehouse, inbound_data, set_warehouse_enabled, warehouse_data)
@@ -62,43 +61,7 @@ def pool_bindings_view(request):
                  **info[row.id], "poolAnchorSkuCode": anchors.get(
                      uuid.UUID(info[row.id]["anchorSkuId"]))}
                 for row in rows]})
-        values = body(request)
-        if not isinstance(values, dict) or (set(values) not in (
-                {"skuId", "poolId", "expectedSkuRevision"},
-                {"skuId", "anchorSkuId", "expectedSkuRevision"})):
-            raise InventoryError("库存池绑定字段不正确。")
-        sku_id = uuid_field(values["skuId"], "SKU ID")
-        revision = values["expectedSkuRevision"]
-        if type(revision) is not int or revision < 1:
-            raise InventoryError("SKU 修订号不正确。")
-        with transaction.atomic():
-            if "anchorSkuId" in values:
-                anchor_id = uuid_field(values["anchorSkuId"], "锚 SKU ID")
-                locked = {row.id: row for row in Sku.objects.select_for_update(of=("self",))
-                          .select_related("current_unit").filter(pk__in=[sku_id, anchor_id]).order_by("id")}
-                anchor = locked.get(anchor_id)
-                if anchor is None:
-                    raise Sku.DoesNotExist
-                was_pool_present = StockPool.objects.filter(anchor_sku_id=anchor_id).exists()
-                target = ensure_independent_pool(anchor)
-                if target.anchor_sku_id != anchor_id:
-                    raise PoolBindingError("锚 SKU 已加入其他库存池。")
-                if not was_pool_present:
-                    audit(request, "inventory.pool.create", "sku", anchor_id, actor,
-                          after={"poolId": str(target.id), "baseUnit": target.base_unit})
-                pool_id = target.id
-            else:
-                pool_id = uuid_field(values["poolId"], "库存池 ID")
-            pool, changed = bind_sku_to_pool(sku_id, pool_id, revision)
-            if changed:
-                audit(request, "inventory.pool.bind", "sku", sku_id, actor,
-                      after={"poolId": str(pool.id), "anchorSkuId": str(pool.anchor_sku_id)})
-        return response(request, {"skuId": str(sku_id), "poolId": str(pool.id),
-                                  "anchorSkuId": str(pool.anchor_sku_id), "changed": changed})
-    except (Sku.DoesNotExist, StockPool.DoesNotExist):
-        return error(request, 404, "NOT_FOUND", "SKU 或库存池不存在。")
-    except PoolBindingError as exc:
-        return error(request, 409, "POOL_BINDING_CONFLICT", str(exc))
+        return error(request, 409, "POOL_BINDING_REMOVED", "请在商品规格中配置多单位换算。")
     except InventoryError as exc:
         return failure(request, exc)
 

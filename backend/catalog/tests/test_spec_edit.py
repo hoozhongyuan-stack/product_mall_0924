@@ -135,14 +135,14 @@ class SpecEditTests(TestCase):
         self.assertEqual(spec_preview.json()["error"]["code"], "SKU_INVENTORY_REFERENCED")
 
         changed_base = self.edit_payload()
-        changed_base["skus"][0]["unit"]["baseUnit"] = "箱"
+        changed_base["skus"][0]["unit"] = {"baseUnit": "箱", "saleUnit": "箱", "ratio": 1}
         base_preview = self.post(self.owner, self.path + "/preview", changed_base)
         self.assertEqual(base_preview.status_code, 409, base_preview.content)
         self.assertEqual(base_preview.json()["error"]["code"], "SKU_INVENTORY_REFERENCED")
         self.assertEqual(Sku.objects.get(id=stocked["id"]).sku_code, original_code)
         self.assertEqual(Product.objects.get(id=self.product["productId"]).revision, 1)
 
-    def test_stocked_sku_rejects_base_unit_api_change_but_allows_new_sale_ratio(self):
+    def test_stocked_sku_rejects_base_unit_and_unconfigured_sale_ratio(self):
         sku = self.edit_payload()["skus"][0]
         self.stock_sku(sku["id"])
         path = f"/api/v1/admin/skus/{sku['id']}/unit"
@@ -156,7 +156,7 @@ class SpecEditTests(TestCase):
             "expectedRevision": sku["expectedSkuRevision"],
             "unit": {"baseUnit": "瓶", "saleUnit": "箱", "ratio": 6},
         })
-        self.assertEqual(updated.status_code, 200, updated.content)
+        self.assertEqual(updated.status_code, 400, updated.content)
 
     def test_stock_added_after_preview_blocks_save_and_preserves_inventory(self):
         payload = self.edit_payload()
@@ -226,7 +226,7 @@ class SpecEditTests(TestCase):
         payload = self.edit_payload()
         sku_id = payload["skus"][0]["id"]
         pool = ensure_independent_pool(Sku.objects.select_related("current_unit").get(pk=sku_id))
-        payload["skus"][0]["unit"] = {"baseUnit": "件", "saleUnit": "箱", "ratio": 6}
+        payload["skus"][0]["unit"] = {"baseUnit": "件", "saleUnit": "件", "ratio": 1}
         preview = self.preview(payload)
         saved = self.send(self.owner, "put", self.path, {**payload, "previewToken": preview["previewToken"]})
         self.assertEqual(saved.status_code, 200, saved.content)
@@ -245,7 +245,7 @@ class SpecEditTests(TestCase):
         rejected = self.post(self.owner, self.path + "/preview", remove)
         self.assertEqual(rejected.status_code, 409, rejected.content)
         change = self.edit_payload()
-        change["skus"][0]["unit"]["baseUnit"] = "件"
+        change["skus"][0]["unit"] = {"baseUnit": "件", "saleUnit": "件", "ratio": 1}
         rejected = self.post(self.owner, self.path + "/preview", change)
         self.assertEqual(rejected.status_code, 409, rejected.content)
 

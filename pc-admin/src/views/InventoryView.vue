@@ -7,7 +7,6 @@ import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
 import { api, ApiError, type Account } from '../api'
 import StockDocumentForm, { type StockDraftPayload } from './inventory/StockDocumentForm.vue'
 import StocktakePanel from './inventory/StocktakePanel.vue'
-import InventoryPoolBindingPanel from './inventory/InventoryPoolBindingPanel.vue'
 import InventoryDateRange from './inventory/InventoryDateRange.vue'
 import InventoryListFooter from './inventory/InventoryListFooter.vue'
 import { csvTable } from './inventory/csv.mjs'
@@ -130,7 +129,7 @@ function exportRows(headers: string[], rows: (string | number)[][], filename: st
 function exportSelected() {
   if (tab.value === 'balances') {
     const rows = selectedRows.value.filter((row): row is InventoryBalance => 'onHandBaseUnits' in row)
-    exportRows(['商品', '库存池锚 SKU', '关联 SKU', '仓库', '账面', '锁定', '可售', '基础单位'],
+    exportRows(['商品', '库存基准 SKU', '关联 SKU', '仓库', '账面', '锁定', '可售', '基础单位'],
       rows.map(row => [row.productName, row.poolAnchorSkuCode, row.poolSkuCodes.join('、'), row.warehouseName,
         row.onHandBaseUnits, row.reservedBaseUnits, row.availableBaseUnits, row.baseUnit]), '库存查询-所选行.csv')
   } else if (tab.value === 'inbounds' || tab.value === 'outbounds') {
@@ -468,13 +467,12 @@ onUnmounted(() => { detailGeneration++; window.removeEventListener('beforeunload
       <div class="inventory-totals" aria-label="当前页库存汇总"><span>账面 <strong>{{ pageTotals.onHand }}</strong></span><span>锁定 <strong>{{ pageTotals.reserved }}</strong></span><span>可售 <strong>{{ pageTotals.available }}</strong></span></div>
       <p v-if="balanceError" class="notice" role="alert">{{ balanceError }} <el-button link type="primary" @click="loadBalances(balances.page)">重试</el-button></p>
       <div class="panel table-wrap" v-loading="balanceLoading">
-        <table><thead><tr><th><el-checkbox :model-value="allSelected" :disabled="balanceLoading" aria-label="全选当前页库存" @change="toggleAll" /></th><th>商品 / 库存池</th><th>仓库</th><th>账面</th><th>锁定</th><th>可售</th></tr></thead>
-          <tbody><tr v-for="row in balances.items" :key="`${row.warehouseId}:${row.skuId}`"><td><el-checkbox :model-value="selectedIds.includes(rowKey(row))" :disabled="balanceLoading" :aria-label="`选择库存池 ${row.poolAnchorSkuCode}`" @change="toggleRow(row, $event)" /></td><td><strong>{{ row.productName }}</strong><small class="inventory-subline code">锚 SKU {{ row.poolAnchorSkuCode }} · 关联 {{ row.poolSkuCodes.join("、") }}</small></td><td>{{ row.warehouseName }}</td><td class="inventory-number">{{ row.onHandBaseUnits }} {{ row.baseUnit }}</td><td class="inventory-number">{{ row.reservedBaseUnits }} {{ row.baseUnit }}</td><td class="inventory-number inventory-available">{{ row.availableBaseUnits }} {{ row.baseUnit }}</td></tr></tbody>
+        <table><thead><tr><th><el-checkbox :model-value="allSelected" :disabled="balanceLoading" aria-label="全选当前页库存" @change="toggleAll" /></th><th>商品 / 规格</th><th>仓库</th><th>账面</th><th>锁定</th><th>可售</th></tr></thead>
+          <tbody><tr v-for="row in balances.items" :key="`${row.warehouseId}:${row.skuId}`"><td><el-checkbox :model-value="selectedIds.includes(rowKey(row))" :disabled="balanceLoading" :aria-label="`选择库存 ${row.poolAnchorSkuCode}`" @change="toggleRow(row, $event)" /></td><td><strong>{{ row.productName }}</strong><small class="inventory-subline code">规格 SKU {{ row.poolSkuCodes.length > 1 ? "（单位换算）" : "" }}： {{ row.poolSkuCodes.join("、") }}</small></td><td>{{ row.warehouseName }}</td><td class="inventory-number">{{ row.onHandBaseUnits }} {{ row.baseUnit }}</td><td class="inventory-number">{{ row.reservedBaseUnits }} {{ row.baseUnit }}</td><td class="inventory-number inventory-available">{{ row.availableBaseUnits }} {{ row.baseUnit }}</td></tr></tbody>
         </table>
         <p v-if="!balanceLoading && !balanceError && !balances.items.length" class="inventory-empty">暂无匹配库存。可先创建仓库，再保存并确认一张入库单。</p>
       </div>
       <InventoryListFooter :page="balances.page" :page-size="balances.pageSize" :total="balances.total" :selected-count="selectedIds.length" :loading="balanceLoading" @page="loadBalances" @size="changePageSize('balances', $event)" @export="exportSelected" />
-      <InventoryPoolBindingPanel v-if="canManage" />
     </div>
 
     <div v-else-if="tab === 'warehouses'" class="inventory-section">
