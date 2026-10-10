@@ -1,0 +1,9 @@
+Name                               Stmts   Miss  Cover   Missing
+----------------------------------------------------------------
+backend/benefits/page_coupons.py      39      1    97%   31
+backend/pages/coupon_views.py         52      0   100%
+backend/pages/editor_v4.py            18      2    89%   14, 17
+backend/pages/release_reports.py     143      6    96%   82, 124-125, 130-131, 152
+backend/pages/runtime.py              27      1    96%   20
+----------------------------------------------------------------
+TOTAL                                279     10    96%

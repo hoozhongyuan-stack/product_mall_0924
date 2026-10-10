@@ -52,7 +52,7 @@ test('published micro page loads mapped components and allows another published 
   }
   const page = mount('../pages/micro/detail.js')
   await page.onLoad({ pageId: firstId })
-  assert.deepEqual(urls, [`${base}/api/v1/app/pages/${firstId}`])
+  assert.deepEqual(urls, [`${base}/api/v1/app/pages/${firstId}?schemaVersion=4`])
   assert.equal(page.data.state, 'ready')
   assert.equal(page.data.name, '中秋专题')
   assert.equal(title, '中秋专题')

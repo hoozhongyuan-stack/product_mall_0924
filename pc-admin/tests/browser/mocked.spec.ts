@@ -3,6 +3,167 @@ import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import { account, asset, ids, imageBytes, installMockApi, ok, openSection, pushRoute, screenshot, sku } from './fixtures'
 
+test('phase2 boundary: home rejects unknown configuration on reload', async ({ page }) => {
+  const initial = (await import('./fixtures')).draft('HOME')
+  let reads = 0, writes = 0
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path === '/api/v1/admin/pages/home/draft') {
+      if (route.request().method() === 'PUT') writes++
+      reads++
+      await ok(route, reads === 1 ? initial : { ...initial, revision: 99, config: { ...initial.config, schemaVersion: 5 } }); return true
+    }
+    return false
+  })
+  await page.goto('/pages/home')
+  await expect(page.locator('.home-component-library')).toBeVisible()
+  await page.getByRole('button', { name: '重新读取', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('需要更新管理端版本')
+  await expect(page.locator('.home-component-library')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '保存草稿', exact: true })).toBeDisabled()
+  expect(writes).toBe(0)
+  verify()
+})
+
+test('phase2 boundary: saved tags shrink a filtered list back to its valid page', async ({ page }) => {
+  const initial = (await import('./fixtures')).draft('MICRO')
+  let saved: any = { ...initial, config: { ...initial.config, schemaVersion: 3, metadata: { tags: ['活动'], share: { title: '', description: '', coverAssetId: '' } } } }
+  const rows = Array.from({ length: 10 }, (_, i) => ({ pageId: `20000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, name: `活动 ${i + 1}`, revision: 1, publishedRevision: null, tags: ['活动'] }))
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path === `/api/v1/admin/pages/${ids.a}/draft`) {
+      if (route.request().method() === 'PUT') { const body = route.request().postDataJSON(); saved = { ...saved, revision: 2, config: body.config } }
+      await ok(route, saved); return true
+    }
+    if (path === '/api/v1/admin/pages') {
+      const pageNo = Number(new URL(route.request().url()).searchParams.get('page') || 1)
+      const stillMatches = saved.config.metadata.tags.includes('活动')
+      await ok(route, { rows: pageNo === 1 ? rows : stillMatches ? [{ pageId: ids.a, name: saved.name, revision: 1, publishedRevision: null, tags: ['活动'] }] : [], page: pageNo, pageSize: 10, total: stillMatches ? 11 : 10 }); return true
+    }
+    return false
+  })
+  await page.goto(`/pages/micro?pageId=${ids.a}`)
+  await page.getByLabel('筛选业务标签', { exact: true }).fill('活动')
+  await page.getByRole('button', { name: '查询页面', exact: true }).click()
+  await page.getByRole('button', { name: '下一页', exact: true }).click()
+  await expect(page.locator('.micro-page-row')).toHaveCount(1)
+  await page.getByText('业务标签与分享资料', { exact: true }).click()
+  await page.getByLabel('业务标签', { exact: true }).fill('其它')
+  await page.getByLabel('业务标签', { exact: true }).press('Tab')
+  await page.getByRole('button', { name: '保存草稿', exact: true }).click()
+  await expect(page.getByText('草稿已保存，线上页面未变化。', { exact: true })).toBeVisible()
+  await expect(page.locator('.micro-page-row')).toHaveCount(10)
+  verify()
+})
+
+test('phase2 micro editor: saved search tags, share metadata and spacer', async ({ page }, testInfo) => {
+  const initial = (await import('./fixtures')).draft('MICRO')
+  let saved: any = initial
+  let filtered = false
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path === '/api/v1/admin/pages') {
+      const url = new URL(route.request().url())
+      filtered = url.searchParams.get('q') === '浏览器' && url.searchParams.get('tag') === '活动'
+      await ok(route, { rows: filtered ? [{ pageId: ids.a, name: saved.name, revision: saved.revision, publishedRevision: null, updatedAt: '2026-10-10', tags: ['活动'] }] : [], page: 1, pageSize: 10, total: filtered ? 1 : 0 }); return true
+    }
+    if (path === `/api/v1/admin/pages/${ids.a}/draft`) {
+      if (route.request().method() === 'PUT') {
+        const body = route.request().postDataJSON()
+        saved = { ...saved, name: body.name, revision: saved.revision + 1, config: body.config }
+      }
+      await ok(route, saved); return true
+    }
+    return false
+  })
+  await page.goto(`/pages/micro?pageId=${ids.a}`)
+  await page.getByLabel('搜索页面名称', { exact: true }).fill('浏览器')
+  await page.getByLabel('筛选业务标签', { exact: true }).fill('活动')
+  await page.getByRole('button', { name: '查询页面', exact: true }).click()
+  await expect(page.locator('.micro-page-row')).toContainText('活动')
+  expect(filtered).toBe(true)
+  await page.getByText('业务标签与分享资料', { exact: true }).click()
+  await page.getByLabel('业务标签', { exact: true }).fill('活动,品牌')
+  await page.getByLabel('分享标题', { exact: true }).fill('夏日品牌活动')
+  await page.getByLabel('分享描述', { exact: true }).fill('精选推荐与活动导购')
+  await page.locator('.home-component-library').getByRole('button', { name: '辅助空白', exact: true }).click()
+  await expect(page.locator('.home-component-list')).toContainText('辅助空白')
+  await page.getByRole('button', { name: '保存草稿', exact: true }).click()
+  await expect(page.getByText('草稿已保存，线上页面未变化。', { exact: true })).toBeVisible()
+  expect(saved.config.schemaVersion).toBe(3)
+  expect(saved.config.metadata.tags).toEqual(['活动', '品牌'])
+  await page.reload()
+  await page.getByText('业务标签与分享资料', { exact: true }).click()
+  await expect(page.getByLabel('分享标题', { exact: true })).toHaveValue('夏日品牌活动')
+  await expect(page.getByLabel('分享描述', { exact: true })).toHaveValue('精选推荐与活动导购')
+  await screenshot(page, testInfo, 'phase2-micro-editor')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  verify()
+})
+
+test('micro editor: immediate selection, copy history, hotzone drawing and persisted page copy', async ({ page }, testInfo) => {
+  const initial = (await import('./fixtures')).draft('MICRO')
+  let saved = initial
+  let copied: typeof initial | null = null
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path === `/api/v1/admin/pages/${ids.a}/draft`) {
+      if (route.request().method() === 'PUT') {
+        const body = route.request().postDataJSON()
+        saved = { ...saved, name: body.name, revision: saved.revision + 1, config: body.config }
+      }
+      await ok(route, saved); return true
+    }
+    if (path === `/api/v1/admin/pages/${ids.a}/copy`) {
+      const body = route.request().postDataJSON()
+      expect(body.source).toBe('DRAFT')
+      expect(body.expectedRevision).toBe(saved.revision)
+      expect(route.request().headers()['idempotency-key']).toBeTruthy()
+      copied = { ...saved, pageId: ids.b, name: body.name, revision: 1, publishedRevision: null,
+        config: { ...saved.config, components: saved.config.components.map((item, i) => ({ ...item, componentId: `copy-${i}` })) } }
+      await ok(route, copied); return true
+    }
+    if (path === `/api/v1/admin/pages/${ids.b}/draft` && copied) { await ok(route, copied); return true }
+    return false
+  })
+  await page.goto(`/pages/micro?pageId=${ids.a}`)
+  await expect(page.getByRole('heading', { name: '即时效果', exact: true })).toBeVisible()
+  const library = page.locator('.home-component-library')
+  await library.getByRole('button', { name: '标题文本' }).click()
+  await page.getByLabel('标题', { exact: true }).fill('品牌专区')
+  await expect(page.locator('.home-phone-body')).toContainText('品牌专区')
+  await page.getByRole('button', { name: '复制组件', exact: true }).click()
+  await expect(page.locator('.home-component-list li')).toHaveCount(3)
+  await page.getByRole('button', { name: '撤销', exact: true }).click()
+  await expect(page.locator('.home-component-list li')).toHaveCount(2)
+  await page.getByRole('button', { name: '重做', exact: true }).click()
+  await expect(page.locator('.home-component-list li')).toHaveCount(3)
+  await library.getByRole('button', { name: '图片热区' }).click()
+  await page.getByLabel('图片素材 ID', { exact: true }).fill('browser-asset')
+  const canvas = page.getByLabel('热区绘制画布')
+  await canvas.scrollIntoViewIfNeeded()
+  const bounds = await canvas.boundingBox()
+  expect(bounds).toBeTruthy()
+  await page.mouse.move(bounds!.x + bounds!.width * .2, bounds!.y + bounds!.height * .2)
+  await page.mouse.down()
+  await page.mouse.move(bounds!.x + bounds!.width * .6, bounds!.y + bounds!.height * .6)
+  await page.mouse.up()
+  await expect(page.getByText('已配置 1 / 20 个区域')).toBeVisible()
+  await canvas.getByRole('button', { name: '点击区域 1，方向键移动', exact: true }).focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByLabel('x', { exact: true })).toHaveValue('0.21')
+  await page.getByRole('button', { name: '保存草稿', exact: true }).click()
+  await expect(page.getByText('草稿已保存，线上页面未变化。', { exact: true })).toBeVisible()
+  expect(saved.config.schemaVersion).toBe(2)
+  await page.reload()
+  await expect(page.locator('.home-phone-body')).toContainText('品牌专区')
+  await page.getByRole('button', { name: '复制页面', exact: true }).click()
+  await page.getByLabel('副本名称', { exact: true }).fill('品牌专区副本')
+  await page.getByRole('button', { name: '创建独立草稿', exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(ids.b))
+  await expect(page.getByLabel('页面名称', { exact: true })).toHaveValue('品牌专区副本')
+  await expect(page.getByText('尚未发布', { exact: true })).toBeVisible()
+  await screenshot(page, testInfo, 'micro-editor-enhanced')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  verify()
+})
+
 test('mock HTTP: login and logout clear the password without remembering the account', async ({ page }) => {
   let loggedIn = false
   const verify = await installMockApi(page, async (route, path) => {
@@ -550,6 +711,8 @@ test('mock HTTP: product rich description uses shared assets and preserves revis
   await description.getByRole('button', { name: '从素材中心选择', exact: true }).click()
   await page.getByRole('dialog', { name: '选择素材', exact: true }).getByRole('button', { name: '选择素材', exact: true }).click()
   await description.getByLabel('图片 1 说明', { exact: true }).fill('商品产地示意')
+  await expect(description.getByLabel('图片 1 说明', { exact: true })).toBeFocused()
+  await expect(description.getByRole('textbox', { name: '商品描述', exact: true }).locator('img[data-asset-id]')).toHaveCount(1)
   await description.getByRole('button', { name: '手机预览', exact: true }).click()
   await expect(description.getByLabel('手机宽度预览').getByAltText('商品产地示意')).toBeVisible()
   await page.getByRole('button', { name: '保存商品资料', exact: true }).click()
@@ -566,3 +729,45 @@ test('mock HTTP: product rich description uses shared assets and preserves revis
   await screenshot(page, testInfo, 'product-description-editor')
   verify()
 })
+
+for (const pageType of ['HOME', 'MICRO']) {
+  test(`phase3 ${pageType}: coupon config and revision-bound release reports`, async ({ page }, testInfo) => {
+    const initial = (await import('./fixtures')).draft(pageType)
+    let saved: any = { ...initial, config: { ...initial.config, components: [] } }
+    let reportReads = 0, publishWrites = 0
+    const base = pageType === 'HOME' ? '/api/v1/admin/pages/home' : `/api/v1/admin/pages/${ids.a}`
+    const verify = await installMockApi(page, async (route, path) => {
+      if (path === '/api/v1/admin/pages/capabilities') { await ok(route, { runtimeSchemaVersion: 4 }); return true }
+      if (path === `${base}/draft`) {
+        if (route.request().method() === 'PUT') { const body = route.request().postDataJSON(); saved = { ...saved, config: body.config, revision: saved.revision + 1 } }
+        await ok(route, saved); return true
+      }
+      if (path === '/api/v1/admin/pages/coupon-preview') { await ok(route, { coupons: [] }); return true }
+      if (path === `${base}/release-report`) {
+        reportReads++
+        expect(route.request().postDataJSON()).toEqual({ expectedRevision: saved.revision, expectedPublicationRevision: saved.publicationRevision })
+        await ok(route, { pageId: saved.pageId, revision: saved.revision, publicationRevision: saved.publicationRevision, publishedVersionId: null, schemaVersion: 4, runtimeSchemaVersion: 4, runtimeSupported: true,
+          diff: { addedComponentIds: saved.config.components.map((item: any) => item.componentId), removedComponentIds: [], updatedComponentIds: [], orderChanged: false, themeChanged: false, metadataChanged: false },
+          issues: [{ path: 'components[0].props.campaignIds[0]', componentId: saved.config.components[0].componentId, code: 'PUBLISH_TARGET_INVALID', severity: 'ERROR', message: '优惠券活动尚未公开。' }], canPublish: false }); return true
+      }
+      if (path.endsWith('/publish')) { publishWrites++; await ok(route, {}); return true }
+      return false
+    })
+    await page.goto(pageType === 'HOME' ? '/pages/home' : `/pages/micro?pageId=${ids.a}`)
+    await page.locator('.home-component-library').getByRole('button', { name: '优惠券列表', exact: true }).click()
+    await page.getByLabel('优惠券来源', { exact: true }).selectOption('MANUAL')
+    await page.getByLabel('优惠券活动 ID', { exact: true }).fill(ids.b)
+    await page.getByLabel('优惠券活动 ID', { exact: true }).press('Tab')
+    await page.getByRole('button', { name: '检查发布差异与引用', exact: true }).click()
+    await expect(page.locator('.release-report-issues')).toContainText('优惠券活动尚未公开。')
+    expect(saved.config.schemaVersion).toBe(4)
+    expect(saved.config.components[0].props.campaignIds).toEqual([ids.b])
+    expect(reportReads).toBe(1); expect(publishWrites).toBe(0)
+    await page.getByLabel('优惠券展示数量', { exact: true }).fill('2')
+    await page.getByLabel('优惠券展示数量', { exact: true }).press('Tab')
+    await expect(page.getByText(/报告已过期/)).toBeVisible()
+    await screenshot(page, testInfo, `phase3-${pageType.toLowerCase()}-report`)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    verify()
+  })
+}

@@ -222,3 +222,16 @@ class StorefrontOperation(models.Model):
                                                 name="unique_storefront_operation_key"),
                        models.CheckConstraint(condition=Q(action__in=["publish", "rollback"]),
                                               name="known_storefront_action")]
+
+
+class PageCopyRequest(models.Model):
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    source_page = models.ForeignKey(MicroPage, on_delete=models.PROTECT, related_name='copy_requests')
+    key = models.CharField(max_length=128)
+    request_digest = models.CharField(max_length=64)
+    result = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'page_copy_request'
+        constraints = [models.UniqueConstraint(fields=['actor', 'source_page', 'key'], name='unique_page_copy_key')]

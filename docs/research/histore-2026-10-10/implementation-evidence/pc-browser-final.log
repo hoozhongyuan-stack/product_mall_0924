@@ -1,0 +1,64 @@
+
+> product-mall-admin@0.1.0 test:browser
+> playwright test --project=desktop --project=mobile
+
+[WebServer] (node:9397) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 46 tests using 1 worker
+
+(node:9403) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] 10:11:18 AM [vite] (client) [Unhandled error] Error: ResizeObserver loop completed with undelivered notifications.
+[WebServer]  > ../../../../../../../@vite/client:305:50
+[WebServer]
+  ✓   1 [desktop] › tests/browser/inventory-pilot.spec.ts:5:1 › inventory pilot: production-mounted SKU dialog renders, pages and retains selected specifications (2.4s)
+  ✓   2 [desktop] › tests/browser/mocked.spec.ts:6:1 › micro editor: immediate selection, copy history, hotzone drawing and persisted page copy (1.7s)
+  ✓   3 [desktop] › tests/browser/mocked.spec.ts:72:1 › mock HTTP: login and logout clear the password without remembering the account (730ms)
+  ✓   4 [desktop] › tests/browser/mocked.spec.ts:95:1 › mock HTTP: pilot login remembers only account and reports authentication errors (1.4s)
+  ✓   5 [desktop] › tests/browser/mocked.spec.ts:136:1 › mock HTTP: grouped navigation and focused product editor retain dirty data (1.0s)
+  ✓   6 [desktop] › tests/browser/mocked.spec.ts:166:1 › mock HTTP: coupon browser-back route update protects dirty details (750ms)
+  ✓   7 [desktop] › tests/browser/mocked.spec.ts:187:3 › mock HTTP: home target HTTP failure and retry preserve edits (831ms)
+  ✓   8 [desktop] › tests/browser/mocked.spec.ts:187:3 › mock HTTP: micro target HTTP failure and retry preserve edits (970ms)
+  ✓   9 [desktop] › tests/browser/mocked.spec.ts:212:1 › mock HTTP: product media upload failure, retry, and remove use shared editor (951ms)
+  ✓  10 [desktop] › tests/browser/mocked.spec.ts:238:1 › mock HTTP: selected SKU CSV download protects prefixed formulas (716ms)
+  ✓  11 [desktop] › tests/browser/mocked.spec.ts:255:1 › mock HTTP: workbench uses authorized real-shaped reports with error recovery (1.2s)
+  ✓  12 [desktop] › tests/browser/mocked.spec.ts:281:1 › mock HTTP: order query uses server fulfillment pagination and recovers empty filters (741ms)
+  ✓  13 [desktop] › tests/browser/mocked.spec.ts:309:1 › mock HTTP: member and inventory pages preserve readable empty and retry states (804ms)
+  ✓  14 [desktop] › tests/browser/mocked.spec.ts:337:1 › mock HTTP: system and marketing lists retain read-only actions and responsive layouts (1.9s)
+  ✓  15 [desktop] › tests/browser/mocked.spec.ts:358:1 › mock HTTP: configuration and operations pages show honest capability states (4.3s)
+  ✓  16 [desktop] › tests/browser/mocked.spec.ts:393:1 › mock HTTP: code release checks and key confirmation stay clear on desktop and mobile (859ms)
+  ✓  17 [desktop] › tests/browser/mocked.spec.ts:437:1 › mock HTTP: direct code upload remains available without third-party authorization (886ms)
+  ✓  18 [desktop] › tests/browser/mocked.spec.ts:485:1 › mock HTTP: WeChat credentials are confirmed, stored without echo, and checked only after save (814ms)
+  ✓  19 [desktop] › tests/browser/mocked.spec.ts:532:1 › mock HTTP: WeChat conflict preserves input and blocks another write until a fresh read (882ms)
+  ✓  20 [desktop] › tests/browser/mocked.spec.ts:564:1 › mock HTTP: WeChat read-only and forbidden pages cannot trigger credentials actions (910ms)
+  ✓  21 [desktop] › tests/browser/mocked.spec.ts:583:1 › mock HTTP: product rich description uses shared assets and preserves revision conflict edits (2.5s)
+  ✓  22 [desktop] › tests/browser/passwords.spec.ts:4:1 › mock HTTP: admins change their own password and return to login (1.6s)
+  ✓  23 [desktop] › tests/browser/passwords.spec.ts:28:1 › mock HTTP: owner resets staff password with current owner password (1.5s)
+(node:9686) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  24 [mobile] › tests/browser/inventory-pilot.spec.ts:5:1 › inventory pilot: production-mounted SKU dialog renders, pages and retains selected specifications (2.1s)
+  ✓  25 [mobile] › tests/browser/mocked.spec.ts:6:1 › micro editor: immediate selection, copy history, hotzone drawing and persisted page copy (1.5s)
+  ✓  26 [mobile] › tests/browser/mocked.spec.ts:72:1 › mock HTTP: login and logout clear the password without remembering the account (678ms)
+  ✓  27 [mobile] › tests/browser/mocked.spec.ts:95:1 › mock HTTP: pilot login remembers only account and reports authentication errors (1.3s)
+  ✓  28 [mobile] › tests/browser/mocked.spec.ts:136:1 › mock HTTP: grouped navigation and focused product editor retain dirty data (2.1s)
+  ✓  29 [mobile] › tests/browser/mocked.spec.ts:166:1 › mock HTTP: coupon browser-back route update protects dirty details (661ms)
+  ✓  30 [mobile] › tests/browser/mocked.spec.ts:187:3 › mock HTTP: home target HTTP failure and retry preserve edits (799ms)
+  ✓  31 [mobile] › tests/browser/mocked.spec.ts:187:3 › mock HTTP: micro target HTTP failure and retry preserve edits (865ms)
+  ✓  32 [mobile] › tests/browser/mocked.spec.ts:212:1 › mock HTTP: product media upload failure, retry, and remove use shared editor (848ms)
+  ✓  33 [mobile] › tests/browser/mocked.spec.ts:238:1 › mock HTTP: selected SKU CSV download protects prefixed formulas (715ms)
+  ✓  34 [mobile] › tests/browser/mocked.spec.ts:255:1 › mock HTTP: workbench uses authorized real-shaped reports with error recovery (1.1s)
+  ✓  35 [mobile] › tests/browser/mocked.spec.ts:281:1 › mock HTTP: order query uses server fulfillment pagination and recovers empty filters (764ms)
+  ✓  36 [mobile] › tests/browser/mocked.spec.ts:309:1 › mock HTTP: member and inventory pages preserve readable empty and retry states (2.0s)
+  ✓  37 [mobile] › tests/browser/mocked.spec.ts:337:1 › mock HTTP: system and marketing lists retain read-only actions and responsive layouts (1.8s)
+  ✓  38 [mobile] › tests/browser/mocked.spec.ts:358:1 › mock HTTP: configuration and operations pages show honest capability states (4.4s)
+  ✓  39 [mobile] › tests/browser/mocked.spec.ts:393:1 › mock HTTP: code release checks and key confirmation stay clear on desktop and mobile (978ms)
+  ✓  40 [mobile] › tests/browser/mocked.spec.ts:437:1 › mock HTTP: direct code upload remains available without third-party authorization (1.1s)
+  ✓  41 [mobile] › tests/browser/mocked.spec.ts:485:1 › mock HTTP: WeChat credentials are confirmed, stored without echo, and checked only after save (1.1s)
+  ✓  42 [mobile] › tests/browser/mocked.spec.ts:532:1 › mock HTTP: WeChat conflict preserves input and blocks another write until a fresh read (977ms)
+  ✓  43 [mobile] › tests/browser/mocked.spec.ts:564:1 › mock HTTP: WeChat read-only and forbidden pages cannot trigger credentials actions (1.2s)
+  ✓  44 [mobile] › tests/browser/mocked.spec.ts:583:1 › mock HTTP: product rich description uses shared assets and preserves revision conflict edits (2.4s)
+  ✓  45 [mobile] › tests/browser/passwords.spec.ts:4:1 › mock HTTP: admins change their own password and return to login (1.5s)
+  ✓  46 [mobile] › tests/browser/passwords.spec.ts:28:1 › mock HTTP: owner resets staff password with current owner password (1.5s)
+
+  46 passed (1.1m)

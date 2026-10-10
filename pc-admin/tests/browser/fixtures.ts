@@ -50,6 +50,8 @@ export async function installMockApi(page: Page, override?: (route: Route, path:
     if (/\/coupon-campaigns\/.+\/issuances$/.test(path)) return ok(route, { items: [], pagination: { page: 1, pageSize: 20, total: 0 } })
     if (path.startsWith('/api/v1/admin/coupon-campaigns/')) return ok(route, campaign(path.split('/').at(-1)!))
     if (path === '/api/v1/admin/pages/home/draft') return ok(route, draft())
+    if (path === '/api/v1/admin/pages/templates') return ok(route, { templates: [], combinations: [] })
+    if (path === '/api/v1/admin/pages/capabilities') return ok(route, { runtimeSchemaVersion: 1, supportedSchemaVersions: [1, 2, 3] })
     if (path === `/api/v1/admin/pages/${ids.a}/draft`) return ok(route, draft('MICRO'))
     if (path === '/api/v1/admin/pages') return ok(route, { rows: [{ pageId: ids.a, name: '浏览器微页面',
       revision: 1, publishedRevision: null, updatedAt: '2026-01-01T00:00:00Z' }], total: 1, page: 1, pageSize: 50 })

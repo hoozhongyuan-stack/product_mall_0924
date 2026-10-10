@@ -1,0 +1,28 @@
+
+> product-mall-admin@0.1.0 test:integration
+> python3 scripts/run-browser-integration.py
+
+Isolated Django/PostgreSQL and Vue ready; external platform credentials absent.
+
+Running 12 tests using 1 worker
+
+(node:26632) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [desktop] › tests/browser/integration.spec.ts:6:1 › real isolated database: phase2 templates, sharing cover and fixed mosaic (3.0s)
+  ✓   2 [desktop] › tests/browser/integration.spec.ts:77:1 › real isolated database: schema2 micro-page publish, legacy fence and independent copy (2.8s)
+  ✓   3 [desktop] › tests/browser/integration.spec.ts:121:1 › real isolated database: login and create a persisted coupon draft (892ms)
+  ✓   4 [desktop] › tests/browser/integration.spec.ts:157:1 › real isolated database: securely replace and retain mini-program credentials (1.2s)
+  ✓   5 [desktop] › tests/browser/integration.spec.ts:211:1 › real isolated database: bulk upload images and persist a referenced product description (3.2s)
+  ✓   6 [desktop] › tests/browser/integration.spec.ts:303:1 › real isolated database: phase3 coupon reference reports, schema4 publish and version-bound hydration (3.3s)
+(node:26664) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   7 [mobile] › tests/browser/integration.spec.ts:6:1 › real isolated database: phase2 templates, sharing cover and fixed mosaic (2.2s)
+  ✓   8 [mobile] › tests/browser/integration.spec.ts:77:1 › real isolated database: schema2 micro-page publish, legacy fence and independent copy (2.9s)
+  ✓   9 [mobile] › tests/browser/integration.spec.ts:121:1 › real isolated database: login and create a persisted coupon draft (1.9s)
+  ✓  10 [mobile] › tests/browser/integration.spec.ts:157:1 › real isolated database: securely replace and retain mini-program credentials (2.3s)
+  ✓  11 [mobile] › tests/browser/integration.spec.ts:211:1 › real isolated database: bulk upload images and persist a referenced product description (3.8s)
+  ✓  12 [mobile] › tests/browser/integration.spec.ts:303:1 › real isolated database: phase3 coupon reference reports, schema4 publish and version-bound hydration (3.1s)
+
+  12 passed (31.7s)
+Verified persisted drafts, encrypted synthetic credentials, zero orders and zero WeChat identities.
+Removed only this run’s isolated database and stopped owned servers.

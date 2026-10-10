@@ -1,0 +1,412 @@
+- complementary:
+  - generic: 店铺
+  - menubar:
+    - menuitem " 店铺":
+      - emphasis: 
+      - text: 店铺
+    - menuitem " 商品":
+      - emphasis: 
+      - text: 商品
+    - menuitem " 订单":
+      - emphasis: 
+      - text: 订单
+    - menuitem " 会员":
+      - emphasis: 
+      - text: 会员
+    - menuitem " 营销":
+      - emphasis: 
+      - text: 营销
+    - menuitem " 分销":
+      - emphasis: 
+      - text: 分销
+    - menuitem " 合伙人":
+      - emphasis: 
+      - text: 合伙人
+    - menuitem " 供应商":
+      - emphasis: 
+      - text: 供应商
+    - menuitem " 门店":
+      - emphasis: 
+      - text: 门店
+    - menuitem " SCRM":
+      - emphasis: 
+      - text: SCRM
+    - menuitem " 报表":
+      - emphasis: 
+      - text: 报表
+    - menuitem " 设置":
+      - emphasis: 
+      - text: 设置
+  - list:
+    - generic: 概览
+    - generic: 店铺信息
+    - generic: 小程序设置
+    - generic: 公众号设置
+    - generic: 公众号菜单
+    - generic: 微页面
+    - generic: 移动商城
+    - generic: PC商城
+    - generic: PC专题页
+    - generic: 文章管理
+    - generic: 素材中心
+- generic: 
+- text:   
+- text: histore
+- generic: 
+- main:
+  - navigation "Breadcrumb":
+    - link "微页面"
+    - text: /
+    - link "新增微页面"
+  - heading [level=3]
+  - list:
+    - heading "牛奶伊利" [level=3]
+    - generic: x元减y元
+    - generic: ¥ 50
+    - generic: 
+    - heading "牛奶伊利" [level=3]
+    - generic: x元减y元
+    - generic: ¥ 59
+    - generic: 
+  - generic: 商品
+  - generic: 商品分组：
+  - radiogroup:
+    - radio "单组商品" [checked]:
+      - radio [checked]
+      - generic: 单组商品
+    - radio "多组商品":
+      - radio
+      - generic: 多组商品
+  - generic: 商品：
+  - radiogroup:
+    - radio "选择商品":
+      - radio
+      - generic: 选择商品
+    - radio "选择分类" [checked]:
+      - radio [checked]
+      - generic: 选择分类
+  - text: 商品分类：
+  - textbox "请选择商品分类"
+  - generic: 
+  - text:                         
+  - text: 排序方式：
+  - textbox "请选择": 创建时间越晚越靠前
+  - generic: 
+  - text: 显示个数：
+  - button "":
+    - generic: 
+  - button "":
+    - generic: 
+  - spinbutton: "2"
+  - generic: 列表样式：
+  - radiogroup:
+    - radio "大图模式":
+      - radio
+      - generic: 大图模式
+    - radio "一行两个" [checked]:
+      - radio [checked]
+      - generic: 一行两个
+    - radio "一行三个":
+      - radio
+      - generic: 一行三个
+    - radio "详细列表":
+      - radio
+      - generic: 详细列表
+    - radio "一大两小":
+      - radio
+      - generic: 一大两小
+    - radio "横向滑动":
+      - radio
+      - generic: 横向滑动
+  - generic: 背景颜色：
+  - generic: 
+  - text: 
+  - button "重置"
+  - generic: 背景图片：
+  - generic: 
+  - generic:  
+  - generic: 整体倒角：
+  - radiogroup:
+    - radio "直角" [checked]:
+      - radio [checked]
+      - generic: 直角
+    - radio "圆角":
+      - radio
+      - generic: 圆角
+  - generic: 页面边距：
+  - slider "slider between 0 and 30"
+  - text: 4像素
+  - generic: 商品间距：
+  - slider "slider between 0 and 30"
+  - text: 8像素
+  - generic: 内间距：
+  - slider "slider between 0 and 150"
+  - text: 0像素
+  - text: 上：
+  - textbox: "0"
+  - generic: 像素
+  - text: 下：
+  - textbox: "0"
+  - generic: 像素
+  - text: 左：
+  - textbox: "0"
+  - generic: 像素
+  - text: 右：
+  - textbox: "0"
+  - generic: 像素
+  - generic: 商品样式：
+  - radiogroup:
+    - radio "无边白底" [checked]:
+      - radio [checked]
+      - generic: 无边白底
+    - radio "卡片投影":
+      - radio
+      - generic: 卡片投影
+    - radio "描边白底":
+      - radio
+      - generic: 描边白底
+    - radio "无边透明底":
+      - radio
+      - generic: 无边透明底
+    - radio "促销":
+      - radio
+      - generic: 促销
+    - radio "瀑布流":
+      - radio
+      - generic: 瀑布流
+  - generic: 商品倒角：
+  - radiogroup:
+    - radio "直角" [checked]:
+      - radio [checked]
+      - generic: 直角
+    - radio "圆角":
+      - radio
+      - generic: 圆角
+  - generic: 图片比例：
+  - radiogroup:
+    - radio "3:2":
+      - radio
+      - generic: 3:2
+    - radio "1:1" [checked]:
+      - radio [checked]
+      - generic: 1:1
+    - radio "3:4":
+      - radio
+      - generic: 3:4
+    - radio "16:9":
+      - radio
+      - generic: 16:9
+  - generic: 图片填充：
+  - radiogroup:
+    - radio "填充" [checked]:
+      - radio [checked]
+      - generic: 填充
+    - radio "周边留白":
+      - radio
+      - generic: 周边留白
+  - generic: 文本样式：
+  - radiogroup:
+    - radio "常规体" [checked]:
+      - radio [checked]
+      - generic: 常规体
+    - radio "加粗体":
+      - radio
+      - generic: 加粗体
+  - generic: 文本对齐：
+  - radiogroup:
+    - radio "左对齐" [checked]:
+      - radio [checked]
+      - generic: 左对齐
+    - radio "居中对齐":
+      - radio
+      - generic: 居中对齐
+  - generic: 显示内容：
+  - checkbox "商品名称" [checked]
+  - generic: 商品名称
+  - text: 颜色：
+  - generic: 
+  - text: 
+  - button "重置"
+  - text: 行数：
+  - radiogroup:
+    - radio "1行" [checked]:
+      - radio [checked]
+      - generic: 1行
+    - radio "2行":
+      - radio
+      - generic: 2行
+  - text: 字体大小：
+  - radiogroup:
+    - radio "12号":
+      - radio
+      - generic: 12号
+    - radio "14号" [checked]:
+      - radio [checked]
+      - generic: 14号
+    - radio "16号":
+      - radio
+      - generic: 16号
+  - text: 字体粗细：
+  - radiogroup:
+    - radio "常规体" [checked]:
+      - radio [checked]
+      - generic: 常规体
+    - radio "加粗体":
+      - radio
+      - generic: 加粗体
+  - checkbox "前置图标"
+  - generic: 前置图标
+  - checkbox "前置标签"
+  - generic: 前置标签
+  - checkbox "商品销量"
+  - generic: 商品销量
+  - checkbox "活动标签" [checked]
+  - generic: 活动标签
+  - paragraph: 勾选后商品卡显示营销活动标签（如 x元减y元、第N件0折），移动端显示真实活动
+  - checkbox "商品卖点"
+  - generic: 商品卖点
+  - text:  
+  - checkbox "商品价格" [checked]
+  - generic: 商品价格
+  - text: 颜色：
+  - generic: 
+  - button "重置"
+  - text: 字体大小：
+  - radiogroup:
+    - radio "14号":
+      - radio
+      - generic: 14号
+    - radio "16号" [checked]:
+      - radio [checked]
+      - generic: 16号
+    - radio "18号":
+      - radio
+      - generic: 18号
+  - text: 字体粗细：
+  - radiogroup:
+    - radio "常规体" [checked]:
+      - radio [checked]
+      - generic: 常规体
+    - radio "加粗体":
+      - radio
+      - generic: 加粗体
+  - checkbox "商品划线价"
+  - generic: 商品划线价
+  - text: 
+  - checkbox "购买按钮" [checked]
+  - generic: 购买按钮
+  - radiogroup:
+    - radio "样式1" [checked]:
+      - radio [checked]
+      - generic: 样式1
+    - radio "样式2":
+      - radio
+      - generic: 样式2
+    - radio "样式3":
+      - radio
+      - generic: 样式3
+    - radio "样式4":
+      - radio
+      - generic: 样式4
+    - radio "样式5":
+      - radio
+      - generic: 样式5
+    - radio "样式6":
+      - radio
+      - generic: 样式6
+    - radio "样式7":
+      - radio
+      - generic: 样式7
+    - radio "样式8":
+      - radio
+      - generic: 样式8
+    - radio "样式9":
+      - radio
+      - generic: 样式9
+    - radio "自定义图片":
+      - radio
+      - generic: 自定义图片
+  - checkbox "商品角标"
+  - generic: 商品角标
+  - generic:   
+  - generic:  
+  - generic: 
+  - generic: 在右侧设置面板「添加组件」中选择，自由摆放
+  - text: 
+  - generic: 自由布局
+  - list:
+    - heading "￥5" [level=3]
+    - heading "不允许828" [level=5]
+    - paragraph: 无使用门槛
+    - heading "￥5" [level=3]
+    - heading "不允许" [level=5]
+    - paragraph: 无使用门槛
+    - heading "￥5" [level=3]
+    - heading "新人礼" [level=5]
+    - paragraph: 无使用门槛
+  - text: 
+  - generic: 优惠券
+  - text: 
+  - generic:  
+  - text: 
+  - generic: 魔方
+  - list:
+  - generic:  
+  - text: 
+  - generic: 图文导航
+  - heading "基础组件" [level=3]
+  - list:
+    - generic: 
+    - paragraph: 标题文本
+    - generic: 
+    - paragraph: 商品
+    - generic: 
+    - paragraph: 图片广告
+    - generic: 
+    - paragraph: 图文导航
+    - generic: 
+    - paragraph: 富文本
+    - generic: 
+    - paragraph: 魔方
+    - generic: 
+    - paragraph: 自由布局
+    - generic: 
+    - paragraph: 辅助空白
+    - generic: 
+    - paragraph: 商品搜索
+    - generic: 
+    - paragraph: 公告
+    - generic: 
+    - paragraph: 秒杀矩阵
+    - generic: 
+    - paragraph: 新人专区
+  - heading "营销组件" [level=3]
+  - list:
+    - generic: 
+    - paragraph: 直播
+    - generic: 
+    - paragraph: 视频号直播
+    - generic: 
+    - paragraph: 优惠券
+    - generic: 
+    - paragraph: 膨胀券
+    - generic: 
+    - paragraph: 限时折扣
+    - generic: 
+    - paragraph: 拼团
+    - generic: 
+    - paragraph: 秒杀
+    - generic: 
+    - paragraph: 积分商品
+    - generic: 
+    - paragraph: 社区话题
+  - list:
+    - generic: 
+    - text: 页面设置
+    - generic: 
+    - text: 组件管理
+  - button "上架"
+  - button "保存并继续"
+  - button "保存为草稿"
+- text: 
+- text:     

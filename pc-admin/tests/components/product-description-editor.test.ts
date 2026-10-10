@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { EditorContent } from '@tiptap/vue-3'
 import ProductDescriptionEditor from '../../src/views/catalog/ProductDescriptionEditor.vue'
@@ -26,6 +26,55 @@ describe('product description editor', () => {
     await button(w, '加粗'); expect(w.props('modelValue')).toContain('<strong>')
     await button(w, '撤销'); expect(w.props('modelValue')).not.toContain('<strong>')
     await button(w, '重做'); expect(w.props('modelValue')).toContain('<strong>')
+  })
+  it('restores toolbar focus synchronously and never restores an old selection later', async () => {
+    const w = await setup()
+    document.body.appendChild(w.element)
+    const callbacks: FrameRequestCallback[] = []
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(callback => { callbacks.push(callback); return callbacks.length })
+    try {
+      const e = editor(w)
+      e.commands.selectAll()
+      await button(w, '二级标题')
+      expect(document.activeElement).toBe(e.view.dom)
+      e.commands.setTextSelection(e.state.doc.content.size - 1)
+      pick(w, a)
+      await flushPromises()
+      const input = w.get('.description-image-row input')
+      ;(input.element as HTMLInputElement).focus()
+      await input.setValue('说明')
+      for (const callback of callbacks.splice(0)) callback(performance.now())
+      expect(document.activeElement).toBe(input.element)
+      expect(String(w.props('modelValue'))).toContain('<h2>商品说明</h2>')
+      expect(String(w.props('modelValue'))).toContain(`data-asset-id="${a}"`)
+    } finally {
+      vi.restoreAllMocks()
+      w.element.remove()
+    }
+  })
+  it('does not let a delayed editor focus steal the image description field', async () => {
+    const w = await setup()
+    document.body.appendChild(w.element)
+    const callbacks: FrameRequestCallback[] = []
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(callback => { callbacks.push(callback); return callbacks.length })
+    const focus = vi.spyOn(editor(w).view, 'focus')
+    try {
+      editor(w).commands.setTextSelection(editor(w).state.doc.content.size - 1)
+      pick(w, a)
+      await flushPromises()
+      const input = w.get('.description-image-row input')
+      ;(input.element as HTMLInputElement).focus()
+      await input.setValue('商品产地示意')
+      for (const callback of callbacks.splice(0)) callback(performance.now())
+      await flushPromises()
+      expect(focus).not.toHaveBeenCalled()
+      expect(document.activeElement).toBe(input.element)
+      expect(String(w.props('modelValue'))).toContain(`data-asset-id="${a}"`)
+      expect(String(w.props('modelValue'))).toContain('alt="商品产地示意"')
+    } finally {
+      vi.restoreAllMocks()
+      w.element.remove()
+    }
   })
   it('inserts library images, edits accessible alt text and changes image order without losing prose', async () => {
     const w = await setup(); pick(w, a); await flushPromises(); pick(w, b); await flushPromises()

@@ -60,23 +60,30 @@ function active(type: string) {
 }
 function format(type: string) {
   if (props.disabled || !editor.value) return
-  const command = editor.value.chain().focus()
+  const command = editor.value.chain()
   if (type === 'paragraph') command.setParagraph().run()
   else if (type === 'h2' || type === 'h3') command.toggleHeading({ level: Number(type[1]) as 2 | 3 }).run()
   else if (type === 'bold') command.toggleBold().run()
   else if (type === 'italic') command.toggleItalic().run()
   else if (type === 'bulletList') command.toggleBulletList().run()
   else command.toggleOrderedList().run()
+  // Vue's native toolbar can restore the committed selection immediately.
+  // Tiptap focus() queues a frame that may arrive after the user moves on.
+  editor.value.view.focus()
 }
 function history(action: 'undo' | 'redo') {
-  if (!props.disabled) editor.value?.chain().focus()[action]().run()
+  if (props.disabled || !editor.value) return
+  editor.value.chain()[action]().run()
+  editor.value.view.focus()
 }
 function canHistory(action: 'undo' | 'redo') { void revision.value; return !!editor.value?.can()[action]() }
 function select(asset: Asset) {
   if (props.disabled || !editor.value) return
   if (asset.kind !== 'IMAGE' || !isAssetId(asset.assetId)) { error.value = '请选择素材中心中的有效图片。'; return }
   if (images.value.length >= 20) { error.value = '商品描述最多 20 张图片，请先移除部分图片。'; return }
-  editor.value.chain().focus().insertContent(imageContent(asset.assetId)).run()
+  // Keep the document selection without scheduling a later focus that can steal
+  // typing from the image description field after the picker closes.
+  editor.value.chain().insertContent(imageContent(asset.assetId)).run()
 }
 function editImage(index: number, action: 'remove' | 'before' | 'after' | 'alt', value = '') {
   const current = editor.value, image = images.value[index]

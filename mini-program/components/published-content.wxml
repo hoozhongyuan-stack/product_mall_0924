@@ -1,11 +1,92 @@
+<template name="mosaic-slot">
+  <view class="mosaic-frame" data-link="{{slot.link}}" bindtap="openLink" role="button" aria-label="{{slot.title || '查看图片内容'}}">
+    <image wx:if="{{slot.imageUrl && !failedAssets[slot.imageUrl]}}" class="mosaic-image" src="{{slot.imageUrl}}" mode="aspectFill" data-url="{{slot.imageUrl}}" binderror="onImageError" />
+    <view wx:else class="mosaic-fallback">图片暂不可显示</view>
+    <view wx:if="{{slot.title}}" class="mosaic-title">{{slot.title}}</view>
+  </view>
+</template>
 <template name="published-content">
+  <view wx:if="{{couponClaim.pending}}" class="component-wrap coupon-recovery" role="status">
+    <view>有一笔领取结果等待核对。核对完成前请勿重复领取。</view>
+    <button class="coupon-action" bindtap="retryCouponClaim" disabled="{{couponClaim.busy}}" loading="{{couponClaim.busy}}">核对领取结果</button>
+  </view>
+  <view wx:if="{{couponClaim.message}}" class="component-wrap coupon-message" role="status">{{couponClaim.message}}</view>
+  <view wx:if="{{couponClaim.claimError}}" class="component-wrap coupon-error" role="alert">{{couponClaim.claimError}}</view>
   <block wx:for="{{components}}" wx:key="id">
-    <view wx:if="{{item.type === 'SEARCH'}}" class="home-search">
+    <view wx:if="{{item.type === 'COUPON_LIST'}}" class="component-wrap content-coupons" style="{{item.appearanceStyle}}">
+      <view wx:if="{{couponState === 'loading'}}" class="component-empty" role="status">正在加载优惠券…</view>
+      <view wx:elif="{{couponState === 'error'}}" class="component-empty" role="alert"><view>{{couponError}}</view><button class="coupon-action" bindtap="reloadCoupons">重试加载优惠券</button></view>
+      <block wx:elif="{{couponState === 'ready'}}">
+        <scroll-view scroll-x="{{item.layout === 'SCROLL'}}" class="coupon-viewport">
+          <view class="coupon-layout coupon-layout-{{item.layout}}">
+            <view wx:for="{{couponData[item.id]}}" wx:for-item="coupon" wx:key="id" class="coupon-card">
+              <view class="coupon-amount">{{coupon.amountLabel}}<text class="coupon-kind">{{coupon.kindLabel}}</text></view>
+              <view class="coupon-title">{{coupon.title}}</view>
+              <view class="coupon-copy">{{coupon.thresholdLabel}}</view>
+              <view class="coupon-copy">{{coupon.scopeLabel}} · {{coupon.redemptionLabel}}</view>
+              <view class="coupon-copy">{{coupon.validLabel}}</view>
+              <view wx:if="{{coupon.claimState !== 'GUEST'}}" class="coupon-copy">剩余 {{coupon.remainingQuantity}} 张 · 每人限领 {{coupon.selfClaimLimit}} 张 · 本人已领 {{coupon.selfClaimedCount}} 张</view>
+              <button class="coupon-action" data-component="{{item.id}}" data-id="{{coupon.id}}" bindtap="claimCoupon" disabled="{{couponClaim.busy || couponClaim.pending || (!coupon.canClaim && coupon.claimState !== 'GUEST')}}" loading="{{couponClaim.busy}}">{{coupon.claimLabel}}</button>
+            </view>
+          </view>
+        </scroll-view>
+        <view wx:if="{{!couponData[item.id].length}}" class="component-empty">暂无可展示的优惠券活动。</view>
+      </block>
+    </view>
+    <view wx:elif="{{item.type === 'MOSAIC'}}" class="component-wrap content-mosaic" style="{{item.appearanceStyle}}">
+      <view class="mosaic-layout mosaic-{{item.template}}" style="{{item.gapStyle}}">
+        <block wx:if="{{item.template === 'FEATURED'}}">
+          <view class="mosaic-slot mosaic-primary"><template is="mosaic-slot" data="{{slot: item.items[0], failedAssets: failedAssets}}" /></view>
+          <view class="mosaic-stack" style="{{item.gapStyle}}">
+            <view class="mosaic-slot"><template is="mosaic-slot" data="{{slot: item.items[1], failedAssets: failedAssets}}" /></view>
+            <view class="mosaic-slot"><template is="mosaic-slot" data="{{slot: item.items[2], failedAssets: failedAssets}}" /></view>
+          </view>
+        </block>
+        <block wx:else><view wx:for="{{item.items}}" wx:for-item="slot" wx:key="index" class="mosaic-slot" style="{{item.slotStyle}}"><template is="mosaic-slot" data="{{slot: slot, failedAssets: failedAssets}}" /></view></block>
+      </view>
+    </view>
+    <view wx:elif="{{item.type === 'SPACER'}}" class="content-spacer" style="{{item.appearanceStyle}}{{item.heightStyle}}" aria-hidden="true"></view>
+    <view wx:elif="{{item.type === 'TITLE'}}" class="component-wrap content-heading" style="{{item.appearanceStyle}}">
+      <view class="heading-text" style="{{item.titleStyle}}">{{item.text}}</view>
+      <view wx:if="{{item.subtitle}}" class="heading-subtitle" style="{{item.titleStyle}}">{{item.subtitle}}</view>
+    </view>
+    <view wx:elif="{{item.type === 'IMAGE'}}" class="component-wrap image-ad" style="{{item.appearanceStyle}}" data-link="{{item.link}}" bindtap="openLink" role="button" aria-label="查看图片内容">
+      <view wx:if="{{item.imageUrl && !failedAssets[item.imageUrl]}}" class="ad-frame ratio-{{item.ratio === '1:1' ? 'square' : item.ratio === '16:9' ? 'wide' : 'auto'}}">
+        <image class="ad-image" src="{{item.imageUrl}}" mode="{{item.ratio === 'AUTO' ? 'widthFix' : 'aspectFill'}}" data-url="{{item.imageUrl}}" binderror="onImageError" />
+      </view>
+      <view wx:else class="media-fallback">图片暂不可显示</view>
+    </view>
+    <view wx:elif="{{item.type === 'NAVIGATION'}}" class="component-wrap content-navigation columns-{{item.columns}}" style="{{item.appearanceStyle}}">
+      <view wx:for="{{item.items}}" wx:for-item="entry" wx:key="index" class="navigation-entry" data-link="{{entry.link}}" bindtap="openLink" role="button" aria-label="{{entry.title}}">
+        <image wx:if="{{entry.imageUrl && !failedAssets[entry.imageUrl]}}" class="navigation-image" src="{{entry.imageUrl}}" mode="aspectFill" data-url="{{entry.imageUrl}}" binderror="onImageError" />
+        <view wx:elif="{{entry.imageUrl}}" class="navigation-fallback">图片暂缺</view>
+        <view class="navigation-title">{{entry.title}}</view>
+      </view>
+      <view wx:if="{{!item.items.length}}" class="component-empty">暂无导航内容</view>
+    </view>
+    <view wx:elif="{{item.type === 'PRODUCT_LIST'}}" class="component-wrap" style="{{item.appearanceStyle}}">
+      <scroll-view scroll-x="{{item.layout === 'SCROLL'}}" class="product-viewport">
+        <view class="content-products layout-{{item.layout}}">
+          <view wx:for="{{item.products}}" wx:for-item="product" wx:key="productId" class="content-product" data-link="{{product.link}}" bindtap="openLink" role="button" aria-label="查看{{product.name}}商品详情">
+            <image wx:if="{{product.imageUrl && !failedAssets[product.imageUrl]}}" class="product-image" src="{{product.imageUrl}}" mode="aspectFill" data-url="{{product.imageUrl}}" binderror="onImageError" />
+            <view wx:else class="product-image product-fallback">图片暂缺</view>
+            <view class="product-info">
+              <view class="product-name">{{product.name}}</view>
+              <view class="product-price">¥{{product.price}}<text class="product-price-suffix">起</text></view>
+              <view wx:if="{{!product.purchasable}}" class="product-unavailable">暂不可购买</view>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+      <view wx:if="{{!item.products.length}}" class="component-empty">暂无可展示商品</view>
+    </view>
+    <view wx:elif="{{item.type === 'UNSUPPORTED'}}" class="component-wrap component-empty" role="status">此内容暂不支持，请更新小程序后重试。</view>
+    <view wx:elif="{{item.type === 'SEARCH'}}" class="home-search" style="{{item.appearanceStyle}}">
       <input class="search-input" placeholder="{{item.placeholder}}" value="{{keyword}}" maxlength="100" bindinput="onSearchInput" bindconfirm="submitSearch" confirm-type="search" aria-label="搜索商品" />
       <button class="search-button" bindtap="submitSearch">搜索</button>
     </view>
 
-    <view wx:elif="{{item.type === 'CAROUSEL'}}" class="component-wrap">
+    <view wx:elif="{{item.type === 'CAROUSEL'}}" class="component-wrap" style="{{item.appearanceStyle}}">
       <swiper wx:if="{{item.slides.length}}" class="hero-swiper" indicator-dots autoplay interval="5000" circular>
         <swiper-item wx:for="{{item.slides}}" wx:for-item="slide" wx:key="imageUrl">
           <view class="slide" bindtap="openLink" data-link="{{slide.link}}" role="button" aria-label="查看精选内容">
@@ -16,7 +97,7 @@
       </swiper>
     </view>
 
-    <view wx:elif="{{item.type === 'IMAGE_HOTZONE'}}" class="component-wrap">
+    <view wx:elif="{{item.type === 'IMAGE_HOTZONE'}}" class="component-wrap" style="{{item.appearanceStyle}}">
       <view class="hotzone">
         <image wx:if="{{!failedAssets[item.imageUrl]}}" class="hotzone-image" src="{{item.imageUrl}}" mode="widthFix" data-url="{{item.imageUrl}}" binderror="onImageError" />
         <view wx:else class="media-fallback">图片暂不可显示</view>
@@ -24,14 +105,14 @@
       </view>
     </view>
 
-    <view wx:elif="{{item.type === 'NOTICE'}}" class="notice-wrap">
+    <view wx:elif="{{item.type === 'NOTICE'}}" class="notice-wrap" style="{{item.appearanceStyle}}">
       <view class="notice-label">公告</view>
       <view class="notice-text">{{item.text}}</view>
       <button wx:if="{{item.link}}" class="notice-open" data-link="{{item.link}}" bindtap="openLink" aria-label="查看公告关联内容">›</button>
     </view>
 
-    <view wx:elif="{{item.type === 'DIVIDER'}}" class="home-divider divider-{{item.dividerStyle}}"></view>
-    <view wx:elif="{{item.type === 'FILING'}}" class="filing">{{item.recordNo}}</view>
+    <view wx:elif="{{item.type === 'DIVIDER'}}" class="home-divider divider-{{item.dividerStyle}}" style="{{item.appearanceStyle}}"></view>
+    <view wx:elif="{{item.type === 'FILING'}}" class="filing" style="{{item.appearanceStyle}}">{{item.recordNo}}</view>
   </block>
   <view class="bottom-space"></view>
 </template>

@@ -1,0 +1,156 @@
+
+> product-mall-admin@0.1.0 test:browser
+> playwright test --project=desktop --project=mobile --grep phase3
+
+[WebServer] (node:21021) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 4 tests using 1 worker
+
+(node:21033) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [desktop] › tests/browser/mocked.spec.ts:729:3 › phase3 HOME: coupon config and revision-bound release reports (30.1s)
+(node:21262) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  2 [desktop] › tests/browser/mocked.spec.ts:729:3 › phase3 MICRO: coupon config and revision-bound release reports (30.1s)
+(node:21614) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  3 [mobile] › tests/browser/mocked.spec.ts:729:3 › phase3 HOME: coupon config and revision-bound release reports (30.1s)
+(node:21875) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  4 [mobile] › tests/browser/mocked.spec.ts:729:3 › phase3 MICRO: coupon config and revision-bound release reports (30.1s)
+
+
+  1) [desktop] › tests/browser/mocked.spec.ts:729:3 › phase3 HOME: coupon config and revision-bound release reports
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('.home-component-library').getByRole('button', { name: '优惠券', exact: true })
+
+
+      750 |     })
+      751 |     await page.goto(pageType === 'HOME' ? '/pages/home' : `/pages/micro?pageId=${ids.a}`)
+    > 752 |     await page.locator('.home-component-library').getByRole('button', { name: '优惠券', exact: true }).click()
+          |                                                                                                     ^
+      753 |     await page.getByLabel('优惠券来源', { exact: true }).selectOption('MANUAL')
+      754 |     await page.getByLabel('优惠券活动 ID', { exact: true }).fill(ids.b)
+      755 |     await page.getByLabel('优惠券活动 ID', { exact: true }).press('Tab')
+        at /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin/tests/browser/mocked.spec.ts:752:101
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase3-HOME-coupon--95dfa-ision-bound-release-reports-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/browser/mocked-phase3-HOME-coupon--95dfa-ision-bound-release-reports-desktop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase3-HOME-coupon--95dfa-ision-bound-release-reports-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/browser/mocked-phase3-HOME-coupon--95dfa-ision-bound-release-reports-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests/browser/mocked.spec.ts:729:3 › phase3 MICRO: coupon config and revision-bound release reports
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('.home-component-library').getByRole('button', { name: '优惠券', exact: true })
+
+
+      750 |     })
+      751 |     await page.goto(pageType === 'HOME' ? '/pages/home' : `/pages/micro?pageId=${ids.a}`)
+    > 752 |     await page.locator('.home-component-library').getByRole('button', { name: '优惠券列表', exact: true }).click()
+          |                                                                                                     ^
+      753 |     await page.getByLabel('优惠券来源', { exact: true }).selectOption('MANUAL')
+      754 |     await page.getByLabel('优惠券活动 ID', { exact: true }).fill(ids.b)
+      755 |     await page.getByLabel('优惠券活动 ID', { exact: true }).press('Tab')
+        at /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin/tests/browser/mocked.spec.ts:752:101
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase3-MICRO-coupon-e7dc4-ision-bound-release-reports-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/browser/mocked-phase3-MICRO-coupon-e7dc4-ision-bound-release-reports-desktop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase3-MICRO-coupon-e7dc4-ision-bound-release-reports-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/browser/mocked-phase3-MICRO-coupon-e7dc4-ision-bound-release-reports-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [mobile] › tests/browser/mocked.spec.ts:729:3 › phase3 HOME: coupon config and revision-bound release reports
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('.home-component-library').getByRole('button', { name: '优惠券', exact: true })
+
+
+      750 |     })
+      751 |     await page.goto(pageType === 'HOME' ? '/pages/home' : `/pages/micro?pageId=${ids.a}`)
+    > 752 |     await page.locator('.home-component-library').getByRole('button', { name: '优惠券列表', exact: true }).click()
+          |                                                                                                     ^
+      753 |     await page.getByLabel('优惠券来源', { exact: true }).selectOption('MANUAL')
+      754 |     await page.getByLabel('优惠券活动 ID', { exact: true }).fill(ids.b)
+      755 |     await page.getByLabel('优惠券活动 ID', { exact: true }).press('Tab')
+        at /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin/tests/browser/mocked.spec.ts:752:101
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase3-HOME-coupon--95dfa-ision-bound-release-reports-mobile/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/browser/mocked-phase3-HOME-coupon--95dfa-ision-bound-release-reports-mobile/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase3-HOME-coupon--95dfa-ision-bound-release-reports-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/browser/mocked-phase3-HOME-coupon--95dfa-ision-bound-release-reports-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [mobile] › tests/browser/mocked.spec.ts:729:3 › phase3 MICRO: coupon config and revision-bound release reports
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('.home-component-library').getByRole('button', { name: '优惠券', exact: true })
+
+
+      750 |     })
+      751 |     await page.goto(pageType === 'HOME' ? '/pages/home' : `/pages/micro?pageId=${ids.a}`)
+    > 752 |     await page.locator('.home-component-library').getByRole('button', { name: '优惠券列表', exact: true }).click()
+          |                                                                                                     ^
+      753 |     await page.getByLabel('优惠券来源', { exact: true }).selectOption('MANUAL')
+      754 |     await page.getByLabel('优惠券活动 ID', { exact: true }).fill(ids.b)
+      755 |     await page.getByLabel('优惠券活动 ID', { exact: true }).press('Tab')
+        at /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin/tests/browser/mocked.spec.ts:752:101
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase3-MICRO-coupon-e7dc4-ision-bound-release-reports-mobile/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/browser/mocked-phase3-MICRO-coupon-e7dc4-ision-bound-release-reports-mobile/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase3-MICRO-coupon-e7dc4-ision-bound-release-reports-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/browser/mocked-phase3-MICRO-coupon-e7dc4-ision-bound-release-reports-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    [desktop] › tests/browser/mocked.spec.ts:729:3 › phase3 HOME: coupon config and revision-bound release reports
+    [desktop] › tests/browser/mocked.spec.ts:729:3 › phase3 MICRO: coupon config and revision-bound release reports
+    [mobile] › tests/browser/mocked.spec.ts:729:3 › phase3 HOME: coupon config and revision-bound release reports
+    [mobile] › tests/browser/mocked.spec.ts:729:3 › phase3 MICRO: coupon config and revision-bound release reports

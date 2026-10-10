@@ -28,7 +28,7 @@
     <button class="text-action" bindtap="browseCatalog">浏览商品分类</button>
   </view>
   <block wx:else>
-    <template is="published-content" data="{{components: components, keyword: keyword, failedAssets: failedAssets}}" />
+    <template is="published-content" data="{{components: components, keyword: keyword, failedAssets: failedAssets, couponState: couponState, couponData: couponData, couponError: couponError, couponClaim: couponClaim}}" />
   </block>
 </view>
 <storefront-shell show-service="{{true}}" />

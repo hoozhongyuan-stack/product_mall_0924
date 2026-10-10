@@ -1,0 +1,30 @@
+.preview-component { position: relative; min-width: 0; }
+.preview-interactive { cursor: pointer; outline: 2px solid transparent; outline-offset: -2px; }
+.preview-interactive:hover { outline-color: #e6bdb7; }
+.preview-interactive:focus-visible,.preview-selected { outline-color: #b63f32; z-index: 1; }
+.preview-title { padding: 16px; line-height: 1.45; overflow-wrap: anywhere; }
+.preview-title p { margin: 6px 0 0; color: #72635c; font-size: 13px; }
+.preview-image { min-height: 72px; text-align: center; }
+.preview-image img { width: 100%; display: block; object-fit: cover; }
+.preview-image span { display: block; padding: 24px 12px; color: #72635c; }
+.preview-navigation { display: grid; padding: 14px 8px; gap: 12px 8px; font-size: 12px; }
+.preview-navigation > div { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; overflow-wrap: anywhere; }
+.preview-navigation img { width: 44px; height: 44px; object-fit: cover; border-radius: 10px; }
+.preview-image-error { color: #72635c; font-size: 10px; }
+.preview-products { display: grid; gap: 10px; padding: 12px; }
+.preview-products-GRID { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.preview-products article { min-width: 0; border-radius: 10px; background: #fff; overflow: hidden; }
+.preview-products article > img,.preview-product-image-placeholder { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.preview-product-image-placeholder { background: #f5f0eb; display: flex; align-items: center; justify-content: center; color: #756960; font-size: 12px; }
+.preview-products article > div { padding: 10px; font-size: 13px; }
+.preview-products article strong { overflow-wrap: anywhere; display: block; }
+.preview-price { margin: 8px 0 4px; color: #b63f32; font-weight: 700; }
+.preview-products article small { color: #76635b; font-size: 11px; }
+.preview-products-LIST article { display: grid; grid-template-columns: 90px minmax(0,1fr); }
+.preview-products-SCROLL { display: flex; overflow-x: auto; }
+.preview-products-SCROLL article { width: 140px; flex-shrink: 0; }
+.preview-product-empty { grid-column: 1 / -1; color: #72635c; font-size: 12px; }
+.preview-hotzone { position: absolute; box-sizing: border-box; border: 1px dashed #b63f32; color: #b63f32; background: #b63f3218; font-size: 10px; text-align: left; pointer-events: none; }
+.preview-carousel-next { position: absolute; bottom: 8px; right: 8px; border: 0; border-radius: 20px; padding: 4px 9px; color: #fff; background: #342920b3; font-size: 11px; }
+.preview-mosaic{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));min-height:100px}.preview-mosaic-THREE{grid-template-columns:repeat(3,minmax(0,1fr))}.preview-mosaic-FOUR{grid-template-columns:repeat(2,minmax(0,1fr))}.preview-mosaic>div{position:relative;min-width:0;min-height:80px;aspect-ratio:1;overflow:hidden}.preview-mosaic img{display:block;width:100%;height:100%;object-fit:cover}.preview-mosaic-FEATURED>div:first-child{grid-row:span 2;aspect-ratio:auto}.preview-mosaic-FEATURED>div:not(:first-child){aspect-ratio:2}.preview-mosaic-empty{display:flex;width:100%;height:100%;justify-content:center;align-items:center;background:#f5f0eb;color:#72635c;font-size:12px}.preview-mosaic-title{position:absolute;bottom:0;left:0;right:0;padding:8px;background:#222c;color:#fff;font-size:12px;overflow-wrap:anywhere}.preview-spacer{min-width:1px}
+.preview-coupons{display:grid;gap:10px;padding:12px}.preview-coupons article{display:flex;border:1px solid #dfb8bd;border-radius:10px;min-width:0;background:#fff7f7;overflow:hidden}.preview-coupon-amount{display:flex;flex-direction:column;gap:4px;justify-content:center;color:#A3202B;font-size:24px;font-weight:700;padding:16px;border-right:1px dashed #dfb8bd;min-width:75px}.preview-coupons small{font-size:11px;font-weight:400;display:block}.preview-coupon-copy{padding:12px;display:flex;flex-direction:column;gap:6px;justify-content:center;min-width:0;overflow-wrap:anywhere}.preview-coupon-copy strong{font-size:13px}.preview-coupon-copy small{color:#735257}.preview-coupons-SCROLL{display:flex;overflow-x:auto}.preview-coupons-SCROLL article{min-width:280px;flex-shrink:0}

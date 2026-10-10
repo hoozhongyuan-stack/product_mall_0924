@@ -150,6 +150,8 @@ def validate_target(domain, content, version):
             raise PageConfigError("历史版本素材不可用，请重新上传后发布。", "PUBLISH_TARGET_INVALID", 422) from exc
         historical = SimpleNamespace(id=content.id, page_type=content.page_type, draft_config=version.config_json)
         _validate_for_publication(historical)
+        from .runtime import check_runtime
+        check_runtime(version.config_json)
 
 
 def rollback_response(request, domain, page_id):

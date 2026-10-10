@@ -1,0 +1,296 @@
+
+> product-mall-miniprogram@0.1.0 test:coverage
+> node --test --experimental-test-coverage --test-coverage-exclude='tests/**' --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 tests/*.test.js
+
+✔ case presentation distinguishes waiting confirmation from a completed refund (10.258875ms)
+✔ draft key persists only same account and same order and retry retains immutable body (2.895042ms)
+✔ application retries unknown result with same key and body even after reopening (11.995833ms)
+✔ server preview controls displayed amount and delayed previous selection cannot win (0.856417ms)
+✔ definitive stale rejection clears retry then refreshes server eligibility (0.834875ms)
+✔ member switch discards private async detail result and an old 401 does not log out new member (8.589667ms)
+✔ withdraw requires confirmation and sends current revision, review conflict refreshes (3.3095ms)
+✔ changing line invalidates previous preview; unloading prevents private write responses (0.76475ms)
+✔ scope labels distinguish shipment and safe unknown refund progress (0.233125ms)
+✔ pagination retains records on retry error and login states clear private forms (0.692459ms)
+✔ order redemption display shows available capacity after active after-sale holds (0.900917ms)
+✔ idle retained page member switch clears old draft and retry before rebinding session (1.655833ms)
+✔ zero cash aftersale preview permits quantity-based application without claiming funds (0.437625ms)
+✔ member separates goods and shipping and zero completed copy from cash completion (0.348083ms)
+✔ description images use the configured API origin and fit the detail width (2.513958ms)
+✔ description URL adaptation only rewrites canonical public asset paths on image nodes (0.293542ms)
+✔ category tree excludes inactive items and keeps the two levels (1.522583ms)
+✔ product presentation uses actual media and on-sale SKU data (2.997208ms)
+✔ API client sends encoded filters and reports delisted items (1.167958ms)
+✔ category page loads real filters, list, search and detail navigation (2.666584ms)
+✔ home links open a selected category or prefilled cross-category search (1.170958ms)
+✔ detail page shows only received SKU choices and handles delisting (7.025084ms)
+✔ newer delisting response wins over a stale detail response (0.836083ms)
+✔ unavailable direct product link returns to catalog without a page to pop (0.920875ms)
+✔ cart merges SKU, updates quantity and quote keeps only price hint (2.662417ms)
+✔ login recovery stores only SKU, quantity and non-personal price hint, once (0.999958ms)
+✔ API sends bearer token and clears it after 401 (1.828875ms)
+✔ WeChat login exchanges code and stores only app token (0.177041ms)
+✔ checkout quotes once on first show and restores selection after login (1.403959ms)
+✔ checkout shows each server settlement amount and keeps public submit closed (4.933083ms)
+✔ checkout never presents stale goods total as final payable when settlement is absent (1.128416ms)
+✔ coupon and points selection request a fresh server quote without calculating locally (5.120541ms)
+✔ coupon presentation validates money dates states and safe scope (10.736625ms)
+✔ login and hide guards discard private data (1.966792ms)
+✔ claim persists UUID owner before POST and blocks duplicate taps (1.587458ms)
+✔ UNKNOWN checks exact本人 operation then retries same key (9.996459ms)
+✔ COMPLETED recovery avoids POST, mismatched result stays unknown (0.65675ms)
+✔ storage failure prevents POST (0.857833ms)
+✔ account switching never shows or replays old claim (6.49725ms)
+✔ hidden claim keeps durable key for next show and unload rejects late response (3.953459ms)
+✔ filters clear old rows and invalidate old pagination (1.295584ms)
+✔ empty error auth and loadmore failure distinct (0.65825ms)
+✔ only returned scoped products and implemented routes can open (0.288167ms)
+✔ changed identity before tap prevents issuing to a new account (0.117ms)
+✔ definite refusal clears attempt, malformed success preserves recovery (0.208833ms)
+✔ pull refresh pagination route guards and member coupon entry remain usable (2.52775ms)
+✔ order cumulative benefits are clearly separate from a single refund (1.557541ms)
+✔ paid zero order uses settlement wording without claiming actual receipt (4.035875ms)
+✔ pure points helpers never convert by cash ratio and reject unsafe prices snapshots (6.685458ms)
+✔ public exchange list paginates retries empty and hides stale responses (4.4605ms)
+✔ quote requires本人 and revalidates quantity address and expiry before submission (2.722208ms)
+✔ submission stores owner body UUID before POST and blocks duplicate click (4.68625ms)
+✔ UNKNOWN checks exact本人 receipt NOT_FOUND retries original body key, even expired quote (7.134541ms)
+✔ COMPLETED recovery skips POST and rejects mismatched points result (2.791666ms)
+✔ persist failure prevents network; 403 is definite but 408 429 remain recoverable (5.252875ms)
+✔ hidden submission owner durable intent survives but never restores old account (1.32575ms)
+✔ changed account during quote and before submit never sends new account old request (0.327125ms)
+✔ POINTS order presentation shows integer integral values without payment controls (1.5345ms)
+✔ SHIP quote includes selected address and rejects a mismatched address snapshot (2.638125ms)
+✔ public detail login and unavailable malformed auth network states are recoverable (0.33075ms)
+✔ quantity validation stale requotes and submit expiry are guarded (0.252292ms)
+✔ load refresh generations unload and own pending on show preserve identity (3.376459ms)
+✔ implemented entry routes and image fallback do not depend on cart or money (3.62275ms)
+✔ malformed recovery and storage clear errors keep original key available (0.890583ms)
+✔ POINTS aftersale uses exact refund integral fields and separates proposal from completion (1.462042ms)
+✔ pending exact owner recovery remains available when public offer disappears (0.890958ms)
+✔ pending owner recovery ignores address service failure and never needs a new quote (0.699083ms)
+✔ POINTS proposals do not claim approval before review and never use cash refund labels (0.218041ms)
+✔ POINTS waiting and event labels identify points return rather than cash (0.249375ms)
+✔ mixed order shows independent authoritative fulfillment statuses and quantities (29.166ms)
+✔ tracking query shows events, empty result, retry and rejects an old member response (5.102958ms)
+✔ voucher QR is paid-member data only; failed image keeps selectable code available (1.919875ms)
+✔ QR written after member switch is deleted without displaying the old voucher (1.050916ms)
+✔ private voucher is only shown for a paid order and closed order does not offer receipt confirmation (0.074ms)
+✔ receipt confirmation requires user confirmation, uses server order, and blocks duplicate taps (0.490708ms)
+✔ receipt confirmation failure keeps shipped status and permits refresh (0.295542ms)
+✔ logout while receipt response is in flight cannot restore a private order (0.235666ms)
+✔ redeem validity date comes from product and quote service, without client calculation (2.813584ms)
+✔ schema3 maps every fixed mosaic and design-unit spacers (2.6325ms)
+✔ mosaic invalid shape is controlled and missing links/images never navigate externally (0.7855ms)
+✔ published home sharing uses safe cover/title and suppresses drafts on failures (22.496916ms)
+✔ micro sharing uses UUID path and safe timeline query with no private image URL (2.349958ms)
+✔ share cover guard rejects private, external and malformed public URL forms (1.692875ms)
+✔ home never enables share on a success envelope without a published version (0.435292ms)
+✔ published home maps approved components and safe theme values (4.891416ms)
+✔ home page reads published content and opens internal product/category/page/search targets (19.497792ms)
+✔ unpublished home keeps catalog available and never renders draft content (1.019416ms)
+✔ schema 2 maps all new components with server-owned product prices (1.485959ms)
+✔ unknown components and unsupported schema return controlled fallbacks (0.554792ms)
+✔ home sends supported schema and maps compatibility failures to actionable Chinese (1.714875ms)
+✔ new component defaults ignore malformed appearance, links and product values (0.407333ms)
+✔ product card resolves controlled relative app asset URL against API base (0.25825ms)
+✔ member presentation preserves debt and explains historical snapshots (4.65725ms)
+✔ freeze and release never pretend to be balance awards (0.723208ms)
+✔ unauthenticated member page clears details (1.117833ms)
+✔ late profile response cannot restore after logout or unload (0.970125ms)
+✔ older response cannot replace latest refresh (0.389041ms)
+✔ old session response cannot erase new member account (0.192875ms)
+✔ pagination blocks duplicate requests and retries failed next page (0.352292ms)
+✔ empty malformed and service failure are distinct states (1.235875ms)
+✔ refresh discards stale page and expired auth clears rows (0.214292ms)
+✔ consumption retains signed adjustments and traces grade downgrade with order (0.123791ms)
+✔ hidden list discards in-flight data and blocks late pagination from member switch (0.166333ms)
+✔ member controls open implemented routes and login returns to the calling page (1.024ms)
+✔ consumption page reads only本人 endpoint and renders non-reward adjustment (0.269ms)
+✔ public consumption causes explain completion refunds and reversal without leaking internal source (0.099709ms)
+✔ published micro page loads mapped components and allows another published page (10.554917ms)
+✔ micro page blocks repeated page in stack and page-stack overflow (0.559584ms)
+✔ catalog recovery replaces the page when navigation stack is full (0.498459ms)
+✔ unpublished micro page hides content and provides retry and return (0.703958ms)
+✔ published page with no visible components has an explicit empty state (1.801125ms)
+✔ network failure is retryable and invalid page ID never reaches server (0.634583ms)
+✔ API carries order idempotency header without dropping bearer (1.213417ms)
+✔ offline gate needs server availability and instructions; WeChat requires server availability (3.910666ms)
+✔ checkout blocks duplicate clicks and retries unknown result with same body and key (2.0315ms)
+✔ closed checkout gate makes no order request (0.200041ms)
+✔ reported payment stays pending; result reads server state (2.275042ms)
+✔ report retries same key and cancel requires user confirmation (0.67275ms)
+✔ detail 401 clears private data and asks login (0.616792ms)
+✔ order pagination replaces refresh and appends next page (1.702417ms)
+✔ successful user report refreshes pending status and definitive rejection permits correction (0.411166ms)
+✔ cancel uses server result and cannot cancel an already paid refreshed order (0.813458ms)
+✔ invalid detail does not call server, unavailable target and network errors can retry (0.344708ms)
+✔ newer detail state wins over delayed old response (0.209459ms)
+✔ list handles logout, filtering, network retry and failed pagination without losing rows (0.263583ms)
+✔ definitive submission rejection clears pending key but authentication failure retains retry (0.264792ms)
+✔ unknown report survives failed refresh and later retries same note and key (0.535375ms)
+✔ logout invalidates in-flight order list response and never restores private rows (0.164291ms)
+✔ payment report draft warns before leaving and clears after confirmed report (0.200667ms)
+✔ elapsed pending order hides payment guidance and new report without changing server status (0.213542ms)
+✔ timeout and customer close reasons have distinct accurate labels (0.072334ms)
+✔ unknown prior report can replay same key after deadline while new reports stay disabled (0.2155ms)
+✔ deadline reached while detail open blocks a newly clicked report and hides instructions (0.129125ms)
+✔ after-sale and refunded orders present accurate states without payment or fulfillment actions (2.110666ms)
+✔ schema4 coupon component requests one version-bound hydration and renders every authoritative claim state (13.147416ms)
+✔ direct embedded claim reuses owner-bound durable UUID and UNKNOWN recovery exactly once (6.624041ms)
+✔ page/version mismatch, member switch and hide never publish stale private coupon state (2.104584ms)
+✔ no coupons avoids hydration; guest opens login; invalid events do not claim (0.867875ms)
+✔ malformed hydration, failed retry and quota refusal preserve safe states (1.120875ms)
+✔ foreign member pending is not shown and guest canClaim flag is rejected (0.929083ms)
+✔ private or unavailable scoped products do not turn a restricted coupon into a site-wide coupon (0.287375ms)
+✔ coupon version conflict retry reloads the published page before another hydration (0.328958ms)
+✔ both purchase entries open a drawer without writing a cart or checkout (5.664333ms)
+✔ drawer rejects unavailable SKUs, caps stock and restores selection on cancel (0.902167ms)
+✔ confirmed drawer action uses existing cart and keeps confirmed quantity and count (0.879084ms)
+✔ direct purchase confirms only inside drawer and share contains the product route (0.410292ms)
+✔ drawer failed persistence keeps recoverable selection and unavailable data closes drawer (0.871625ms)
+✔ cart exposes old price, actual fulfillment and safe reselect route, keeps invalid row until explicit removal (0.83475ms)
+✔ guest redeem checkout prompts login without address requirement, retains goods and requotes after login with gate closed (3.367875ms)
+✔ reselect entry opens drawer after detail arrives and unload ignores late response (0.733542ms)
+✔ stock rejection keeps order uncreated, requotes actual stock and adjusts only quantities after confirmation (1.576041ms)
+✔ cart selection, cached prices, management and quantity controls preserve server checkout guard (1.319333ms)
+✔ cart reselect cancels without change and confirms an atomic replacement, merging an existing target SKU (0.426667ms)
+✔ cart reselect refuses changed source or merged quantity above stock, without removing any row (0.295541ms)
+✔ reselect same SKU keeps other rows and selection state; missing or failed storage never deletes source (0.465208ms)
+✔ drawer does not bypass unavailable selection or persist outside confirmation, and navigation failure can retry (0.446792ms)
+✔ detail media fallbacks and page lifecycle refresh actual cart count and safely recover failed loads (6.495875ms)
+✔ empty SKU response leaves a disabled recoverable drawer without inventing sellable stock (0.295792ms)
+✔ stock recovery cannot adjust sold-out or malformed stock and failed requote remains recoverable (0.286458ms)
+✔ checkout guest address login and form recovery use existing routes and invalid benefit input never requotes (0.569625ms)
+✔ presentation retains original request while showing partial acceptance and waived-return reason (5.075958ms)
+✔ server return permission is required and carrier/tracking validation rejects unsafe inputs (2.164833ms)
+✔ unknown shipment outcome freezes body/key across reopen and refresh must precede retry (1.6275ms)
+✔ unknown write resolved by authoritative read does not submit again (0.334416ms)
+✔ definitive revision conflict refreshes and stops correction after acceptance (0.550542ms)
+✔ member switching and unload prevent shipment responses from restoring private state (0.509125ms)
+✔ idle member change drops retained form and pending key before reading new session (0.577333ms)
+✔ malformed success preserves unknown request and a late old write cannot erase new member view (0.589334ms)
+✔ known field error keeps editable form; refreshing same member preserves an unsaved correction (0.525625ms)
+✔ zero-approved return acceptance reports no money refund rather than a pending refund (0.173166ms)
+✔ member address shortcut reaches existing address management without creating a new flow (19.036167ms)
+✔ catalog image failure identifies only the affected product and clears on full reload (4.109291ms)
+✔ address selection presents stored choice and ignores forged IDs without changing selection (1.094542ms)
+✔ address auth failure exposes a login return compatible with the existing login page (0.928916ms)
+✔ native region picker updates three address fields immutably and missing fields stay actionable (2.473375ms)
+✔ order shortcuts keep server fulfillment filters and points intersection without a client-side slice (2.577959ms)
+✔ member count labels preserve real zero and show unknown for absent or malformed keys (0.489708ms)
+✔ address edit loads current revision and preserves entered values after conflict, then creates a new address (1.139083ms)
+✔ address delete requires confirmation and current revision, while refresh supports empty and auth states (4.443334ms)
+✔ login keeps agreement gate, returns to address caller after success and reports failed authorization (1.516292ms)
+✔ order progress uses server fulfillment states and hides misleading linear steps for refunds and aftersales (0.856792ms)
+✔ launch target keeps a shared product or scan query and rejects external paths (1.807459ms)
+✔ direct target redirects once on cold launch and not after completion or hot show (2.246375ms)
+✔ startup page waits for first render, uses fallback on GIF error, and skips once (2.441584ms)
+✔ unpublished startup still counts down with local brand fallback (0.772ms)
+✔ three-second countdown starts onReady and restores the scan target only once (0.735334ms)
+✔ a shared target is intercepted before its product request (0.995208ms)
+✔ failed startup redirect resumes the original target instead of leaving it blank (4.765958ms)
+✔ backgrounding pauses visible countdown; returning resumes without a new launch (0.543625ms)
+✔ storefront navigation keeps the four fixed routes and safe icon fallbacks (2.936584ms)
+✔ malformed navigation falls back; service accepts only safe published phone or QR (0.256542ms)
+✔ storefront shell navigates only fixed routes and phone/QR require user action (2.207583ms)
+✔ QR entry opens only after tap and network failure hides contact without hiding navigation (0.507ms)
+✔ server PNG data URI is written as base64 user file and removed after use (2.450125ms)
+✔ startup cleanup only deletes voucher files under the private user directory (0.12375ms)
+✔ missing filesystem or malformed PNG keeps text-code fallback without writing (0.231791ms)
+✔ checkout WeChat selection requires available server quote and survives refresh (3.971333ms)
+✔ WeChat submit uses selected method and restores unknown request same key (0.892417ms)
+✔ native payment success queries server and never claims local PAID (2.627542ms)
+✔ cancel queries before NOTPAY permits retry and reuses prepay UUID (0.574375ms)
+✔ unknown prepay retries same UUID after reload without premature native invocation (0.901125ms)
+✔ unknown native result survives reload and failed query never reprompts (0.460667ms)
+✔ only authoritative order confirms paid even when native result failed (0.33325ms)
+✔ expired unavailable offline zero and successful-funds orders cannot start pay (0.674875ms)
+✔ duplicate pay clicks and cancel blocked during prepay (0.258583ms)
+✔ invalid signed parameters never enter native pay (0.257ms)
+✔ payment 401 clears visible private order and persisted payment intent (0.268209ms)
+✔ payment intents for two orders survive independently and omit signed private data (0.304334ms)
+✔ new successful funds snapshot overrides older NOTPAY query without permitting repay (0.196ms)
+✔ query 401 clears intent and private data; expired order can query without native pay (0.205541ms)
+✔ logout during prepay prevents native invocation and clears private view (0.205959ms)
+✔ deadline reached while page open forbids prepay without locally closing order (0.452959ms)
+✔ closed WeChat order can query late payment while remaining closed (0.294709ms)
+✔ switching member while prepay in flight clears view and never opens former member payment (0.23125ms)
+ℹ tests 214
+ℹ suites 0
+ℹ pass 214
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 291.825375
+ℹ start of coverage report
+ℹ ---------------------------------------------------------------------------------------------------------------------------------------
+ℹ file                   | line % | branch % | funcs % | uncovered lines
+ℹ ---------------------------------------------------------------------------------------------------------------------------------------
+ℹ components             |        |          |         |
+ℹ  storefront-shell      |        |          |         |
+ℹ   index.js             |  97.18 |    75.00 |   64.29 | 67-68
+ℹ lib                    |        |          |         |
+ℹ  aftersales.js         |  97.65 |    89.29 |  100.00 | 16-17
+ℹ  api.js                |  95.92 |    97.22 |  100.00 | 4-5
+ℹ  benefits.js           | 100.00 |    90.00 |  100.00 |
+ℹ  cart.js               |  95.65 |    88.57 |  100.00 | 18-19
+ℹ  catalog.js            | 100.00 |    88.14 |  100.00 |
+ℹ  coupon-page.js        | 100.00 |    89.92 |  100.00 |
+ℹ  coupons.js            | 100.00 |    91.23 |  100.00 |
+ℹ  exchange.js           | 100.00 |    91.53 |   84.62 |
+ℹ  home.js               |  94.62 |    95.97 |   95.24 | 29-35
+ℹ  member-page.js        | 100.00 |    94.64 |  100.00 |
+ℹ  member.js             | 100.00 |    88.89 |  100.00 |
+ℹ  order-filters.js      | 100.00 |   100.00 |  100.00 |
+ℹ  orders.js             |  99.24 |    92.91 |   94.74 | 24
+ℹ  page-coupons.js       | 100.00 |    83.58 |  100.00 |
+ℹ  page-links.js         |  90.48 |    94.74 |  100.00 | 35-38
+ℹ  published-sharing.js  | 100.00 |   100.00 |  100.00 |
+ℹ  return-shipment.js    |  95.56 |    70.37 |  100.00 | 5-6
+ℹ  session.js            | 100.00 |    89.47 |  100.00 |
+ℹ  startup.js            |  96.30 |    76.92 |  100.00 | 40-41
+ℹ  storefront.js         | 100.00 |   100.00 |  100.00 |
+ℹ  voucher-image.js      | 100.00 |    75.86 |   84.62 |
+ℹ  wechat-payment.js     | 100.00 |    94.59 |  100.00 |
+ℹ pages                  |        |          |         |
+ℹ  addresses             |        |          |         |
+ℹ   addresses.js         | 100.00 |    91.67 |  100.00 |
+ℹ   edit.js              | 100.00 |    96.15 |  100.00 |
+ℹ  aftersales            |        |          |         |
+ℹ   detail.js            |  96.79 |    84.76 |   71.43 | 69 139-140 149 152
+ℹ   index.js             |  89.02 |    63.64 |   65.38 | 40-41 79-81 97-100 103-105 109 114-115 130-133
+ℹ  cart                  |        |          |         |
+ℹ   cart.js              | 100.00 |    82.14 |  100.00 |
+ℹ  checkout              |        |          |         |
+ℹ   checkout.js          |  98.43 |    87.50 |   88.10 | 73-74 156-157
+ℹ  coupons               |        |          |         |
+ℹ   campaigns.js         | 100.00 |   100.00 |  100.00 |
+ℹ   index.js             | 100.00 |   100.00 |  100.00 |
+ℹ  exchange              |        |          |         |
+ℹ   detail.js            |  98.20 |    86.58 |  100.00 | 35-36
+ℹ   index.js             | 100.00 |    88.57 |   93.33 |
+ℹ  home                  |        |          |         |
+ℹ   home.js              |  92.94 |    91.67 |   45.00 | 25-27 34 82-83
+ℹ  index                 |        |          |         |
+ℹ   index.js             |  81.30 |    57.45 |   65.22 | 33 37-39 58 60-62 82-84 88-93 97-100 110-111
+ℹ  launch                |        |          |         |
+ℹ   launch.js            |  95.10 |    75.00 |   87.50 | 63-64 72-74
+ℹ  login                 |        |          |         |
+ℹ   login.js             | 100.00 |   100.00 |  100.00 |
+ℹ  member                |        |          |         |
+ℹ   consumption.js       | 100.00 |   100.00 |  100.00 |
+ℹ   index.js             | 100.00 |   100.00 |   88.89 |
+ℹ   points.js            | 100.00 |   100.00 |  100.00 |
+ℹ  micro                 |        |          |         |
+ℹ   detail.js            |  91.35 |    85.71 |   61.11 | 35-37 44 83-85 101-102
+ℹ  orders                |        |          |         |
+ℹ   detail.js            |  90.73 |    84.49 |   73.68 | 24-25 41-45 53-54 93-97 116-117 142-144 151-152 175-176 193-194 214-215 308-309
+ℹ   list.js              | 100.00 |    90.63 |   58.33 |
+ℹ  product               |        |          |         |
+ℹ   detail.js            | 100.00 |    97.56 |   94.87 |
+ℹ ---------------------------------------------------------------------------------------------------------------------------------------
+ℹ all files              |  96.04 |    87.46 |   87.58 |
+ℹ ---------------------------------------------------------------------------------------------------------------------------------------
+ℹ end of coverage report

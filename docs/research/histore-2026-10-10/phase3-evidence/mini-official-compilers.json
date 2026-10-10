@@ -1,0 +1,16 @@
+[
+  {
+    "binary": "/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc",
+    "sourceCount": 23,
+    "exitCode": 0,
+    "stderr": "",
+    "boundary": "official static compiler only; no simulator, device, upload, review or release"
+  },
+  {
+    "binary": "/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcsc",
+    "sourceCount": 30,
+    "exitCode": 0,
+    "stderr": "",
+    "boundary": "official static compiler only; no simulator, device, upload, review or release"
+  }
+]

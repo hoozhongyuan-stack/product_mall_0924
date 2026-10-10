@@ -1,0 +1,94 @@
+[WebServer] (node:16131) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 2 tests using 1 worker
+
+(node:16137) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [desktop] › tests/browser/mocked.spec.ts:6:1 › phase2 boundary: home rejects unknown configuration on reload (9.0s)
+(node:16234) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  2 [desktop] › tests/browser/mocked.spec.ts:27:1 › phase2 boundary: saved tags shrink a filtered list back to its valid page (8.9s)
+
+
+  1) [desktop] › tests/browser/mocked.spec.ts:6:1 › phase2 boundary: home rejects unknown configuration on reload
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('.home-component-library')
+    Expected: 0
+    Received: 1
+    Timeout:  8000ms
+
+    Call log:
+      - Expect "toHaveCount" locator('.home-component-library') with timeout 8000ms
+      - waiting for locator('.home-component-library')
+        20 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      19 |   await page.getByRole('button', { name: '重新读取', exact: true }).click()
+      20 |   await expect(page.getByRole('alert')).toContainText('需要更新管理端版本')
+    > 21 |   await expect(page.locator('.home-component-library')).toHaveCount(0)
+         |                                                         ^
+      22 |   await expect(page.getByRole('button', { name: '保存草稿', exact: true })).toBeDisabled()
+      23 |   expect(writes).toBe(0)
+      24 |   verify()
+        at /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin/tests/browser/mocked.spec.ts:21:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase2-boundary-hom-a39de-own-configuration-on-reload-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/browser/mocked-phase2-boundary-hom-a39de-own-configuration-on-reload-desktop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase2-boundary-hom-a39de-own-configuration-on-reload-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/browser/mocked-phase2-boundary-hom-a39de-own-configuration-on-reload-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests/browser/mocked.spec.ts:27:1 › phase2 boundary: saved tags shrink a filtered list back to its valid page
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('.micro-page-row')
+    Expected: 10
+    Received: 0
+    Timeout:  8000ms
+
+    Call log:
+      - Expect "toHaveCount" locator('.micro-page-row') with timeout 8000ms
+      - waiting for locator('.micro-page-row')
+        20 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      51 |   await page.getByRole('button', { name: '保存草稿', exact: true }).click()
+      52 |   await expect(page.getByText('草稿已保存，线上页面未变化。', { exact: true })).toBeVisible()
+    > 53 |   await expect(page.locator('.micro-page-row')).toHaveCount(10)
+         |                                                 ^
+      54 |   verify()
+      55 | })
+      56 |
+        at /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin/tests/browser/mocked.spec.ts:53:49
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase2-boundary-sav-c562b-list-back-to-its-valid-page-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/browser/mocked-phase2-boundary-sav-c562b-list-back-to-its-valid-page-desktop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/browser/mocked-phase2-boundary-sav-c562b-list-back-to-its-valid-page-desktop/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/browser/mocked-phase2-boundary-sav-c562b-list-back-to-its-valid-page-desktop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests/browser/mocked.spec.ts:6:1 › phase2 boundary: home rejects unknown configuration on reload
+    [desktop] › tests/browser/mocked.spec.ts:27:1 › phase2 boundary: saved tags shrink a filtered list back to its valid page

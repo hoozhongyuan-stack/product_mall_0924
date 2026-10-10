@@ -1,0 +1,325 @@
+
+> product-mall-miniprogram@0.1.0 test
+> node --test tests/*.test.js
+
+✔ case presentation distinguishes waiting confirmation from a completed refund (10.100458ms)
+✔ draft key persists only same account and same order and retry retains immutable body (1.057833ms)
+✔ application retries unknown result with same key and body even after reopening (4.165125ms)
+✔ server preview controls displayed amount and delayed previous selection cannot win (1.479042ms)
+✔ definitive stale rejection clears retry then refreshes server eligibility (0.953084ms)
+✔ member switch discards private async detail result and an old 401 does not log out new member (8.796708ms)
+✔ withdraw requires confirmation and sends current revision, review conflict refreshes (0.527625ms)
+✔ changing line invalidates previous preview; unloading prevents private write responses (0.267292ms)
+✔ scope labels distinguish shipment and safe unknown refund progress (0.085417ms)
+✔ pagination retains records on retry error and login states clear private forms (0.56975ms)
+✔ order redemption display shows available capacity after active after-sale holds (0.934708ms)
+✔ idle retained page member switch clears old draft and retry before rebinding session (0.72325ms)
+✔ zero cash aftersale preview permits quantity-based application without claiming funds (0.675333ms)
+✔ member separates goods and shipping and zero completed copy from cash completion (0.296917ms)
+✔ description images use the configured API origin and fit the detail width (1.432042ms)
+✔ description URL adaptation only rewrites canonical public asset paths on image nodes (0.138916ms)
+✔ category tree excludes inactive items and keeps the two levels (1.233083ms)
+✔ product presentation uses actual media and on-sale SKU data (1.923875ms)
+✔ API client sends encoded filters and reports delisted items (0.827458ms)
+✔ category page loads real filters, list, search and detail navigation (2.870042ms)
+✔ home links open a selected category or prefilled cross-category search (0.685458ms)
+✔ detail page shows only received SKU choices and handles delisting (2.932958ms)
+✔ newer delisting response wins over a stale detail response (1.061542ms)
+✔ unavailable direct product link returns to catalog without a page to pop (1.04875ms)
+✔ cart merges SKU, updates quantity and quote keeps only price hint (1.946917ms)
+✔ login recovery stores only SKU, quantity and non-personal price hint, once (0.258875ms)
+✔ API sends bearer token and clears it after 401 (1.276333ms)
+✔ WeChat login exchanges code and stores only app token (1.06975ms)
+✔ checkout quotes once on first show and restores selection after login (3.922417ms)
+✔ checkout shows each server settlement amount and keeps public submit closed (1.934042ms)
+✔ checkout never presents stale goods total as final payable when settlement is absent (0.746458ms)
+✔ coupon and points selection request a fresh server quote without calculating locally (2.318ms)
+✔ coupon presentation validates money dates states and safe scope (8.021541ms)
+✔ login and hide guards discard private data (3.675792ms)
+✔ claim persists UUID owner before POST and blocks duplicate taps (2.852709ms)
+✔ UNKNOWN checks exact本人 operation then retries same key (7.517292ms)
+✔ COMPLETED recovery avoids POST, mismatched result stays unknown (0.613084ms)
+✔ storage failure prevents POST (0.184542ms)
+✔ account switching never shows or replays old claim (0.215959ms)
+✔ hidden claim keeps durable key for next show and unload rejects late response (0.18925ms)
+✔ filters clear old rows and invalidate old pagination (1.098167ms)
+✔ empty error auth and loadmore failure distinct (0.981625ms)
+✔ only returned scoped products and implemented routes can open (0.255958ms)
+✔ changed identity before tap prevents issuing to a new account (0.811583ms)
+✔ definite refusal clears attempt, malformed success preserves recovery (1.253542ms)
+✔ pull refresh pagination route guards and member coupon entry remain usable (4.235541ms)
+✔ order cumulative benefits are clearly separate from a single refund (2.235708ms)
+✔ paid zero order uses settlement wording without claiming actual receipt (2.76475ms)
+✔ pure points helpers never convert by cash ratio and reject unsafe prices snapshots (5.729791ms)
+✔ public exchange list paginates retries empty and hides stale responses (8.176667ms)
+✔ quote requires本人 and revalidates quantity address and expiry before submission (2.745667ms)
+✔ submission stores owner body UUID before POST and blocks duplicate click (2.790959ms)
+✔ UNKNOWN checks exact本人 receipt NOT_FOUND retries original body key, even expired quote (4.036416ms)
+✔ COMPLETED recovery skips POST and rejects mismatched points result (0.430459ms)
+✔ persist failure prevents network; 403 is definite but 408 429 remain recoverable (0.396167ms)
+✔ hidden submission owner durable intent survives but never restores old account (0.215958ms)
+✔ changed account during quote and before submit never sends new account old request (0.209333ms)
+✔ POINTS order presentation shows integer integral values without payment controls (0.82225ms)
+✔ SHIP quote includes selected address and rejects a mismatched address snapshot (5.951584ms)
+✔ public detail login and unavailable malformed auth network states are recoverable (1.353083ms)
+✔ quantity validation stale requotes and submit expiry are guarded (1.178291ms)
+✔ load refresh generations unload and own pending on show preserve identity (21.235208ms)
+✔ implemented entry routes and image fallback do not depend on cart or money (2.857958ms)
+✔ malformed recovery and storage clear errors keep original key available (0.556209ms)
+✔ POINTS aftersale uses exact refund integral fields and separates proposal from completion (1.130834ms)
+✔ pending exact owner recovery remains available when public offer disappears (0.980791ms)
+✔ pending owner recovery ignores address service failure and never needs a new quote (1.234959ms)
+✔ POINTS proposals do not claim approval before review and never use cash refund labels (1.137625ms)
+✔ POINTS waiting and event labels identify points return rather than cash (0.260375ms)
+✔ mixed order shows independent authoritative fulfillment statuses and quantities (2.453459ms)
+✔ tracking query shows events, empty result, retry and rejects an old member response (26.278792ms)
+✔ voucher QR is paid-member data only; failed image keeps selectable code available (1.546959ms)
+✔ QR written after member switch is deleted without displaying the old voucher (0.658583ms)
+✔ private voucher is only shown for a paid order and closed order does not offer receipt confirmation (0.252916ms)
+✔ receipt confirmation requires user confirmation, uses server order, and blocks duplicate taps (1.479917ms)
+✔ receipt confirmation failure keeps shipped status and permits refresh (0.598167ms)
+✔ logout while receipt response is in flight cannot restore a private order (0.378625ms)
+✔ redeem validity date comes from product and quote service, without client calculation (1.744625ms)
+✔ schema3 maps every fixed mosaic and design-unit spacers (5.931625ms)
+✔ mosaic invalid shape is controlled and missing links/images never navigate externally (0.257584ms)
+✖ published home sharing uses safe cover/title and suppresses drafts on failures (11.90075ms)
+✔ micro sharing uses UUID path and safe timeline query with no private image URL (2.438959ms)
+✔ share cover guard rejects private, external and malformed public URL forms (0.208958ms)
+✔ home never enables share on a success envelope without a published version (0.230541ms)
+✔ published home maps approved components and safe theme values (3.41025ms)
+✔ home page reads published content and opens internal product/category/page/search targets (3.851625ms)
+✔ unpublished home keeps catalog available and never renders draft content (1.061416ms)
+✔ schema 2 maps all new components with server-owned product prices (0.634208ms)
+✔ unknown components and unsupported schema return controlled fallbacks (0.46375ms)
+✖ home sends supported schema and maps compatibility failures to actionable Chinese (2.102709ms)
+✔ new component defaults ignore malformed appearance, links and product values (0.488709ms)
+✔ product card resolves controlled relative app asset URL against API base (0.337167ms)
+✔ member presentation preserves debt and explains historical snapshots (4.328958ms)
+✔ freeze and release never pretend to be balance awards (2.305959ms)
+✔ unauthenticated member page clears details (2.193417ms)
+✔ late profile response cannot restore after logout or unload (1.496666ms)
+✔ older response cannot replace latest refresh (1.081042ms)
+✔ old session response cannot erase new member account (0.269917ms)
+✔ pagination blocks duplicate requests and retries failed next page (1.366208ms)
+✔ empty malformed and service failure are distinct states (0.671583ms)
+✔ refresh discards stale page and expired auth clears rows (0.595792ms)
+✔ consumption retains signed adjustments and traces grade downgrade with order (1.91375ms)
+✔ hidden list discards in-flight data and blocks late pagination from member switch (0.627459ms)
+✔ member controls open implemented routes and login returns to the calling page (2.575709ms)
+✔ consumption page reads only本人 endpoint and renders non-reward adjustment (1.804333ms)
+✔ public consumption causes explain completion refunds and reversal without leaking internal source (0.255958ms)
+✖ published micro page loads mapped components and allows another published page (6.833208ms)
+✔ micro page blocks repeated page in stack and page-stack overflow (0.636ms)
+✔ catalog recovery replaces the page when navigation stack is full (0.20075ms)
+✔ unpublished micro page hides content and provides retry and return (0.238208ms)
+✔ published page with no visible components has an explicit empty state (0.178ms)
+✔ network failure is retryable and invalid page ID never reaches server (0.185292ms)
+✔ API carries order idempotency header without dropping bearer (2.7505ms)
+✔ offline gate needs server availability and instructions; WeChat requires server availability (5.781167ms)
+✔ checkout blocks duplicate clicks and retries unknown result with same body and key (1.613541ms)
+✔ closed checkout gate makes no order request (0.322041ms)
+✔ reported payment stays pending; result reads server state (3.762958ms)
+✔ report retries same key and cancel requires user confirmation (0.909292ms)
+✔ detail 401 clears private data and asks login (0.62025ms)
+✔ order pagination replaces refresh and appends next page (1.778084ms)
+✔ successful user report refreshes pending status and definitive rejection permits correction (1.789875ms)
+✔ cancel uses server result and cannot cancel an already paid refreshed order (0.890167ms)
+✔ invalid detail does not call server, unavailable target and network errors can retry (0.732459ms)
+✔ newer detail state wins over delayed old response (0.237042ms)
+✔ list handles logout, filtering, network retry and failed pagination without losing rows (0.707208ms)
+✔ definitive submission rejection clears pending key but authentication failure retains retry (1.455625ms)
+✔ unknown report survives failed refresh and later retries same note and key (0.781083ms)
+✔ logout invalidates in-flight order list response and never restores private rows (0.197791ms)
+✔ payment report draft warns before leaving and clears after confirmed report (0.262958ms)
+✔ elapsed pending order hides payment guidance and new report without changing server status (0.211625ms)
+✔ timeout and customer close reasons have distinct accurate labels (0.075958ms)
+✔ unknown prior report can replay same key after deadline while new reports stay disabled (0.213833ms)
+✔ deadline reached while detail open blocks a newly clicked report and hides instructions (0.135666ms)
+✔ after-sale and refunded orders present accurate states without payment or fulfillment actions (0.417417ms)
+✖ schema4 coupon component requests one version-bound hydration and renders every authoritative claim state (5.753791ms)
+✖ direct embedded claim reuses owner-bound durable UUID and UNKNOWN recovery exactly once (2.745584ms)
+✖ page/version mismatch, member switch and hide never publish stale private coupon state (0.676125ms)
+✖ no coupons avoids hydration; guest opens login; invalid events do not claim (0.911958ms)
+✔ both purchase entries open a drawer without writing a cart or checkout (6.125208ms)
+✔ drawer rejects unavailable SKUs, caps stock and restores selection on cancel (1.07175ms)
+✔ confirmed drawer action uses existing cart and keeps confirmed quantity and count (1.251125ms)
+✔ direct purchase confirms only inside drawer and share contains the product route (0.710042ms)
+✔ drawer failed persistence keeps recoverable selection and unavailable data closes drawer (0.370167ms)
+✔ cart exposes old price, actual fulfillment and safe reselect route, keeps invalid row until explicit removal (0.851583ms)
+✔ guest redeem checkout prompts login without address requirement, retains goods and requotes after login with gate closed (1.238541ms)
+✔ reselect entry opens drawer after detail arrives and unload ignores late response (0.199375ms)
+✔ stock rejection keeps order uncreated, requotes actual stock and adjusts only quantities after confirmation (1.277666ms)
+✔ cart selection, cached prices, management and quantity controls preserve server checkout guard (0.813ms)
+✔ cart reselect cancels without change and confirms an atomic replacement, merging an existing target SKU (0.56975ms)
+✔ cart reselect refuses changed source or merged quantity above stock, without removing any row (0.550292ms)
+✔ reselect same SKU keeps other rows and selection state; missing or failed storage never deletes source (1.111958ms)
+✔ drawer does not bypass unavailable selection or persist outside confirmation, and navigation failure can retry (0.513542ms)
+✔ detail media fallbacks and page lifecycle refresh actual cart count and safely recover failed loads (5.655292ms)
+✔ empty SKU response leaves a disabled recoverable drawer without inventing sellable stock (0.2295ms)
+✔ stock recovery cannot adjust sold-out or malformed stock and failed requote remains recoverable (0.589792ms)
+✔ checkout guest address login and form recovery use existing routes and invalid benefit input never requotes (0.668375ms)
+✔ presentation retains original request while showing partial acceptance and waived-return reason (9.891459ms)
+✔ server return permission is required and carrier/tracking validation rejects unsafe inputs (3.7195ms)
+✔ unknown shipment outcome freezes body/key across reopen and refresh must precede retry (3.718542ms)
+✔ unknown write resolved by authoritative read does not submit again (0.719625ms)
+✔ definitive revision conflict refreshes and stops correction after acceptance (0.634666ms)
+✔ member switching and unload prevent shipment responses from restoring private state (2.359583ms)
+✔ idle member change drops retained form and pending key before reading new session (1.252625ms)
+✔ malformed success preserves unknown request and a late old write cannot erase new member view (0.495542ms)
+✔ known field error keeps editable form; refreshing same member preserves an unsaved correction (0.26775ms)
+✔ zero-approved return acceptance reports no money refund rather than a pending refund (0.171791ms)
+✔ member address shortcut reaches existing address management without creating a new flow (5.7595ms)
+✔ catalog image failure identifies only the affected product and clears on full reload (1.527666ms)
+✔ address selection presents stored choice and ignores forged IDs without changing selection (1.243541ms)
+✔ address auth failure exposes a login return compatible with the existing login page (0.849417ms)
+✔ native region picker updates three address fields immutably and missing fields stay actionable (0.528583ms)
+✔ order shortcuts keep server fulfillment filters and points intersection without a client-side slice (0.619458ms)
+✔ member count labels preserve real zero and show unknown for absent or malformed keys (0.692083ms)
+✔ address edit loads current revision and preserves entered values after conflict, then creates a new address (0.787666ms)
+✔ address delete requires confirmation and current revision, while refresh supports empty and auth states (4.89ms)
+✔ login keeps agreement gate, returns to address caller after success and reports failed authorization (0.830625ms)
+✔ order progress uses server fulfillment states and hides misleading linear steps for refunds and aftersales (0.362208ms)
+✔ launch target keeps a shared product or scan query and rejects external paths (1.0375ms)
+✔ direct target redirects once on cold launch and not after completion or hot show (1.052708ms)
+✔ startup page waits for first render, uses fallback on GIF error, and skips once (3.487125ms)
+✔ unpublished startup still counts down with local brand fallback (0.619125ms)
+✔ three-second countdown starts onReady and restores the scan target only once (0.630958ms)
+✔ a shared target is intercepted before its product request (1.145625ms)
+✔ failed startup redirect resumes the original target instead of leaving it blank (6.501875ms)
+✔ backgrounding pauses visible countdown; returning resumes without a new launch (0.420209ms)
+✔ storefront navigation keeps the four fixed routes and safe icon fallbacks (1.5495ms)
+✔ malformed navigation falls back; service accepts only safe published phone or QR (0.181375ms)
+✔ storefront shell navigates only fixed routes and phone/QR require user action (1.948542ms)
+✔ QR entry opens only after tap and network failure hides contact without hiding navigation (0.919625ms)
+✔ server PNG data URI is written as base64 user file and removed after use (1.182834ms)
+✔ startup cleanup only deletes voucher files under the private user directory (0.175375ms)
+✔ missing filesystem or malformed PNG keeps text-code fallback without writing (0.256792ms)
+✔ checkout WeChat selection requires available server quote and survives refresh (3.244875ms)
+✔ WeChat submit uses selected method and restores unknown request same key (0.724958ms)
+✔ native payment success queries server and never claims local PAID (2.190666ms)
+✔ cancel queries before NOTPAY permits retry and reuses prepay UUID (0.411542ms)
+✔ unknown prepay retries same UUID after reload without premature native invocation (0.408209ms)
+✔ unknown native result survives reload and failed query never reprompts (0.3365ms)
+✔ only authoritative order confirms paid even when native result failed (0.3265ms)
+✔ expired unavailable offline zero and successful-funds orders cannot start pay (0.610792ms)
+✔ duplicate pay clicks and cancel blocked during prepay (0.23ms)
+✔ invalid signed parameters never enter native pay (0.212042ms)
+✔ payment 401 clears visible private order and persisted payment intent (0.211583ms)
+✔ payment intents for two orders survive independently and omit signed private data (0.283ms)
+✔ new successful funds snapshot overrides older NOTPAY query without permitting repay (0.344958ms)
+✔ query 401 clears intent and private data; expired order can query without native pay (0.26975ms)
+✔ logout during prepay prevents native invocation and clears private view (0.18ms)
+✔ deadline reached while page open forbids prepay without locally closing order (0.135333ms)
+✔ closed WeChat order can query late payment while remaining closed (0.143ms)
+✔ switching member while prepay in flight clears view and never opens former member payment (0.641875ms)
+ℹ tests 210
+ℹ suites 0
+ℹ pass 203
+ℹ fail 7
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 243.474166
+
+✖ failing tests:
+
+test at tests/home-v3.test.js:35:1
+✖ published home sharing uses safe cover/title and suppresses drafts on failures (11.90075ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    {
+  -   imageUrl: 'https://mall.test/api/v1/app/assets/11111111-1111-1111-1111-111111111111/file',
+      path: '/pages/home/home',
+  +   title: '商城首页'
+  -   title: '品牌精选'
+    }
+
+      at TestContext.<anonymous> (/Users/hoo/Documents/Codex/产品策划/product_mall_0924/mini-program/tests/home-v3.test.js:45:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { title: '商城首页', path: '/pages/home/home' },
+    expected: { title: '品牌精选', path: '/pages/home/home', imageUrl: 'https://mall.test/api/v1/app/assets/11111111-1111-1111-1111-111111111111/file' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/home.test.js:121:1
+✖ home sends supported schema and maps compatibility failures to actionable Chinese (2.102709ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /更新/. Input:
+
+  'The input did not match the regular expression /schemaVersion=4/. Input:\n' +
+    '\n' +
+    "'http://127.0.0.1:8000/api/v1/app/home?schemaVersion=3'\n"
+
+      at TestContext.<anonymous> (/Users/hoo/Documents/Codex/产品策划/product_mall_0924/mini-program/tests/home.test.js:129:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "The input did not match the regular expression /schemaVersion=4/. Input:\n\n'http://127.0.0.1:8000/api/v1/app/home?schemaVersion=3'\n",
+    expected: /更新/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/micro.test.js:37:1
+✖ published micro page loads mapped components and allows another published page (6.833208ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+    [
+  +   'http://127.0.0.1:8000/api/v1/app/pages/11111111-1111-1111-1111-111111111111?schemaVersion=3'
+  -   'http://127.0.0.1:8000/api/v1/app/pages/11111111-1111-1111-1111-111111111111?schemaVersion=4'
+    ]
+
+      at TestContext.<anonymous> (/Users/hoo/Documents/Codex/产品策划/product_mall_0924/mini-program/tests/micro.test.js:55:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'http://127.0.0.1:8000/api/v1/app/pages/11111111-1111-1111-1111-111111111111?schemaVersion=3' ],
+    expected: [ 'http://127.0.0.1:8000/api/v1/app/pages/11111111-1111-1111-1111-111111111111?schemaVersion=4' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/page-coupons.test.js:13:1
+✖ schema4 coupon component requests one version-bound hydration and renders every authoritative claim state (5.753791ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /schemaVersion=4/. Input:
+
+  'https://mall.test/api/v1/app/pages/22222222-2222-4222-8222-222222222222?schemaVersion=3'
+
+      at TestContext.<anonymous> (/Users/hoo/Documents/Codex/产品策划/product_mall_0924/mini-program/tests/page-coupons.test.js:17:10)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'https://mall.test/api/v1/app/pages/22222222-2222-4222-8222-222222222222?schemaVersion=3',
+    expected: /schemaVersion=4/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/page-coupons.test.js:25:1
+✖ direct embedded claim reuses owner-bound durable UUID and UNKNOWN recovery exactly once (2.745584ms)
+  TypeError: p.claimCoupon is not a function
+      at TestContext.<anonymous> (/Users/hoo/Documents/Codex/产品策划/product_mall_0924/mini-program/tests/page-coupons.test.js:28:17)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+
+test at tests/page-coupons.test.js:38:1
+✖ page/version mismatch, member switch and hide never publish stale private coupon state (0.676125ms)
+  TypeError: p.reloadCoupons is not a function
+      at TestContext.<anonymous> (/Users/hoo/Documents/Codex/产品策划/product_mall_0924/mini-program/tests/page-coupons.test.js:40:66)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)
+
+test at tests/page-coupons.test.js:48:1
+✖ no coupons avoids hydration; guest opens login; invalid events do not claim (0.911958ms)
+  TypeError: p.claimCoupon is not a function
+      at TestContext.<anonymous> (/Users/hoo/Documents/Codex/产品策划/product_mall_0924/mini-program/tests/page-coupons.test.js:53:5)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:911:7)

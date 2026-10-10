@@ -1,0 +1,12 @@
+Isolated PostgreSQL TEST DB: test_micro_v4_final_1010
+Command: .venv/bin/python -m coverage run --source=pages.editor_v4,pages.coupon_views,pages.release_reports,benefits.page_coupons,pages.runtime backend/manage.py test pages benefits catalog.tests.test_page_products --noinput
+Creating test database for alias 'default'...
+.......................................................................................................................................................................................................Refund settlement failed (RuntimeError)
+...
+----------------------------------------------------------------------
+Ran 202 tests in 71.380s
+
+OK
+Destroying test database for alias 'default'...
+Found 202 test(s).
+System check identified no issues (0 silenced).

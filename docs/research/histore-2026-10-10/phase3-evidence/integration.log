@@ -1,0 +1,79 @@
+
+> product-mall-admin@0.1.0 test:integration
+> python3 scripts/run-browser-integration.py
+
+Isolated Django/PostgreSQL and Vue ready; external platform credentials absent.
+
+Running 12 tests using 1 worker
+
+(node:22107) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [desktop] › tests/browser/integration.spec.ts:6:1 › real isolated database: phase2 templates, sharing cover and fixed mosaic (2.8s)
+  ✓   2 [desktop] › tests/browser/integration.spec.ts:77:1 › real isolated database: schema2 micro-page publish, legacy fence and independent copy (3.1s)
+  ✓   3 [desktop] › tests/browser/integration.spec.ts:121:1 › real isolated database: login and create a persisted coupon draft (931ms)
+  ✓   4 [desktop] › tests/browser/integration.spec.ts:157:1 › real isolated database: securely replace and retain mini-program credentials (1.3s)
+  ✓   5 [desktop] › tests/browser/integration.spec.ts:211:1 › real isolated database: bulk upload images and persist a referenced product description (3.2s)
+  ✘   6 [desktop] › tests/browser/integration.spec.ts:303:1 › real isolated database: phase3 coupon reference reports, schema4 publish and version-bound hydration (30.1s)
+(node:22504) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   7 [mobile] › tests/browser/integration.spec.ts:6:1 › real isolated database: phase2 templates, sharing cover and fixed mosaic (2.7s)
+  ✓   8 [mobile] › tests/browser/integration.spec.ts:77:1 › real isolated database: schema2 micro-page publish, legacy fence and independent copy (2.9s)
+  ✓   9 [mobile] › tests/browser/integration.spec.ts:121:1 › real isolated database: login and create a persisted coupon draft (2.0s)
+  ✓  10 [mobile] › tests/browser/integration.spec.ts:157:1 › real isolated database: securely replace and retain mini-program credentials (2.3s)
+  ✓  11 [mobile] › tests/browser/integration.spec.ts:211:1 › real isolated database: bulk upload images and persist a referenced product description (3.7s)
+  ✘  12 [mobile] › tests/browser/integration.spec.ts:303:1 › real isolated database: phase3 coupon reference reports, schema4 publish and version-bound hydration (30.0s)
+
+
+  1) [desktop] › tests/browser/integration.spec.ts:303:1 › real isolated database: phase3 coupon reference reports, schema4 publish and version-bound hydration
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByLabel('优惠券来源', { exact: true })
+
+
+      314 |   const id = new URL(page.url()).searchParams.get('pageId')!
+      315 |   await page.locator('.home-component-library').getByRole('button', { name: '优惠券列表', exact: true }).click()
+    > 316 |   await page.getByLabel('优惠券来源', { exact: true }).selectOption('MANUAL')
+          |                                                   ^
+      317 |   await page.getByLabel('优惠券活动 ID', { exact: true }).fill('90000000-0000-4000-8000-000000000001')
+      318 |   await page.getByLabel('优惠券活动 ID', { exact: true }).press('Tab')
+      319 |   await page.getByRole('button', { name: '检查发布差异与引用', exact: true }).click()
+        at /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin/tests/browser/integration.spec.ts:316:51
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/integration/integration-real-isolated--7f5a3-and-version-bound-hydration-desktop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/integration/integration-real-isolated--7f5a3-and-version-bound-hydration-desktop/error-context.md
+
+  2) [mobile] › tests/browser/integration.spec.ts:303:1 › real isolated database: phase3 coupon reference reports, schema4 publish and version-bound hydration
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByLabel('优惠券来源', { exact: true })
+
+
+      314 |   const id = new URL(page.url()).searchParams.get('pageId')!
+      315 |   await page.locator('.home-component-library').getByRole('button', { name: '优惠券列表', exact: true }).click()
+    > 316 |   await page.getByLabel('优惠券来源', { exact: true }).selectOption('MANUAL')
+          |                                                   ^
+      317 |   await page.getByLabel('优惠券活动 ID', { exact: true }).fill('90000000-0000-4000-8000-000000000001')
+      318 |   await page.getByLabel('优惠券活动 ID', { exact: true }).press('Tab')
+      319 |   await page.getByRole('button', { name: '检查发布差异与引用', exact: true }).click()
+        at /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin/tests/browser/integration.spec.ts:316:51
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/integration/integration-real-isolated--7f5a3-and-version-bound-hydration-mobile/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/integration/integration-real-isolated--7f5a3-and-version-bound-hydration-mobile/error-context.md
+
+  2 failed
+    [desktop] › tests/browser/integration.spec.ts:303:1 › real isolated database: phase3 coupon reference reports, schema4 publish and version-bound hydration
+    [mobile] › tests/browser/integration.spec.ts:303:1 › real isolated database: phase3 coupon reference reports, schema4 publish and version-bound hydration
+  10 passed (1.4m)
+Removed only this run’s isolated database and stopped owned servers.

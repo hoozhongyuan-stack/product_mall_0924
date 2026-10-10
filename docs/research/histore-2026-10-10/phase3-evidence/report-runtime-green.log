@@ -1,0 +1,9 @@
+
+ RUN  v5.0.2 /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin
+
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  10:44:34
+   Duration  347ms (environment 79%, import 11%, transform 8%, tests 1%, worker 1%)
+

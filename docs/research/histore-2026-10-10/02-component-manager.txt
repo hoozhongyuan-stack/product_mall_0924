@@ -1,0 +1,144 @@
+- complementary:
+  - generic: 店铺
+  - menubar:
+    - menuitem " 店铺":
+      - emphasis: 
+      - text: 店铺
+    - menuitem " 商品":
+      - emphasis: 
+      - text: 商品
+    - menuitem " 订单":
+      - emphasis: 
+      - text: 订单
+    - menuitem " 会员":
+      - emphasis: 
+      - text: 会员
+    - menuitem " 营销":
+      - emphasis: 
+      - text: 营销
+    - menuitem " 分销":
+      - emphasis: 
+      - text: 分销
+    - menuitem " 合伙人":
+      - emphasis: 
+      - text: 合伙人
+    - menuitem " 供应商":
+      - emphasis: 
+      - text: 供应商
+    - menuitem " 门店":
+      - emphasis: 
+      - text: 门店
+    - menuitem " SCRM":
+      - emphasis: 
+      - text: SCRM
+    - menuitem " 报表":
+      - emphasis: 
+      - text: 报表
+    - menuitem " 设置":
+      - emphasis: 
+      - text: 设置
+  - list:
+    - generic: 概览
+    - generic: 店铺信息
+    - generic: 小程序设置
+    - generic: 公众号设置
+    - generic: 公众号菜单
+    - generic: 微页面
+    - generic: 移动商城
+    - generic: PC商城
+    - generic: PC专题页
+    - generic: 文章管理
+    - generic: 素材中心
+- generic: 
+- text:   
+- text: histore
+- generic: 
+- main:
+  - navigation "Breadcrumb":
+    - link "微页面"
+    - text: /
+    - link "新增微页面"
+  - heading [level=3]
+  - list:
+    - heading "牛奶伊利" [level=3]
+    - generic: x元减y元
+    - generic: ¥ 50
+    - generic: 
+    - heading "牛奶伊利" [level=3]
+    - generic: x元减y元
+    - generic: ¥ 59
+    - generic: 
+  - generic:   
+  - generic:  
+  - text: 
+  - generic: 商品
+  - list:
+  - generic:  
+  - text: 
+  - generic: 图文导航
+  - generic: 组件管理 拖拽可排序，点击可快速定位组件位置
+  - text: 
+  - button "清除组件"
+  - list:
+    - generic: 
+    - text: 商品
+    - generic: 
+    - generic: 
+    - text: 图文导航
+    - generic: 
+  - heading "基础组件" [level=3]
+  - list:
+    - generic: 
+    - paragraph: 标题文本
+    - generic: 
+    - paragraph: 商品
+    - generic: 
+    - paragraph: 图片广告
+    - generic: 
+    - paragraph: 图文导航
+    - generic: 
+    - paragraph: 富文本
+    - generic: 
+    - paragraph: 魔方
+    - generic: 
+    - paragraph: 自由布局
+    - generic: 
+    - paragraph: 辅助空白
+    - generic: 
+    - paragraph: 商品搜索
+    - generic: 
+    - paragraph: 公告
+    - generic: 
+    - paragraph: 秒杀矩阵
+    - generic: 
+    - paragraph: 新人专区
+  - heading "营销组件" [level=3]
+  - list:
+    - generic: 
+    - paragraph: 直播
+    - generic: 
+    - paragraph: 视频号直播
+    - generic: 
+    - paragraph: 优惠券
+    - generic: 
+    - paragraph: 膨胀券
+    - generic: 
+    - paragraph: 限时折扣
+    - generic: 
+    - paragraph: 拼团
+    - generic: 
+    - paragraph: 秒杀
+    - generic: 
+    - paragraph: 积分商品
+    - generic: 
+    - paragraph: 社区话题
+  - list:
+    - generic: 
+    - text: 页面设置
+    - generic: 
+    - text: 组件管理
+  - button "上架"
+  - button "保存并继续"
+  - button "保存为草稿"
+- text: 
+- text: 

@@ -1,0 +1,14 @@
+[
+  {
+    "compiler": "wcc",
+    "targets": 23,
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "compiler": "wcsc",
+    "targets": 30,
+    "exitCode": 0,
+    "stderr": ""
+  }
+]

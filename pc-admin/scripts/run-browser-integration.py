@@ -121,6 +121,8 @@ def run(*, preview=False):
                     DJANGO_CSRF_TRUSTED_ORIGINS=f'http://127.0.0.1:{web_port}',
                     MALL_MEDIA_ROOT=str(Path(temporary) / 'media'), EXCHANGE_ORDER_ENABLED='0',
                     MALL_WECHAT_CREDENTIAL_KEY_FILE=str(credential_key),
+                    # Synthetic integration clients support v4; never change deployment defaults.
+                    PAGE_RUNTIME_SCHEMA_VERSION='1' if preview else '4',
                     WECHAT_REFUND_ENABLED='0', KDNIAO_ENABLED='0',
                     MALL_E2E_OWNER=owner, MALL_E2E_OWNER_PASSWORD=owner_password,
                     MALL_E2E_REAL='1', MALL_E2E_EXTERNAL_SERVER='1',

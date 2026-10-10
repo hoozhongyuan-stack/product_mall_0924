@@ -7,7 +7,7 @@ from catalog import views as catalog_views
 from catalog import product_sale_views as catalog_sale_views
 from catalog import media_views
 from pages import views as page_views
-from pages import startup_views, history, storefront_views
+from pages import startup_views, history, storefront_views, editor_views, coupon_views as page_coupon_views, release_reports
 from inventory import views as inventory_views
 from checkout import views as checkout_views
 from customers import profile_views as customer_profile_views
@@ -238,6 +238,15 @@ urlpatterns = [
     path("api/v1/admin/pages/home/preview", page_views.home_preview_view),
     path("api/v1/admin/pages/home/publish", page_views.home_publish_view),
     path("api/v1/admin/pages", page_views.pages_view),
+    path("api/v1/admin/pages/capabilities", editor_views.capabilities_view),
+    path("api/v1/admin/pages/templates", editor_views.templates_view),
+    path("api/v1/admin/pages/coupon-preview", page_coupon_views.coupon_preview_view),
+    path("api/v1/admin/pages/home/release-report", release_reports.release_report_view),
+    path("api/v1/admin/pages/<uuid:page_id>/release-report", release_reports.release_report_view),
+    path("api/v1/app/pages/home/coupons", page_coupon_views.public_coupons_view),
+    path("api/v1/app/pages/<uuid:page_id>/coupons", page_coupon_views.public_coupons_view),
+    path("api/v1/admin/pages/product-preview", editor_views.product_preview_view),
+    path("api/v1/admin/pages/<uuid:page_id>/copy", editor_views.copy_view),
     path("api/v1/admin/pages/<uuid:page_id>/draft", page_views.micro_draft_view),
     path("api/v1/admin/pages/<uuid:page_id>/preview", page_views.micro_preview_view),
     path("api/v1/admin/pages/<uuid:page_id>/publish", page_views.micro_publish_view),

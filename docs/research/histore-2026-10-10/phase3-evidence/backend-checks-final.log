@@ -1,0 +1,4 @@
+Migration drift and Django system checks use an in-memory inspection configuration; no development DB migration.
+No changes detected
+System check identified no issues (0 silenced).
+git diff --check exit: 0

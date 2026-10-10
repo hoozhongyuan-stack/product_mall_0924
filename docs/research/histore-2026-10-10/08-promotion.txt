@@ -1,0 +1,284 @@
+- complementary:
+  - generic: 店铺
+  - menubar:
+    - menuitem " 店铺":
+      - emphasis: 
+      - text: 店铺
+    - menuitem " 商品":
+      - emphasis: 
+      - text: 商品
+    - menuitem " 订单":
+      - emphasis: 
+      - text: 订单
+    - menuitem " 会员":
+      - emphasis: 
+      - text: 会员
+    - menuitem " 营销":
+      - emphasis: 
+      - text: 营销
+    - menuitem " 分销":
+      - emphasis: 
+      - text: 分销
+    - menuitem " 合伙人":
+      - emphasis: 
+      - text: 合伙人
+    - menuitem " 供应商":
+      - emphasis: 
+      - text: 供应商
+    - menuitem " 门店":
+      - emphasis: 
+      - text: 门店
+    - menuitem " SCRM":
+      - emphasis: 
+      - text: SCRM
+    - menuitem " 报表":
+      - emphasis: 
+      - text: 报表
+    - menuitem " 设置":
+      - emphasis: 
+      - text: 设置
+  - list:
+    - generic: 概览
+    - generic: 店铺信息
+    - generic: 小程序设置
+    - generic: 公众号设置
+    - generic: 公众号菜单
+    - generic: 微页面
+    - generic: 移动商城
+    - generic: PC商城
+    - generic: PC专题页
+    - generic: 文章管理
+    - generic: 素材中心
+- generic: 
+- text:   
+- text: histore
+- generic: 
+- main:
+  - tablist:
+    - tab "微页面" [selected]
+    - tab "草稿箱"
+  - tabpanel "微页面"
+  - button " 新建微页面":
+    - generic: 
+    - text: 新建微页面
+  - generic: 关键字：
+  - textbox
+  - generic: 创建时间：
+  - textbox "开始时间"
+  - generic: 至
+  - textbox "结束时间"
+  - button "今天"
+  - button "昨天"
+  - button "近7天"
+  - button "近30天"
+  - button "筛选"
+  - button "重置筛选条件"
+  - table:
+    - rowgroup:
+      - row "标题 创建时间 操作":
+        - columnheader "标题":
+          - generic: 标题
+        - columnheader "创建时间":
+          - generic: 创建时间
+        - columnheader "操作":
+          - generic: 操作
+  - table:
+    - rowgroup:
+      - row "胡 2026-10-09 11:38:37 复制 编辑 推广 设为主页 删除":
+        - cell "胡":
+          - generic: 胡
+        - cell "2026-10-09 11:38:37":
+          - generic: 2026-10-09 11:38:37
+        - cell "复制 编辑 推广 设为主页 删除":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广"
+          - button "设为主页"
+          - text: 
+          - button "删除"
+      - row "测试 2026-10-08 17:56:47 复制 编辑 推广 设为主页 删除":
+        - cell "测试":
+          - generic: 测试
+        - cell "2026-10-08 17:56:47":
+          - generic: 2026-10-08 17:56:47
+        - cell "复制 编辑 推广 设为主页 删除":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广"
+          - button "设为主页"
+          - text: 
+          - button "删除"
+      - row "百货精选 2026-09-29 18:19:17 复制 编辑 推广 设为主页 删除":
+        - cell "百货精选":
+          - generic: 百货精选
+        - cell "2026-09-29 18:19:17":
+          - generic: 2026-09-29 18:19:17
+        - cell "复制 编辑 推广 设为主页 删除":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广"
+          - button "设为主页"
+          - text: 
+          - button "删除"
+      - row "超市精选 微商城首页 H5 首页 App 首页 2026-09-28 11:33:55 复制 编辑 推广 设为主页":
+        - cell "超市精选 微商城首页 H5 首页 App 首页":
+          - text: 超市精选
+          - generic: 微商城首页
+          - generic: H5 首页
+          - generic: App 首页
+        - cell "2026-09-28 11:33:55":
+          - generic: 2026-09-28 11:33:55
+        - cell "复制 编辑 推广 设为主页":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广" [active]
+          - button "设为主页"
+      - row "生鲜 2026-09-28 10:02:36 复制 编辑 推广 设为主页 删除":
+        - cell "生鲜":
+          - generic: 生鲜
+        - cell "2026-09-28 10:02:36":
+          - generic: 2026-09-28 10:02:36
+        - cell "复制 编辑 推广 设为主页 删除":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广"
+          - button "设为主页"
+          - text: 
+          - button "删除"
+      - row "家居建材 2026-09-24 18:11:38 复制 编辑 推广 设为主页 删除":
+        - cell "家居建材":
+          - generic: 家居建材
+        - cell "2026-09-24 18:11:38":
+          - generic: 2026-09-24 18:11:38
+        - cell "复制 编辑 推广 设为主页 删除":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广"
+          - button "设为主页"
+          - text: 
+          - button "删除"
+      - row "首页 2026-09-24 16:42:53 复制 编辑 推广 设为主页 删除":
+        - cell "首页":
+          - generic: 首页
+        - cell "2026-09-24 16:42:53":
+          - generic: 2026-09-24 16:42:53
+        - cell "复制 编辑 推广 设为主页 删除":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广"
+          - button "设为主页"
+          - text: 
+          - button "删除"
+      - row "服装馆模板 2026-09-24 14:06:03 复制 编辑 推广 设为主页 删除":
+        - cell "服装馆模板":
+          - generic: 服装馆模板
+        - cell "2026-09-24 14:06:03":
+          - generic: 2026-09-24 14:06:03
+        - cell "复制 编辑 推广 设为主页 删除":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广"
+          - button "设为主页"
+          - text: 
+          - button "删除"
+      - row "美妆类模板 2026-09-20 08:28:12 复制 编辑 推广 设为主页 删除":
+        - cell "美妆类模板":
+          - generic: 美妆类模板
+        - cell "2026-09-20 08:28:12":
+          - generic: 2026-09-20 08:28:12
+        - cell "复制 编辑 推广 设为主页 删除":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广"
+          - button "设为主页"
+          - text: 
+          - button "删除"
+      - row "合丰9号 · 好酒到家 2026-09-15 14:23:38 复制 编辑 推广 设为主页 删除":
+        - cell "合丰9号 · 好酒到家":
+          - generic: 合丰9号 · 好酒到家
+        - cell "2026-09-15 14:23:38":
+          - generic: 2026-09-15 14:23:38
+        - cell "复制 编辑 推广 设为主页 删除":
+          - text: 
+          - button "复制"
+          - button "编辑"
+          - button "推广"
+          - button "设为主页"
+          - text: 
+          - button "删除"
+  - generic: 共 60 条
+  - button "" [disabled]:
+    - generic: 
+  - list:
+    - listitem: "1"
+    - listitem: "2"
+    - listitem: "3"
+    - listitem: "4"
+    - listitem: "5"
+    - listitem: "6"
+  - button "":
+    - generic: 
+  - textbox "请选择": 10条/页
+  - generic: 
+  - dialog "推广":
+    - text: 推广
+    - button "Close":
+      - generic: 
+    - heading "样式预览" [level=3]
+    - generic: histore演示站
+    - generic: 【发现一家好店】
+    - generic: histore演示站
+    - generic: 扫描或长按小程序码
+    - heading "推广设置" [level=3]
+    - generic: 路径：
+    - radiogroup:
+      - radio "小程序" [checked]:
+        - radio [checked]
+        - generic: 小程序
+      - radio "H5":
+        - radio
+        - generic: H5
+    - generic: 分享样式：
+    - radiogroup:
+      - radio "海报" [checked]:
+        - radio [checked]
+        - generic: 海报
+      - radio "微信好友":
+        - radio
+        - generic: 微信好友
+    - generic: "*分享标题："
+    - textbox "请输入内容": histore演示站
+    - generic: 10/20
+    - generic: "*分享描述："
+    - textbox "请输入内容": 【发现一家好店】
+    - generic: 8/120
+    - generic: 分享图片：
+    - text: 
+    - generic: 建议图片尺寸800*800px，图片宽高比1：1
+    - generic:  
+    - heading "推广资源" [level=3]
+    - generic: 页面链接：
+    - textbox [disabled]: pages/topic/topic?id=97
+    - button "复制"
+    - generic: 图片下载：
+    - button " 推广海报":
+      - generic: 
+      - text: 推广海报
+    - link " 推广码":
+      - /url: https://historedemo.oss-cn-hangzhou.aliyuncs.com/appletQrcode/wx668b579363d681b2/ef64212ab42bf38f79237c5423b99ca5.png
+      - button " 推广码":
+        - generic: 
+        - text: 推广码
+    - button "取 消"
+    - button "确 定"
+  - text: 
+- text: 

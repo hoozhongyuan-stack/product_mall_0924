@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import CouponFields from './CouponFields.vue'
+import MosaicFields from './MosaicFields.vue'
+import HotzoneCanvas from './HotzoneCanvas.vue'
+import PageContentFields from './PageContentFields.vue'
 import AssetPicker from '../../shared/AssetPicker.vue'
 import { api } from '../../api'
 import type { Asset } from '../../shared/media'
@@ -19,6 +23,7 @@ const uploading = ref('')
 const error = ref('')
 
 function updateProps(values: Partial<PageComponent['props']>) {
+  if (props.disabled) return
   emit('change', { ...props.component, props: { ...props.component.props, ...values } })
 }
 function updateSlides(slides: Slide[]) { updateProps({ slides }) }
@@ -31,19 +36,19 @@ function updateArea(index: number, change: Partial<HotzoneArea>) {
 }
 function assetUrl(assetId: string) { return assetId ? `/api/v1/admin/assets/${encodeURIComponent(assetId)}/file` : '' }
 
-async function uploadImage(event: Event, slot: 'hotzone' | number) {
+async function uploadImage(event: Event, slot: 'hotzone' | 'image' | number) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file || uploading.value) return
+  if (props.disabled || !file || uploading.value) return
   const target = props.component
   const componentId = target.componentId
   const binding: Omit<UploadedAssetBinding, 'assetId'> = {
     componentId,
-    type: target.type === 'CAROUSEL' ? 'CAROUSEL' : 'IMAGE_HOTZONE',
+    type: target.type === 'CAROUSEL' ? 'CAROUSEL' : target.type === 'IMAGE' ? 'IMAGE' : 'IMAGE_HOTZONE',
     slot,
-    expectedSlides: slot === 'hotzone' ? undefined : JSON.stringify(target.props.slides || []),
-    expectedAssetId: slot === 'hotzone' ? target.props.assetId || '' : undefined,
+    expectedSlides: typeof slot === 'string' ? undefined : JSON.stringify(target.props.slides || []),
+    expectedAssetId: typeof slot === 'string' ? target.props.assetId || '' : undefined,
   }
   if (!['image/png', 'image/jpeg'].includes(file.type) || file.size > 10 * 1024 * 1024 || !file.size) {
     error.value = '请选择不超过 10 MiB 的 JPG 或 PNG 图片。'
@@ -63,10 +68,10 @@ async function uploadImage(event: Event, slot: 'hotzone' | number) {
     }
   } finally { uploading.value = '' }
 }
-function chooseAsset(asset: Asset, slot: 'hotzone' | number) {
+function chooseAsset(asset: Asset, slot: 'hotzone' | 'image' | number) {
   if (props.disabled) return
   const target = props.component
-  emit('uploaded', { componentId: target.componentId, type: target.type === 'CAROUSEL' ? 'CAROUSEL' : 'IMAGE_HOTZONE', slot, expectedSlides: slot === 'hotzone' ? undefined : JSON.stringify(target.props.slides || []), expectedAssetId: slot === 'hotzone' ? target.props.assetId || '' : undefined, assetId: asset.assetId })
+  emit('uploaded', { componentId: target.componentId, type: target.type === 'CAROUSEL' ? 'CAROUSEL' : target.type === 'IMAGE' ? 'IMAGE' : 'IMAGE_HOTZONE', slot, expectedSlides: typeof slot === 'string' ? undefined : JSON.stringify(target.props.slides || []), expectedAssetId: typeof slot === 'string' ? target.props.assetId || '' : undefined, assetId: asset.assetId })
 }
 function addArea() {
   updateAreas([...(props.component.props.areas || []), {
@@ -81,7 +86,7 @@ function setLink(value: PageLink | undefined) { updateProps({ link: value }) }
 </script>
 
 <template>
-  <div class="home-component-form">
+  <fieldset :disabled="disabled" class="home-component-form" style="border:0;padding:0;margin:0;min-width:0">
     <template v-if="component.type === 'SEARCH'">
       <label>搜索提示语<input :value="component.props.placeholder || ''" maxlength="40" placeholder="搜索商品" @input="updateProps({ placeholder: ($event.target as HTMLInputElement).value })"></label>
       <p class="help-text">点击后进入站内商品搜索。</p>
@@ -105,12 +110,13 @@ function setLink(value: PageLink | undefined) { updateProps({ link: value }) }
       <button type="button" class="secondary-button home-add-row" @click="updateSlides([...(component.props.slides || []), { assetId: '' }])">添加轮播图</button>
     </template>
 
-    <template v-else-if="component.type === 'IMAGE_HOTZONE'">
-      <p class="help-text">图片热区坐标按图片宽高的 0–1 比例填写，可设置多个点击区域。</p>
+    <template v-else-if="component.type === 'IMAGE_HOTZONE' || component.type === 'IMAGE'">
+      <p class="help-text">{{ component.type === 'IMAGE' ? '图片广告可配置站内跳转。' : '在图片上绘制点击区域，或填写 0–1 比例坐标。' }}</p>
       <img v-if="component.props.assetId" :src="assetUrl(component.props.assetId)" alt="热区图片" class="home-asset-thumb">
-      <label v-if="canUpload" class="home-upload-button">{{ uploading === 'hotzone' ? '上传中…' : '上传或更换图片' }}<input type="file" accept="image/png,image/jpeg" :disabled="disabled || Boolean(uploading)" @change="uploadImage($event, 'hotzone')"></label>
-      <AssetPicker kind="IMAGE" :disabled="disabled || Boolean(uploading)" :target-key="JSON.stringify([component.componentId, component.props.assetId])" @select="chooseAsset($event, 'hotzone')" />
+      <label v-if="canUpload" class="home-upload-button">{{ uploading === 'hotzone' ? '上传中…' : '上传或更换图片' }}<input type="file" accept="image/png,image/jpeg" :disabled="disabled || Boolean(uploading)" @change="uploadImage($event, component.type === 'IMAGE' ? 'image' : 'hotzone')"></label>
+      <AssetPicker kind="IMAGE" :disabled="disabled || Boolean(uploading)" :target-key="JSON.stringify([component.componentId, component.props.assetId])" @select="chooseAsset($event, component.type === 'IMAGE' ? 'image' : 'hotzone')" />
       <label>图片素材 ID<input :value="component.props.assetId || ''" placeholder="上传图片或粘贴素材 ID" @input="updateProps({ assetId: ($event.target as HTMLInputElement).value.trim() })"></label>
+      <HotzoneCanvas v-if="component.type === 'IMAGE_HOTZONE'" :asset-id="component.props.assetId || ''" :areas="component.props.areas || []" :disabled="disabled" @change="updateAreas" />
       <div v-for="(area, index) in component.props.areas || []" :key="index" class="home-subitem">
         <div class="home-subitem-head"><strong>点击区域 {{ index + 1 }}</strong><button type="button" class="text-button danger" @click="updateAreas((component.props.areas || []).filter((_, position) => position !== index))">移除</button></div>
         <div class="home-coordinates">
@@ -118,7 +124,7 @@ function setLink(value: PageLink | undefined) { updateProps({ link: value }) }
         </div>
         <PageLinkEditor :model-value="area.link" :list-id="`${component.componentId}-area-${index}`" :categories="categories" :products="products" :pages="pages" @update:model-value="updateArea(index, { link: $event || { type: 'FUNCTION', targetId: 'CATALOG' } })" />
       </div>
-      <button type="button" class="secondary-button home-add-row" @click="addArea">添加点击区域</button>
+      <button v-if="component.type === 'IMAGE_HOTZONE'" type="button" class="secondary-button home-add-row" @click="addArea">添加点击区域</button>
     </template>
 
     <template v-else-if="component.type === 'DIVIDER'">
@@ -129,6 +135,15 @@ function setLink(value: PageLink | undefined) { updateProps({ link: value }) }
       <label>备案号<input :value="component.props.recordNo || ''" maxlength="100" placeholder="填写已取得的正式备案号" @input="updateProps({ recordNo: ($event.target as HTMLInputElement).value })"></label>
       <p class="help-text">未取得正式备案号时，可先隐藏此组件，不能填写示例号后发布。</p>
     </template>
+    <CouponFields v-if="component.type === 'COUPON_LIST'" :component="component" :disabled="disabled" @change="emit('change', $event)" />
+    <MosaicFields v-if="component.type === 'MOSAIC'" :component="component" :disabled="disabled" :categories="categories" :products="products" :pages="pages" @change="emit('change', $event)" />
+    <label v-if="component.type === 'SPACER'">留白高度<select :value="component.props.height || 16" @change="updateProps({ height: Number(($event.target as HTMLSelectElement).value) as PageComponent['props']['height'] })"><option v-for="height in [4,8,12,16,24,32,48,64,96]" :key="height" :value="height">{{ height }} px</option></select></label>
+    <PageContentFields v-if="['TITLE', 'IMAGE', 'NAVIGATION', 'PRODUCT_LIST'].includes(component.type)" :component="component" :disabled="disabled" :categories="categories" :products="products" :pages="pages" @change="emit('change', $event)" />
+    <details class="component-appearance"><summary>组件外观</summary>
+      <label>背景颜色<input type="color" :value="component.appearance?.backgroundColor || '#ffffff'" @input="emit('change', { ...component, appearance: { ...component.appearance, backgroundColor: ($event.target as HTMLInputElement).value } })"></label>
+      <label v-for="key in (['padding', 'margin', 'radius'] as const)" :key="key">{{ key === 'padding' ? '内边距' : key === 'margin' ? '外边距' : '圆角' }}<select :value="component.appearance?.[key] || 0" @change="emit('change', { ...component, appearance: { ...component.appearance, [key]: Number(($event.target as HTMLSelectElement).value) } })"><option v-for="value in (key === 'radius' ? [0, 8, 16] : [0, 4, 8, 12, 16, 24, 32])" :key="value" :value="value">{{ value }} px</option></select></label>
+      <button type="button" @click="emit('change', { ...component, appearance: undefined })">恢复默认外观</button>
+    </details>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-  </div>
+  </fieldset>
 </template>

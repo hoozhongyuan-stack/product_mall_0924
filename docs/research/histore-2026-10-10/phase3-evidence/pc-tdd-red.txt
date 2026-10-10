@@ -1,0 +1,11 @@
+2026-10-10 PC 第三阶段首次 RED
+命令：cd pc-admin && pnpm exec vitest run tests/components/page-marketing.test.ts
+exit_code: 1
+Test Files 1 failed (1)
+Tests no tests
+Error: Failed to resolve import "../../src/views/pages/CouponFields.vue" from "tests/components/page-marketing.test.ts". Does the file exist?
+说明：测试先于新组件创建；首次 RED 为模块缺失，尚未运行测试断言。后续组件创建后9项断言 GREEN；不将此模块缺失阶段称为9项断言均失败。
+
+Final correctness fixes (2026-10-10):
+Coupon accessible-name/AUTO reset test: 1 failed, 9 passed; failure expected undefined to be 优惠券来源. Added aria-label source/layout and AUTO campaignIds reset; targeted 10 passed.
+Name-only report test: 1 failed, 10 passed; validateReleaseReport previously accepted nameChanged:string and test expected throw. Added optional boolean validation and panel name-only difference; targeted 11 passed. Final npm test Node94/Vitest280/typecheck/build passed; final coverage details pc-marketing-coverage.json and pc-coverage.log.

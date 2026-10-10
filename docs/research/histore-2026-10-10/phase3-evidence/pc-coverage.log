@@ -1,0 +1,205 @@
+
+> product-mall-admin@0.1.0 test:coverage
+> node --test --experimental-test-coverage --test-coverage-include='src/**/*.mjs' --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 tests/*.test.mjs && vitest run --coverage
+
+✔ reviews require an explicit decision and an audit reason (1.221167ms)
+✔ actual transfer evidence must equal the approved amount and be independently checked (7.265042ms)
+✔ a preparer cannot confirm their own transfer even with permission (0.229709ms)
+✔ unknown or failed confirmation keeps explicit recovery copy (0.321625ms)
+✔ campaign money is integer fen and cash threshold is zero (8.898417ms)
+✔ campaign bounds dates identities quantities and products (0.192084ms)
+✔ manual quantity and repeated grant cause cannot be omitted (0.109042ms)
+✔ unknown requests are actor scoped and frozen without passwords (2.214667ms)
+✔ campaign enum, validity, repeat and corrupt storage fail safely (0.300125ms)
+✔ only exact NOT_FOUND allows original request retry (2.63ms)
+✔ issuance completion must match campaign member count and valid distinct coupons (0.326708ms)
+✔ campaign publish and distribution must match identity revision and final state (0.306709ms)
+✔ creation and editing completion must match saved terms (0.468458ms)
+✔ ambiguous throttle timeout and lost authorization preserve original identity (0.138209ms)
+✔ completion validates nested product DTO and malformed response safely (0.241375ms)
+✔ approved goods and independent shipping use server total for transfer (1.682917ms)
+✔ zero cash is a valid settlement and never a positive cash transfer (0.758667ms)
+✔ benefit settlement retry is scoped to account and case and retains exact key and revision (0.520167ms)
+✔ zero-cash return accepts explicit zero only for a server zero-cash case (1.484834ms)
+✔ malformed persisted intent is cleared without submitting a replacement (0.179833ms)
+✔ an application amount never becomes an approval before review (0.574625ms)
+✔ review acceptance and completion have distinct refund facts (0.616417ms)
+✔ rejected withdrawn and unknown cases never imply a refund (0.083208ms)
+✔ offer price is a bounded integer and SKU is selected safely (3.524833ms)
+✔ offer recovery binds original SKU price identity and exact revision (2.509542ms)
+✔ edit and availability recovery validates request revision and final action (0.268542ms)
+✔ pending offer request is actor and object scoped and contains no password (0.697792ms)
+✔ points orders have explicit settlement labels and never money as their main value (1.337958ms)
+✔ unknown settlement values do not invent a zero and malformed offer payloads stay frozen (0.286083ms)
+✔ only ready and unexpired exports can be downloaded (2.9905ms)
+✔ known rejection clears pending request but uncertain result retains its request key (9.797542ms)
+✔ export labels and download names are fixed locally (0.178333ms)
+✔ shipment requires a configured carrier and a bounded tracking number (5.911458ms)
+✔ redemption quantity is a whole number within the server remaining count (0.318625ms)
+✔ fulfillment labels and shipping eligibility reflect independent order state (0.128209ms)
+✔ after-sale and refund states are distinct from completed fulfillment (0.048ms)
+✔ shipment quantities preserve purchased units and subtract only confirmed refunded units (0.644708ms)
+✔ missing malformed or out of range refund quantities block shipment instead of becoming zero (0.113916ms)
+✔ normalizes nested Vue reactive component props into independent plain JSON (23.669875ms)
+✔ normalizes an independent micro page without turning it into a home page (0.521583ms)
+✔ late upload updates its original component even after the selected component changes (0.584416ms)
+✔ late upload does not bind to a different slide after its position changes (1.2965ms)
+✔ CSV escapes quotes and formulas in user-entered inventory notes (0.966708ms)
+✔ CSV neutralizes formulas hidden behind whitespace, BOM or control characters (13.310708ms)
+✔ inbound quantity accepts only safe positive integer operation units (1.114792ms)
+✔ selector rejects missing, incompatible, nonsquare and duplicate assets (1.236667ms)
+✔ query encodes filters and limits upload-only users to unbound assets (0.16775ms)
+✔ upload checks real size/type and selection rejects an obsolete target (0.089375ms)
+✔ global readers can reuse bound materials and blank filters stay absent (0.071917ms)
+✔ video and GIF uploads enforce their own MIME and byte boundaries (0.058ms)
+✔ money uses decimal strings and integer fen (1.291834ms)
+✔ thresholds must ascend and start at zero (0.649791ms)
+✔ body binds revision and exact integer amounts (0.380084ms)
+✔ pending body and key are stable per account (1.318875ms)
+✔ rule bounds prevent invalid ratios, dates and oversized amounts (0.601292ms)
+✔ corrupt persisted request cannot be submitted as a new body (0.36ms)
+✔ public reasons explain completion, refund, reversal and expiry (0.259416ms)
+✔ actual money is parsed exactly to cents and invalid amounts are refused (1.3735ms)
+✔ reconciliation requires independently verified bank details and a reason for mismatch (4.022958ms)
+✔ reported payment and anomalies never display as paid (0.135958ms)
+✔ immutable confirmation must be regenerated after changing evidence (8.698083ms)
+✔ rollback body binds target and both revisions and requires a reason (16.25475ms)
+✔ pending recovery retains exact body and key only within actor and target (0.371125ms)
+✔ recovery accepts only the original historical version and next publication revision (0.069125ms)
+✔ unknown outcomes and recovery authorization failures retain original request (0.066417ms)
+✔ new rollback requires a durable verified recovery record before network submission (0.101417ms)
+✔ original publish body and confirmation revision remain fixed across rollback and draft edits (4.523958ms)
+✔ successful original receipt after a later rollback reads authoritative pointer and version (0.197166ms)
+✔ failed pointer/detail refresh never supplies a partial publication state (0.727958ms)
+✔ unpublished pointer is synchronized without requesting a nonexistent detail (0.41775ms)
+✔ publish completion accepts a valid original receipt and rejects malformed or different operations (0.424625ms)
+✔ durable ordinary publish recovery is scoped and preserves exact frozen body without password (0.408541ms)
+✔ acceptance validates actual counts, waiver and reason (3.272417ms)
+✔ blank refund amount asks server calculation; money is exact integer fen (0.423416ms)
+✔ unknown and processing refund outcomes require queries (0.127792ms)
+✔ counts remain integers, bounded and consistent across received and waived decisions (0.107959ms)
+✔ pending acceptance retains exact body and key within its account and case only (1.057417ms)
+✔ provider conflict and closed refunds explain why automatic actions are blocked (0.158541ms)
+✔ navigation keeps exact order and requires icon pairs (1.277583ms)
+✔ navigation updates one item without mutating input (0.234875ms)
+✔ service modes require their matching contact and clear inactive fields (0.812541ms)
+✔ save result normalization does not misreport a new edit (0.424667ms)
+✔ reordering axes retains existing SKU identity and filled values (1.184625ms)
+✔ new and removed combinations are explicit while retained SKU keeps its revision (0.275666ms)
+✔ payload includes stable IDs and revisions, with valid enabled grade price (0.794709ms)
+✔ late startup upload only replaces the originally selected slot (0.85775ms)
+✔ 实盘数量允许零和安全整数，拒绝小数与负数 (0.5365ms)
+✔ 提交盘点要求全部 SKU 和差异原因 (1.76675ms)
+✔ settings parser requires the three fixed disabled candidates (1.6635ms)
+✔ draft validation and request preserve disabled semantics (1.293916ms)
+✔ save reconciliation preserves edits made during the request (0.364666ms)
+✔ task labels distinguish unknown delivery from synthetic processing (0.468166ms)
+✔ only explicitly recoverable reservations with a dedicated permission show recovery (0.629042ms)
+✔ task query keeps bounded filters and opaque cursor (0.139375ms)
+ℹ tests 94
+ℹ suites 0
+ℹ pass 94
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 692.940292
+ℹ start of coverage report
+ℹ --------------------------------------------------------------------------
+ℹ file                      | line % | branch % | funcs % | uncovered lines
+ℹ --------------------------------------------------------------------------
+ℹ src                       |        |          |         |
+ℹ  shared                   |        |          |         |
+ℹ   csv.mjs                 | 100.00 |   100.00 |  100.00 |
+ℹ   money.mjs               | 100.00 |    80.00 |  100.00 |
+ℹ   order-settlement.mjs    | 100.00 |   100.00 |  100.00 |
+ℹ   singleton-config.mjs    |  98.00 |    75.00 |  100.00 | 49
+ℹ  views                    |        |          |         |
+ℹ   aftersales              |        |          |         |
+ℹ    form.mjs               | 100.00 |    83.33 |   85.71 |
+ℹ    point-refund-state.mjs | 100.00 |   100.00 |  100.00 |
+ℹ    returns.mjs            | 100.00 |    95.83 |  100.00 |
+ℹ    settlement.mjs         | 100.00 |   100.00 |  100.00 |
+ℹ   coupons                 |        |          |         |
+ℹ    form.mjs               | 100.00 |   100.00 |  100.00 |
+ℹ    recovery.mjs           | 100.00 |    98.21 |  100.00 |
+ℹ   customers               |        |          |         |
+ℹ    events.mjs             | 100.00 |   100.00 |  100.00 |
+ℹ    rules.mjs              | 100.00 |   100.00 |  100.00 |
+ℹ   exchange                |        |          |         |
+ℹ    form.mjs               | 100.00 |   100.00 |  100.00 |
+ℹ   exports                 |        |          |         |
+ℹ    task.mjs               | 100.00 |   100.00 |  100.00 |
+ℹ   inventory               |        |          |         |
+ℹ    csv.mjs                | 100.00 |   100.00 |  100.00 |
+ℹ    quantity.mjs           | 100.00 |   100.00 |  100.00 |
+ℹ    stocktake.mjs          | 100.00 |   100.00 |  100.00 |
+ℹ   notifications           |        |          |         |
+ℹ    draft.mjs              |  96.72 |    88.89 |  100.00 | 31-32
+ℹ    task-view.mjs          | 100.00 |    81.25 |  100.00 |
+ℹ   orders                  |        |          |         |
+ℹ    fulfillment.mjs        | 100.00 |    91.11 |  100.00 |
+ℹ    offline-payment.mjs    | 100.00 |    84.38 |  100.00 |
+ℹ --------------------------------------------------------------------------
+ℹ all files                 |  99.35 |    93.89 |   99.04 |
+ℹ --------------------------------------------------------------------------
+ℹ end of coverage report
+
+ RUN  v5.0.2 /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin
+      Coverage enabled with v8
+
+
+ Test Files  33 passed (33)
+      Tests  280 passed (280)
+   Start at  10:59:18
+   Duration  6.94s (import 44%, environment 24%, tests 21%, transform 9%, worker 2%)
+
+    Isolate  33 workers spawned · ~482ms startup each (spawn + environment, per file)
+             at least ~1.29s faster with isolate: false — reuses workers across files instead of one per file
+
+ % Coverage report from v8
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+-------------------|---------|----------|---------|---------|-------------------
+All files          |   96.53 |    92.16 |   97.19 |   98.61 |
+ src               |   91.72 |    89.18 |   91.83 |   90.38 |
+  App.vue          |    90.9 |    88.78 |   90.24 |   89.47 | ...93,107,155,170
+ src/shared        |   98.11 |    94.11 |   98.55 |     100 |
+  ...loadQueue.vue |   98.59 |      100 |   96.29 |     100 |
+  ...load-queue.ts |   95.71 |    93.33 |     100 |     100 | 36,48,68
+  ...-operation.ts |   99.12 |    88.88 |     100 |     100 | 65,83,114-118,123
+ src/views         |   97.01 |     93.1 |   97.87 |     100 |
+  ...mainCheck.vue |   96.55 |    95.34 |     100 |     100 | 15,24
+  ...askResult.vue |     100 |    97.36 |     100 |     100 | 7
+  ...ationView.vue |   96.62 |    91.62 |   96.87 |     100 | ...-83,99,106-107
+ src/views/catalog |   95.14 |    91.92 |   97.67 |     100 |
+  ...ionEditor.vue |   95.65 |    94.54 |     100 |     100 | 18,42,62,75,90,96
+  ...diaEditor.vue |   93.85 |    90.29 |   93.54 |     100 | ...,80,83,104,106
+  ...ion-editor.ts |   97.43 |     87.5 |     100 |     100 | 30,48
+ ...iews/inventory |   92.85 |    88.37 |   90.32 |   98.21 |
+  ...SkuPicker.vue |   91.89 |    88.31 |   88.88 |   97.95 | 59
+  ...kuSummary.vue |     100 |    88.88 |     100 |     100 | 14
+ src/views/pages   |   97.44 |    91.79 |   98.23 |   99.03 |
+  CouponFields.vue |     100 |    88.09 |     100 |     100 | 18-28
+  ...gePreview.vue |     100 |    91.84 |     100 |     100 | ...18-20,36,59-61
+  ...oneCanvas.vue |   93.93 |    94.28 |   83.33 |   95.65 | 65,68
+  MosaicFields.vue |   96.66 |    83.72 |     100 |     100 | 12,18-28
+  ...entEditor.vue |   96.42 |    82.98 |   95.65 |   97.05 | 105,139
+  ...entFields.vue |     100 |    92.98 |     100 |     100 | ...34-35,41,46-47
+  ...CopyPanel.vue |   87.32 |    91.66 |     100 |   98.11 | 46
+  ...ataEditor.vue |     100 |     97.5 |     100 |     100 | 12
+  ...eusePanel.vue |     100 |    97.14 |     100 |     100 | 15
+  ...portPanel.vue |     100 |    98.48 |     100 |     100 | 8
+  ...or-history.ts |   97.95 |    88.88 |     100 |     100 | 10,17,33
+  ...e-geometry.ts |     100 |       80 |     100 |     100 | 3
+  page-reuse.ts    |     100 |    96.15 |     100 |     100 | 14
+  types.ts         |     100 |    95.91 |     100 |     100 | 128,132
+  ...ase-report.ts |   96.87 |    84.09 |     100 |     100 | 16,20-21,24,35-36
+-------------------|---------|----------|---------|---------|-------------------
+
+=============================== Coverage summary ===============================
+Statements   : 96.53% ( 1673/1733 )
+Branches     : 92.16% ( 2001/2171 )
+Functions    : 97.19% ( 555/571 )
+Lines        : 98.61% ( 1136/1152 )
+================================================================================

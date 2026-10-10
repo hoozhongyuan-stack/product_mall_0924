@@ -45,10 +45,12 @@ def page_links(config, *, visible_only=False):
             continue
         props = component.get("props", {})
         links = []
-        if component.get("type") == "NOTICE":
+        if component.get("type") in {"NOTICE", "IMAGE"}:
             links = [props.get("link")]
         elif component.get("type") == "CAROUSEL":
             links = [slide.get("link") for slide in props.get("slides", [])]
+        elif component.get("type") in {"NAVIGATION", "MOSAIC"}:
+            links = [item.get("link") for item in props.get("items", [])]
         elif component.get("type") == "IMAGE_HOTZONE":
             links = [area.get("link") for area in props.get("areas", [])]
         for link in links:
@@ -127,18 +129,26 @@ def component_assets(component):
     props = component["props"]
     if component["type"] == "CAROUSEL":
         return {str(slide["assetId"]) for slide in props.get("slides", []) if slide.get("assetId")}
-    if component["type"] == "IMAGE_HOTZONE":
+    if component["type"] in {"NAVIGATION", "MOSAIC"}:
+        return {str(item["assetId"]) for item in props.get("items", []) if item.get("assetId")}
+    if component["type"] in {"IMAGE_HOTZONE", "IMAGE"}:
         return {str(props["assetId"])} if props.get("assetId") else set()
     return set()
 
 
 def referenced_assets(config, *, visible_only=False):
-    return {item for component in config["components"] if not visible_only or component["visible"]
-            for item in component_assets(component)}
+    assets = {item for component in config["components"] if not visible_only or component["visible"]
+              for item in component_assets(component)}
+    cover = config.get("metadata", {}).get("share", {}).get("coverAssetId")
+    return assets | ({cover} if cover else set())
 
 
-def validate_component(component, *, publishing, page_id=None, graph_cache=None):
-    fields(component, {"componentId", "type", "sortOrder", "visible", "props"}, label="组件")
+def validate_component(component, *, publishing, page_id=None, graph_cache=None, schema_version=1):
+    fields(component, {"componentId", "type", "sortOrder", "visible", "props"},
+           {"appearance"} if schema_version >= 2 else set(), label="组件")
+    if "appearance" in component:
+        from .editor_validation import appearance
+        appearance(component["appearance"])
     string(component["componentId"], "组件 ID", 64)
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", component["componentId"]):
         fail("组件 ID 仅允许字母、数字、短横线和下划线。")
@@ -201,14 +211,27 @@ def validate_component(component, *, publishing, page_id=None, graph_cache=None)
         number = string(props.get("recordNo", ""), "备案号", 100, nonempty=publishing)
         if publishing and ("示例" in number or "待" in number or "占位" in number):
             fail("备案号尚未由运营提供。", publishing=True)
+    elif schema_version == 4 and kind == "COUPON_LIST":
+        from .editor_v4 import validate_coupons
+        validate_coupons(props, publishing=publishing)
+    elif schema_version >= 3 and kind in ("MOSAIC", "SPACER"):
+        from .editor_v3 import validate_layout
+        validate_layout(component, publishing=publishing, page_id=page_id, graph_cache=graph_cache)
+    elif schema_version >= 2:
+        from .editor_validation import validate_new
+        validate_new(component, publishing=publishing, page_id=page_id, graph_cache=graph_cache)
     else:
         fail("组件类型不支持。")
 
 
 def validate_config(config, *, publishing=False, page_type="HOME", page_id=None):
-    fields(config, {"schemaVersion", "pageType", "theme", "components"}, label="页面配置")
-    if type(config["schemaVersion"]) is not int or config["schemaVersion"] != 1 or config["pageType"] != page_type:
+    fields(config, {"schemaVersion", "pageType", "theme", "components"},
+           {"metadata"} if isinstance(config, dict) and config.get("schemaVersion") in (3, 4) else set(), label="页面配置")
+    if type(config["schemaVersion"]) is not int or config["schemaVersion"] not in (1, 2, 3, 4) or config["pageType"] != page_type:
         fail("页面版本或类型不支持。")
+    if "metadata" in config:
+        from .editor_v3 import validate_metadata
+        validate_metadata(config["metadata"], publishing=publishing)
     theme = config["theme"]
     fields(theme, {"pageBackgroundColor", "headerBackgroundColor", "brandTextColor"}, label="主题")
     for value in theme.values():
@@ -219,8 +242,10 @@ def validate_config(config, *, publishing=False, page_type="HOME", page_id=None)
         fail("组件数量不正确。")
     graph_cache = {}
     for component in components:
+        if not isinstance(component, dict):
+            fail("组件须为对象。")
         validate_component(component, publishing=publishing and component.get("visible") is True,
-                           page_id=page_id, graph_cache=graph_cache)
+                           page_id=page_id, graph_cache=graph_cache, schema_version=config["schemaVersion"])
     if len({item["componentId"] for item in components}) != len(components) or \
             len({item["sortOrder"] for item in components}) != len(components):
         fail("组件 ID 和顺序不得重复。")

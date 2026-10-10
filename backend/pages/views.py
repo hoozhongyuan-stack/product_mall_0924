@@ -14,6 +14,8 @@ from catalog.validation import CatalogError
 from .models import (MicroPage, PageConfigVersion, PageDraftAsset, PagePublication,
                      PagePublishRequest, PageVersionAsset)
 from .validation import PageConfigError, referenced_assets, validate_config
+from .runtime import check_runtime, public_config, component_data
+from .editor_v3 import sharing
 
 
 def _page():
@@ -154,8 +156,17 @@ def _preview_view(request, page):
         if page.draft_revision != revision:
             return error(request, 409, "REVISION_CONFLICT", "草稿已被修改，请刷新后重试。",
                          [{"currentRevision": page.draft_revision}])
+        from .editor_v4 import coupon_component_data
+        coupon_data = {}
+        if any(item["visible"] and item["type"] == "COUPON_LIST" for item in page.draft_config["components"]):
+            _, bad = require(request, "coupon.read")
+            if bad:
+                return bad
         _validate_for_publication(page)
-        return response(request, {"revision": page.draft_revision, "config": page.draft_config})
+        if any(item["visible"] and item["type"] == "COUPON_LIST" for item in page.draft_config["components"]):
+            coupon_data = coupon_component_data(page.draft_config)
+        return response(request, {"revision": page.draft_revision, "config": page.draft_config,
+                                  "componentData": component_data(page.draft_config), "couponData": coupon_data, "share": sharing(page.draft_config)})
     except (PageConfigError, CatalogError) as exc:
         return _failure(request, exc)
 
@@ -209,6 +220,7 @@ def _publish_view(request, selected_page, actor):
             if bad:
                 return bad
             _validate_for_publication(page)
+            check_runtime(page.draft_config)
             bad = confirm_action(request, actor, "page.publish", page.id, revision)
             if bad:
                 return bad
@@ -244,10 +256,12 @@ def public_home_view(request):
     if not publication:
         return error(request, 404, "HOME_UNPUBLISHED", "首页尚未发布。")
     full_config = publication.current_version.config_json
-    visible_config = {**full_config, "components": [component for component in full_config["components"]
-                                                   if component["visible"]]}
+    try:
+        visible_config = public_config(request, full_config)
+    except PageConfigError as exc:
+        return _failure(request, exc)
     return response(request, {"versionId": str(publication.current_version_id),
-                              "config": visible_config})
+                              "config": visible_config, "componentData": component_data(visible_config), "share": sharing(full_config)})
 
 
 def pages_view(request):
@@ -267,11 +281,20 @@ def pages_view(request):
             return error(request, 400, "VALIDATION_FAILED", "分页参数不正确。")
         queryset = MicroPage.objects.filter(page_type="MICRO").select_related(
             "pagepublication__current_version").order_by("-updated_at", "-id")
+        query = request.GET.get("q", "").strip()
+        tag = request.GET.get("tag", "").strip()
+        if len(query) > 80 or len(tag) > 20 or any(len(request.GET.getlist(key)) != 1 for key in request.GET):
+            return error(request, 400, "VALIDATION_FAILED", "页面筛选参数不正确。")
+        if query:
+            queryset = queryset.filter(name__icontains=query)
+        if tag:
+            queryset = queryset.filter(draft_config__metadata__tags__contains=[tag])
         total = queryset.count()
         rows = [{"pageId": str(page.id), "name": page.name, "revision": page.draft_revision,
                  "publishedRevision": page.pagepublication.current_version.revision
                  if page.pagepublication.current_version else None,
-                 "updatedAt": page.updated_at.isoformat()}
+                 "updatedAt": page.updated_at.isoformat(),
+                 "tags": page.draft_config.get("metadata", {}).get("tags", [])}
                 for page in queryset[(page_no - 1) * page_size:page_no * page_size]]
         return offset_response(request, {"rows": rows, "page": page_no, "pageSize": page_size, "total": total})
     try:
@@ -335,8 +358,10 @@ def public_micro_view(request, page_id):
     if not publication:
         return error(request, 404, "PAGE_UNPUBLISHED", "微页面尚未发布。")
     full_config = publication.current_version.config_json
-    visible_config = {**full_config, "components": [component for component in full_config["components"]
-                                                   if component["visible"]]}
+    try:
+        visible_config = public_config(request, full_config)
+    except PageConfigError as exc:
+        return _failure(request, exc)
     return response(request, {"pageId": str(publication.page_id),
                               "versionId": str(publication.current_version_id),
-                              "name": publication.current_version.name, "config": visible_config})
+                              "name": publication.current_version.name, "config": visible_config, "componentData": component_data(visible_config), "share": sharing(full_config)})

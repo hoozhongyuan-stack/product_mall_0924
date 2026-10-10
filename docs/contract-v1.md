@@ -120,7 +120,7 @@
 
 ### 3.2 页面配置结构与发布
 
-`page_config_version.config_json` 建议包含 `schemaVersion: 1`、`pageType: HOME/MICRO`、`theme`、`components[]`。首页 `theme` 包含 `pageBackgroundColor`、`headerBackgroundColor`、`brandTextColor`；颜色按实际对比度和目标设备验证。每个组件有稳定 `componentId`、`type`、`sortOrder`、`visible`、对应 `props`；同页面排序不得重复。
+`page_config_version.config_json` 包含 `schemaVersion: 1|2|3|4`、`pageType: HOME/MICRO`、`theme`、`components[]`。首页 `theme` 包含 `pageBackgroundColor`、`headerBackgroundColor`、`brandTextColor`；颜色按实际对比度和目标设备验证。每个组件有稳定 `componentId`、`type`、`sortOrder`、`visible`、对应 `props`；同页面排序不得重复。版本 1 原六组件保持兼容；版本 2 增加下述四组件和受控外观；版本3增加受控布局与页面元数据，版本4增加优惠券组件。最多 40 组件，禁止未知字段及配置内价格库存。
 
 | 组件类型 | `props` 必填项 | 发布前校验 |
 |---|---|---|
@@ -130,6 +130,31 @@
 | `SEARCH` | 可选 `placeholder` | 搜索目标为站内搜索页。 |
 | `NOTICE` | `text`、可选 `link` | 文案非空，链接目标有效。 |
 | `FILING` | `recordNo` | 正式备案号由运营或合规提供，未提供时不能用占位号发布。 |
+| `TITLE`（v2） | `text`、`align: LEFT|CENTER`、`size: 16|20|24`，可选 `subtitle` | 主标题最多 100 字且可见发布时非空，副标题最多 200 字；纯文本。 |
+| `IMAGE`（v2） | `assetId`、`ratio: AUTO|1:1|16:9`，可选 `link` | 素材可用，跳转有效；不接收外部图片 URL。 |
+| `NAVIGATION`（v2） | `columns: 2|3|4`、`items[{title,link,assetId?}]` | 最多 20 项，发布时非空，标题最多 40 字；每项链接和可选图片校验。 |
+| `PRODUCT_LIST`（v2） | `source: MANUAL|CATEGORY`、`productIds[]`、`categoryId`、`limit: 1..20`、`layout: GRID|LIST|SCROLL`、`sort: NEWEST|PRICE_ASC` | 手选最多 20 个不同商品 UUID，按 ID 顺序；分类按创建时间最新或价格升序。非当前来源字段可为空，发布时当前来源必须有效。 |
+| `MOSAIC`（v3） | `template: TWO|THREE|FOUR|FEATURED`、`items[{assetId,title?,link?}]`、`gap: 0|4|8|12|16` | 槽位数分别2/3/4/3，标题最多40字；草稿允许空图片，发布时所有图片必须可用；站内链接有效并纳入页面环路检查。 |
+| `SPACER`（v3） | `height: 4|8|12|16|24|32|48|64|96` | 受控高度，375设计单位，小程序乘2转rpx。 |
+| `COUPON_LIST`（v4） | `source: MANUAL|AUTO`、`campaignIds:UUID[]`（最多10个）、`limit:1..10`、`layout:LIST|SCROLL` | 手选引用须已公开并支持SELF/BOTH；动态领取状态不阻止整页发布，详细DTO、权限和领取边界见文末第三阶段协议。 |
+
+版本3及以上可选 `metadata{tags,share:{title,description,coverAssetId}}`，元数据两个键、分享三个键完整提供。标签至多5个、每个1—20字、必须已去除首尾空白且不重复。分享标题最多60字、描述最多120字，可为空；封面空字符串或素材UUID，须为图片，纳入草稿/历史版本引用、发布权限与公开素材保护。版本1/2拒绝metadata、MOSAIC及SPACER，不自动改变历史快照。
+
+版本2及以上组件可选 `appearance{backgroundColor?,padding?,margin?,radius?}`，颜色为 `#RRGGBB`，内外间距允许 `0/4/8/12/16/24/32`，圆角允许 `0/8/16`，均为 375 宽设计单位，小程序乘 2 转 rpx；未配置保持既有样式。v1 不接收 appearance。
+
+预览与公开首页/微页面响应增加 `share:{title,description,coverUrl}`，只读取对应草稿预览或当前发布版本；公开config剔除metadata，运营标签及原始封面ID只在后台配置中保留，公开分享单独从已发布快照生成；无配置时为空字符串，封面路径为公开UUID素材端点。微信消息使用标题/封面，描述保存不代表平台消息展示。客户端首页空标题回退“商城首页”，微页回退已发布页面名称；不启用尚未读取成功的页面分享。
+
+预览与公开首页/微页面响应增加 `componentData`，以可见商品组件 ID 为键，值为 `[{productId,name,priceFen,imageUrl,purchasable}]`。整数分起价取商品域最低在售 SKU 公开日常标价；图片路径为 `/api/v1/app/assets/{UUID}/file`；小程序按 API origin 解析。查询仅输出公开有效商品，失效商品移除，空来源返回空列表；配置和历史版本不保存动态商品数据。会员实际成交价在商品详情／报价时重新获取。
+
+| 新接口 | 权限与请求 | 结果与约束 |
+| --- | --- | --- |
+| `GET /api/v1/admin/pages/capabilities` | `page.read` | `{runtimeSchemaVersion,supportedSchemaVersions:[1,2,3,4]}`。运行时支持来自服务端部署设置，不接受客户端自报作为发布许可。 |
+| `GET /api/v1/admin/pages/templates` | `page.read` | `{templates:[{templateId,version:1,name,description,config}],combinations:[{combinationId,version:1,name,description,components}]}`；模板ID为`BRAND_HOME/CATEGORY_GUIDE/CAMPAIGN`，组合ID为`BRAND_HEADER/CATEGORY_SECTION/CAMPAIGN_ENTRY`；每次返回独立待配置版本3草稿。客户端应用时重新生成组件ID，保留当前pageType、标签/分享资料；模板替换需确认，可撤销，保存沿用草稿PUT，线上不自动同步。 |
+| `GET /api/v1/admin/pages`（增量） | `page.read`；`q`最多80字按页面名称包含查询、`tag`最多20字精确筛选、沿用page/pageSize | 当前已保存草稿标签参与筛选；列表行追加`tags[]`，旧配置为空。q/tag查询先去除首尾空白，重复参数和非法长度拒绝；按原updatedAt排序分页，不以客户端过滤代替服务端分页。 |
+| `POST /api/v1/admin/pages/product-preview` | `page.read`、CSRF；`{props: PRODUCT_LIST.props}` | `{products: 商品DTO[]}`，有界只读查询；空待配置来源可返回空，非法字段拒绝。 |
+| `POST /api/v1/admin/pages/{id}/copy` | 实时 `page.edit` 与 `page.read`、CSRF、`Idempotency-Key`；`{name,source:DRAFT|PUBLISHED,expectedRevision}` | 201 新微页面草稿 DTO。修订分别对应源草稿／当前线上版本，冲突409；同操作者＋源页面＋请求键同内容重放返回原201结果，异内容409。组件ID重建，素材权限复核、引用建立与审计同事务，发布身份不复制。 |
+
+`PAGE_RUNTIME_SCHEMA_VERSION` 默认 `1`，合法值1/2/3/4；只有目标小程序代码完成相应平台验证后，才能在部署中显式设为对应版本。发布和历史回退到更高版本时返回 `422 PAGE_RUNTIME_UNSUPPORTED`。公开首页/微页 GET 接受客户端 `schemaVersion=1|2|3|4` 查询声明；缺省为1，旧端请求更高版本内容返回 `422 PAGE_SCHEMA_UNSUPPORTED` 提示更新，非法或重复声明400。服务端内容不静默裁剪。服务端预览可校验新版草稿，不因此开放线上发布；新小程序请求版本4，并支持历史版本1/2/3。
 
 链接结构为 `{type: PRODUCT|CATEGORY|PAGE|FUNCTION, targetId}`；`PAGE` 只接受独立微页面 UUID，草稿可引用尚未发布的微页面，预览/发布必须确认目标已发布，并拒绝自引用和当前发布图中的循环。不接受任意外链；商品和分类目标发布时须符合上架/启用状态，功能目标限 `SEARCH`/`CATALOG`。首页和微页面发布先验证当前可见组件与链接，再在一个事务中生成不可变版本、切换 `page_publication` 指针并写审计；`expectedRevision` 过期时拒绝，同一请求键重试只产生一个版本。本段记录原发布切片；E1历史与回退见5.22，事件待发送机制另属E2。
 
@@ -712,3 +737,14 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 - 小程序个人中心支持头像、昵称编辑及主动退出。退出复用服务端会话撤销接口，清除本地令牌与私人展示；游客可继续访问个人中心公共入口。
 - 付款方式开关保存于付款策略，两个独立字段允许同时启用或停用；未曾配置的字段保留旧环境开关兼容。勾选微信支付不代表平台接通，配置状态 `NOT_CONFIGURED/PENDING_VERIFICATION` 单独显示，缺失商户配置的真实支付请求明确失败。历史订单使用原付款快照。
 - 全后台面包屑与功能页签统一固定于主顶栏下方。库存日期范围复用域内控件，支持今天、近7天、近30天、本月；移动日历有界滚动。原生业务表格样式只作用于表格容器，避免污染官方日历组件。
+## 微页面第三阶段：优惠券组件与发布报告（2026-10-10）
+
+配置 `schemaVersion:4` 兼容原 schema 1—3 的组件、外观和可选 metadata；旧 schema 严格拒绝优惠券组件。`COUPON_LIST.props` 为 `{source:'MANUAL'|'AUTO',campaignIds:UUID[],limit:1..10,layout:'LIST'|'SCROLL'}`，活动 ID 最多 10 个且按 UUID 身份去重；手选顺序保留，AUTO 按有效截止时间／ID 排序。MANUAL 发布引用须为已公开、支持 SELF/BOTH 的活动；已领完、过期、未开始和暂停领取属于实时展示状态，不阻止整个页面发布。AUTO 允许暂无可领活动。页面不创建权益规则、券身份、额度、领取资格或核销事实。
+
+`GET /api/v1/app/pages/{home|UUID}/coupons?versionId=<已读发布版本UUID>` 独立读取个性化券卡。仅接受唯一 versionId 参数，当前发布版本不匹配返回 409 `PAGE_VERSION_CONFLICT`，未发布返回 404 `PAGE_UNPUBLISHED`。无 Authorization 为游客；带无效／过期／撤销／禁用身份的 Bearer 返回 401，身份复用 `customers.auth.require_member`。响应为 `{pageId:'home'|UUID,versionId,memberId:null|本人UUID,componentData:{componentId:CouponCard[]}}`，只包含当前已发布页面的可见优惠券组件。响应成功／错误都 `Cache-Control:no-store`，`Vary:Authorization,Cookie`，个性化数据不加入可共享的普通公开页面配置。
+
+`CouponCard` 字段为 `{id,title,kind,minGoodsFen,discountFen,productIds,productNames,scopeRestricted,scopeLabel,redeemEligible,validFrom,validUntil,remainingQuantity,selfClaimLimit,selfClaimedCount,canClaim,claimState}`。金额为整数分；scope 的商品 ID／名称仅列公开可售商品，隐藏商品不出站；`scopeRestricted` 保留是否指定商品范围，`scopeLabel` 为“指定商品”或“全部商品”，不能把过滤后空商品数组误称全店券。MANUAL 只显示 PUBLISHED + SELF/BOTH 活动，私有草稿、不存在活动和仅后台发放活动不出站。状态为 `GUEST/AVAILABLE/LIMIT_REACHED/SOLD_OUT/EXPIRED/NOT_STARTED/UNAVAILABLE`；停发、时段、余量、本人次数的判断沿用已有权益条件，`canClaim` 仅在 AVAILABLE 为 true。AUTO 仅列当前可领活动；本人数量状态继续单独判断。DTO 不含管理 code、revision、操作人、发行模式、凭证键或其他会员信息。展示结果不锁定领取资格；实际领取仍调用既有 `POST /api/v1/app/coupon-campaigns/{id}/claim`，原 UUID 幂等键、会员绑定和结果恢复规则保持原样。
+
+后台 `POST /api/v1/admin/pages/coupon-preview` body `{props}` 需要 `page.read` 与 `coupon.read`，返回 `{coupons:CouponCard[]}`，以游客状态显示安全券卡。完整页面 preview 包含可见优惠券组件时同样需要 coupon.read，componentData 保持商品数据，另返回 couponData 券卡映射；配置和 metadata 仍完整保留。发布页面默认能力仍为 schema 1，只有已部署且验证对应小程序渲染器后人工提高 `PAGE_RUNTIME_SCHEMA_VERSION`；当前实现允许 1—4。公开页面 GET 需声明支持 `schemaVersion=4`，旧客户端不支持时返回明确兼容错误。运营 metadata 不加入普通公开 config，分享资料从已发布完整配置独立返回。公开 config 以不改写发布快照的投影清除未激活来源选择器：AUTO 优惠券的 campaignIds 置空，CATEGORY 商品的 productIds 置空，MANUAL 商品的 categoryId 置空；草稿可保留这些暂未使用的选择值，不参与对应来源查询和发布引用校验。
+
+`POST /api/v1/admin/pages/{home|UUID}/release-report` 需要 page.read 与 CSRF，body 为 `{expectedRevision,expectedPublicationRevision}`。报告在页面／线上指针及发布链接图锁内读取一致快照，不保存、不发布、不领取、不创建业务审计事实。任一版本变化分别返回 409 `REVISION_CONFLICT`／`PUBLICATION_REVISION_CONFLICT`。响应为 `{pageId,revision,publicationRevision,publishedVersionId,schemaVersion,runtimeSchemaVersion,runtimeSupported,diff,issues,canPublish}`。`diff` 为 `{addedComponentIds,removedComponentIds,updatedComponentIds,orderChanged,themeChanged,metadataChanged,nameChanged}`；metadataChanged 包含后台标签变化，标签本身不展示在消费者页面；nameChanged 比较当前草稿页面名称与当前发布版本名称，无线上版本时为true，名称单独变化也属于公开页面变化。`issues` 每项为 `{componentId?,path,code,message,severity:'ERROR'|'WARNING'}`，分别收集配置、图片／分享封面、商品／分类、PAGE 未发布／循环、优惠券公开引用及运行时兼容问题。公开券当前领完／过期／未开始／停发为 WARNING；私有或失效引用为 ERROR。报告允许读取未补完整的草稿，`canPublish` 仅表示当前快照未发现 ERROR，不能取代提交发布时的完整校验、密码确认、双修订号和幂等协议。报告成功不证明已发布、部署或微信真机验收。

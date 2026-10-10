@@ -1,0 +1,24 @@
+
+> product-mall-admin@0.1.0 test:integration
+> python3 scripts/run-browser-integration.py
+
+Isolated Django/PostgreSQL and Vue ready; external platform credentials absent.
+
+Running 8 tests using 1 worker
+
+(node:10013) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [desktop] › tests/browser/integration.spec.ts:6:1 › real isolated database: schema2 micro-page publish, legacy fence and independent copy (3.6s)
+  ✓  2 [desktop] › tests/browser/integration.spec.ts:50:1 › real isolated database: login and create a persisted coupon draft (2.5s)
+  ✓  3 [desktop] › tests/browser/integration.spec.ts:86:1 › real isolated database: securely replace and retain mini-program credentials (2.3s)
+  ✓  4 [desktop] › tests/browser/integration.spec.ts:140:1 › real isolated database: bulk upload images and persist a referenced product description (4.1s)
+(node:10245) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  5 [mobile] › tests/browser/integration.spec.ts:6:1 › real isolated database: schema2 micro-page publish, legacy fence and independent copy (2.8s)
+  ✓  6 [mobile] › tests/browser/integration.spec.ts:50:1 › real isolated database: login and create a persisted coupon draft (2.0s)
+  ✓  7 [mobile] › tests/browser/integration.spec.ts:86:1 › real isolated database: securely replace and retain mini-program credentials (2.2s)
+  ✓  8 [mobile] › tests/browser/integration.spec.ts:140:1 › real isolated database: bulk upload images and persist a referenced product description (3.7s)
+
+  8 passed (24.0s)
+Verified persisted drafts, encrypted synthetic credentials, zero orders and zero WeChat identities.
+Removed only this run’s isolated database and stopped owned servers.

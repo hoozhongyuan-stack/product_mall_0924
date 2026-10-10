@@ -20,3 +20,12 @@ def search_product_options(search,page,page_size):
     return [{'id':str(row.id),'name':row.name,'productNo':row.product_no,'status':row.status}
             for row in query.only('id','name','product_no','status').order_by('name','id')
             [(page-1)*page_size:page*page_size]],total
+
+
+def page_coupon_product_names(product_ids):
+    """Publicly visible scope labels for anonymous page cards."""
+    from .models import Category, Sku
+    return [{'id': str(row.id), 'name': row.name} for row in Product.objects.filter(
+        id__in=product_ids, status=Product.Status.ON_SALE, main_image__isnull=False,
+        category__status=Category.Status.ACTIVE, category__parent__status=Category.Status.ACTIVE,
+        skus__sale_status=Sku.SaleStatus.ON_SALE).distinct().only('id', 'name').order_by('id')]

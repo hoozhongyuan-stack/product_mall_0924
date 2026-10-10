@@ -9,8 +9,16 @@ import { keepRollbackIntent, type RollbackResult } from '../shared/publication-h
 import { applyCurrentPublication, currentPublication, publicationIntent, matchesPublishResult, parsePublishIntent, persistPublishIntent, type PublishIntent } from '../shared/publication-sync'
 import { api, ApiError, type Account, type Confirmation } from '../api'
 import HomePagePreview from './pages/HomePagePreview.vue'
+import EditorActions from './pages/EditorActions.vue'
+import PageReusePanel from './pages/PageReusePanel.vue'
+import PageMetadataEditor from './pages/PageMetadataEditor.vue'
+import ReleaseReportPanel from './pages/ReleaseReportPanel.vue'
+import { useReleaseReport } from './pages/use-release-report'
+import { useEditorHistory, reorderComponent, duplicateComponent } from './pages/editor-history'
+import { useEditorRuntime } from './pages/editor-runtime'
+import './pages/editor-enhancements.css'
 import PageComponentEditor from './pages/PageComponentEditor.vue'
-import { applyUploadedAsset, componentNames, createComponent, normalizeConfig, type ComponentType, type HomeDraft, type HomePreview, type HomePublication, type PageComponent, type PageConfig, type UploadedAssetBinding } from './pages/types'
+import { applyUploadedAsset, componentNames, createComponent, normalizeConfig, type ComponentType, type HomeDraft, type HomePreview, type HomePublication, type PageComponent, type PageConfig, type PageMetadata, type UploadedAssetBinding } from './pages/types'
 import './pages/home.css'
 import { usePageTargets } from './pages/targets'
 
@@ -36,9 +44,31 @@ const publicationRecoveryBlocked = ref(false)
 const { categories, products, pages: linkPages, warning: targetWarning, loading: targetsLoading, load: loadTargets } = usePageTargets()
 const pages = computed(() => linkPages.value.filter(item => item.publishedRevision !== null)
   .map(item => ({ pageId: item.pageId, name: item.name })))
-const componentTypes: ComponentType[] = ['CAROUSEL', 'IMAGE_HOTZONE', 'DIVIDER', 'SEARCH', 'NOTICE', 'FILING']
+const componentTypes: ComponentType[] = ['TITLE', 'IMAGE', 'NAVIGATION', 'PRODUCT_LIST', 'COUPON_LIST', 'MOSAIC', 'SPACER', 'CAROUSEL', 'IMAGE_HOTZONE', 'DIVIDER', 'SEARCH', 'NOTICE', 'FILING']
+const { canUndo, canRedo, reset: resetHistory, undo, redo } = useEditorHistory(editor)
+const { runtimeSchema, runtimeLoading, runtimeError, runtimeBlocked, loadRuntime } = useEditorRuntime(editor)
+const draggingId = ref('')
+function startDrag(event: DragEvent, id: string) {
+  if (!canEdit.value || busy.value) return
+  draggingId.value = id
+  event.dataTransfer?.setData('text/plain', id)
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+function dropComponent(id: string) {
+  if (canEdit.value && !busy.value && editor.value && draggingId.value) editor.value = reorderComponent(editor.value, draggingId.value, id)
+  draggingId.value = ''
+}
+function copySelected() {
+  if (!editor.value || !selected.value || !canEdit.value || busy.value) return
+  const originalIndex = editor.value.components.findIndex(item => item.componentId === selectedId.value)
+  const next = duplicateComponent(editor.value, selectedId.value)
+  if (next === editor.value) return
+  editor.value = next
+  selectedId.value = next.components[originalIndex + 1]!.componentId
+}
 
 const dirty = computed(() => !!editor.value && savedSnapshot.value !== JSON.stringify(editor.value))
+const { report, reportLoading, reportError, reportStale, refreshReport } = useReleaseReport(draft, dirty, busy, () => '/pages/home', saveDraft)
 const previewStale = computed(() => !!preview.value && (dirty.value || previewSnapshot.value !== savedSnapshot.value))
 const previewReady = computed(() => !!preview.value && !previewStale.value && preview.value.revision === draft.value?.revision)
 const alreadyPublished = computed(() => !!draft.value && draft.value.publishedRevision === draft.value.revision)
@@ -58,14 +88,19 @@ async function loadDraft() {
   error.value = ''
   try {
     const result = await api<HomeDraft>('/pages/home/draft')
+    const config = normalizeConfig(result.config)
     draft.value = result
     restorePublishIntent()
-    editor.value = normalizeConfig(result.config)
+    editor.value = config
+    resetHistory()
     savedSnapshot.value = JSON.stringify(editor.value)
     preview.value = null
     previewSnapshot.value = ''
     selectedId.value = 'theme'
-  } catch (reason) { error.value = message(reason) }
+  } catch (reason) {
+    draft.value = null; editor.value = null; preview.value = null; savedSnapshot.value = ''
+    error.value = message(reason)
+  }
   finally { loading.value = false }
 }
 
@@ -81,6 +116,22 @@ onBeforeRouteLeave(async () => !dirty.value || await confirmAction('首页草稿
 function updateTheme(key: keyof PageConfig['theme'], value: string) {
   if (!editor.value) return
   editor.value = { ...editor.value, theme: { ...editor.value.theme, [key]: value } }
+}
+function replaceEditor(config: PageConfig) {
+  if (!editor.value || !canEdit.value || busy.value) return
+  editor.value = normalizeConfig({ ...config, pageType: editor.value.pageType })
+  selectedId.value = 'theme'
+  notice.value = '编辑快照已应用，可撤销；请保存草稿。线上版本未变化。'
+}
+function appendCombination(items: PageComponent[]) {
+  if (!editor.value || !canEdit.value || busy.value || editor.value.components.length + items.length > 40) return
+  editor.value = normalizeConfig({ ...editor.value, components: [...editor.value.components, ...items] })
+  selectedId.value = items[0]?.componentId || 'theme'
+  notice.value = '组件组合已加入，可撤销；请补全素材与目标后保存。'
+}
+function updateMetadata(metadata: PageMetadata) {
+  if (!editor.value || !canEdit.value || busy.value) return
+  editor.value = normalizeConfig({ ...editor.value, schemaVersion: Math.max(3, editor.value.schemaVersion) as PageConfig['schemaVersion'], metadata })
 }
 function updateComponents(items: PageComponent[]) {
   if (!editor.value) return
@@ -101,7 +152,7 @@ function bindUploadedAsset(upload: UploadedAssetBinding) {
   notice.value = '图片已上传并绑定到原组件，记得保存草稿。'
 }
 function addComponent(type: ComponentType) {
-  if (!editor.value) return
+  if (!editor.value || !canEdit.value || busy.value || editor.value.components.length >= 40) return
   const item = createComponent(type, editor.value.components.length + 1)
   updateComponents([...editor.value.components, item])
   selectedId.value = item.componentId
@@ -164,6 +215,7 @@ function openPublish() {
     if (publishIntent.value.objectId !== draft.value.pageId) { error.value = '另一个页面的发布结果尚未确认，请返回原页面恢复原发布请求。'; return }
     error.value = ''; publishPassword.value = ''; publishOpen.value = true; return
   }
+  if (runtimeBlocked.value) { error.value = '请先确认小程序支持新增组件，再发布。'; return }
   if (dirty.value) { error.value = '请先保存草稿，再发布当前修订。'; return }
   if (!previewReady.value) { error.value = '请先生成当前草稿的服务端预览，再发布。'; return }
   if (alreadyPublished.value) { error.value = '当前草稿修订已发布。'; return }
@@ -268,7 +320,7 @@ function rolledBack(result: RollbackResult) {
       <div class="home-heading-actions"><PublicationHistory v-if="draft" :account="account" base="/pages/home" :object-id="draft.pageId" :draft-revision="draft.revision" :disabled="loading || Boolean(busy)" @rolled-back="rolledBack" />
         <button type="button" class="secondary-button" :disabled="loading || Boolean(busy) || !canEdit || !dirty" @click="saveDraft">{{ busy === 'save' ? '保存中…' : '保存草稿' }}</button>
         <button type="button" class="secondary-button" :disabled="loading || Boolean(busy)" @click="showPreview">{{ busy === 'preview' ? '生成中…' : '预览' }}</button>
-        <button v-if="canPublish" type="button" class="primary-button" :disabled="loading || Boolean(busy) || publicationRecoveryBlocked || Boolean(publicationRefresh) || (!publishIntent && (dirty || !previewReady || alreadyPublished))" :title="alreadyPublished ? '当前草稿已发布' : !previewReady ? '请先预览当前草稿' : dirty ? '请先保存草稿' : ''" @click="openPublish">{{ publishIntent ? '恢复原发布请求' : publicationRefresh ? '线上状态待同步' : alreadyPublished ? '当前修订已发布' : '发布首页' }}</button>
+        <button v-if="canPublish" type="button" class="primary-button" :disabled="loading || Boolean(busy) || publicationRecoveryBlocked || Boolean(publicationRefresh) || (!publishIntent && (runtimeBlocked || dirty || !previewReady || alreadyPublished))" :title="alreadyPublished ? '当前草稿已发布' : !previewReady ? '请先预览当前草稿' : dirty ? '请先保存草稿' : ''" @click="openPublish">{{ publishIntent ? '恢复原发布请求' : publicationRefresh ? '线上状态待同步' : alreadyPublished ? '当前修订已发布' : '发布首页' }}</button>
       </div>
     </header>
     <div v-if="error" class="notice home-error" role="alert">{{ error }} <button v-if="!draft" type="button" class="text-button" @click="loadDraft">重新加载</button></div>
@@ -283,40 +335,44 @@ function rolledBack(result: RollbackResult) {
         <span v-else>草稿已保存</span>
         <button type="button" class="text-button home-reload" :disabled="Boolean(busy)" @click="reloadDraft">重新读取</button>
       </div>
+      <EditorActions :disabled="!canEdit || Boolean(busy)" :can-undo="canUndo" :can-redo="canRedo" :can-copy="Boolean(selected)" :count="editor.components.length" @undo="undo" @redo="redo" @copy="copySelected" @theme="selectedId = 'theme'" />
+      <p v-if="editor.schemaVersion > 1 && runtimeBlocked" class="editor-runtime-note" role="status">{{ runtimeLoading ? '正在读取小程序兼容状态…' : runtimeError || `新增组件草稿可编辑和预览；小程序当前支持配置版本 ${runtimeSchema}，发布暂不可用。` }}<button v-if="!runtimeLoading" type="button" class="text-button" @click="loadRuntime">重新检查</button></p>
+      <PageReusePanel :key="draft.pageId" :config="editor" :disabled="!canEdit || Boolean(busy)" @replace="replaceEditor" @append="appendCombination" />
+      <section class="panel page-metadata-panel" aria-label="分享与业务标签"><PageMetadataEditor :key="draft.pageId" :metadata="editor.metadata" :disabled="!canEdit || Boolean(busy)" @change="updateMetadata" /></section>
+      <ReleaseReportPanel :report="report" :stale="reportStale" :loading="reportLoading" :error="reportError" :disabled="Boolean(busy) || loading" @refresh="refreshReport" />
       <div class="home-editor-grid">
         <aside class="home-toolbox panel" aria-label="组件与顺序">
           <h2>可用组件</h2><p>添加后设置内容、顺序和显示状态。</p>
           <div class="home-component-library">
-            <button v-for="type in componentTypes" :key="type" type="button" :disabled="!canEdit" @click="addComponent(type)"><span>{{ componentNames[type] }}</span><strong aria-hidden="true">＋</strong></button>
+            <button v-for="type in componentTypes" :key="type" type="button" :disabled="!canEdit || Boolean(busy) || editor.components.length >= 40" @click="addComponent(type)"><span>{{ componentNames[type] }}</span><strong aria-hidden="true">＋</strong></button>
           </div>
           <div class="home-toolbox-title"><h3>页面组件</h3><small>{{ editor.components.length }} 项</small></div>
           <p v-if="!editor.components.length" class="help-text">还没有组件。请从上方添加。</p>
           <ol v-else class="home-component-list">
-            <li v-for="(item, index) in editor.components" :key="item.componentId" :class="{ selected: selectedId === item.componentId }">
+            <li v-for="(item, index) in editor.components" :key="item.componentId" :class="{ selected: selectedId === item.componentId }" :draggable="canEdit && !busy" @dragstart="startDrag($event, item.componentId)" @dragover.prevent @drop.prevent="dropComponent(item.componentId)" @dragend="draggingId = ''">
               <button type="button" class="home-component-select" :aria-current="selectedId === item.componentId ? 'true' : undefined" @click="selectedId = item.componentId"><strong>{{ componentNames[item.type] }}</strong><small>{{ item.visible ? '显示中' : '已隐藏' }}</small></button>
-              <div v-if="canEdit" class="home-row-tools"><button type="button" :disabled="index === 0" :aria-label="`上移${componentNames[item.type]}`" @click="moveComponent(index, -1)">↑</button><button type="button" :disabled="index === editor.components.length - 1" :aria-label="`下移${componentNames[item.type]}`" @click="moveComponent(index, 1)">↓</button></div>
+              <div v-if="canEdit" class="home-row-tools"><button type="button" :disabled="index === 0 || Boolean(busy)" :aria-label="`上移${componentNames[item.type]}`" @click="moveComponent(index, -1)">↑</button><button type="button" :disabled="index === editor.components.length - 1 || Boolean(busy)" :aria-label="`下移${componentNames[item.type]}`" @click="moveComponent(index, 1)">↓</button></div>
             </li>
           </ol>
         </aside>
 
         <section class="home-preview-panel panel" aria-labelledby="home-preview-title">
-          <div class="home-panel-title"><div><h2 id="home-preview-title">页面预览</h2><p>以服务端校验的草稿配置展示</p></div><span class="badge badge-muted">{{ preview ? `修订 ${preview.revision}` : '待预览' }}</span></div>
-          <HomePagePreview v-if="preview" :config="preview.config" :stale="previewStale" />
-          <div v-else class="home-preview-empty"><strong>预览尚未生成</strong><p>点击“预览”后，页面会保存未提交的修改，再显示服务端校验结果。</p><button type="button" class="secondary-button" :disabled="Boolean(busy)" @click="showPreview">生成预览</button></div>
+          <div class="home-panel-title"><div><h2 id="home-preview-title">即时效果</h2><p>点击画布选中组件，编辑结果即时显示；链接不会跳转。</p></div><span :class="previewReady ? 'badge badge-good' : 'badge badge-muted'">{{ previewReady ? '服务端校验通过' : '待服务端校验' }}</span></div>
+          <HomePagePreview :config="editor" :stale="false" :interactive="true" :selected-id="selectedId" @select="selectedId = $event" />
         </section>
 
         <section class="home-settings panel" aria-labelledby="home-settings-title">
           <div class="home-panel-title"><div><h2 id="home-settings-title">{{ selected ? `组件设置 · ${componentNames[selected.type]}` : '页面设置 · 首页主题' }}</h2><p>{{ selected ? '修改后保存草稿，预览不会影响线上页面。' : '三项主题颜色只作用于首页。' }}</p></div></div>
           <template v-if="selected">
-            <label v-if="canEdit" class="home-toggle"><input type="checkbox" :checked="selected.visible" @change="updateComponent({ ...selected, visible: ($event.target as HTMLInputElement).checked })">显示此组件</label>
+            <label v-if="canEdit" class="home-toggle"><input type="checkbox" :checked="selected.visible" :disabled="Boolean(busy)" @change="updateComponent({ ...selected, visible: ($event.target as HTMLInputElement).checked })">显示此组件</label>
             <span v-else class="badge badge-muted">{{ selected.visible ? '显示中' : '已隐藏' }}</span>
-            <fieldset :disabled="!canEdit" class="home-settings-fieldset"><PageComponentEditor :disabled="!canEdit || Boolean(busy)" :component="selected" :can-upload="canUpload" :categories="categories" :products="products" :pages="pages" @change="updateComponent" @uploaded="bindUploadedAsset" /></fieldset>
+            <fieldset :disabled="!canEdit || Boolean(busy)" class="home-settings-fieldset"><PageComponentEditor :disabled="!canEdit || Boolean(busy)" :component="selected" :can-upload="canUpload" :categories="categories" :products="products" :pages="pages" @change="updateComponent" @uploaded="bindUploadedAsset" /></fieldset>
             <p v-if="targetsLoading" class="help-text" role="status">正在读取目标列表…</p>
             <p v-else-if="targetWarning" class="help-text" role="alert">{{ targetWarning }} <button type="button" class="text-button" @click="loadTargets">重试读取目标</button></p>
-            <button v-if="canEdit" type="button" class="text-button danger home-remove" @click="removeComponent(selected.componentId)">移除组件</button>
+            <button v-if="canEdit" type="button" class="text-button danger home-remove" :disabled="Boolean(busy)" @click="removeComponent(selected.componentId)">移除组件</button>
           </template>
           <div v-else class="home-theme-fields">
-            <label v-for="field in ([['pageBackgroundColor', '页面背景色'], ['headerBackgroundColor', '顶部区域底色'], ['brandTextColor', '顶部品牌文字色']] as const)" :key="field[0]">{{ field[1] }}<span class="home-color-control"><input type="color" :value="editor.theme[field[0]]" :disabled="!canEdit" :aria-label="field[1]" @input="updateTheme(field[0], ($event.target as HTMLInputElement).value)"><input :value="editor.theme[field[0]]" :disabled="!canEdit" maxlength="7" pattern="#[0-9A-Fa-f]{6}" @change="updateTheme(field[0], ($event.target as HTMLInputElement).value.trim())"></span></label>
+            <label v-for="field in ([['pageBackgroundColor', '页面背景色'], ['headerBackgroundColor', '顶部区域底色'], ['brandTextColor', '顶部品牌文字色']] as const)" :key="field[0]">{{ field[1] }}<span class="home-color-control"><input type="color" :value="editor.theme[field[0]]" :disabled="!canEdit || Boolean(busy)" :aria-label="field[1]" @input="updateTheme(field[0], ($event.target as HTMLInputElement).value)"><input :value="editor.theme[field[0]]" :disabled="!canEdit || Boolean(busy)" maxlength="7" pattern="#[0-9A-Fa-f]{6}" @change="updateTheme(field[0], ($event.target as HTMLInputElement).value.trim())"></span></label>
             <p class="help-text">发布前会校验颜色格式；请在手机预览中检查文字与背景的对比。</p>
           </div>
         </section>
@@ -331,3 +387,7 @@ function rolledBack(result: RollbackResult) {
     </el-dialog>
   </section>
 </template>
+
+<style scoped>
+.page-metadata-panel{padding:20px;margin:16px 0}@media(max-width:700px){.page-metadata-panel{padding:16px}}
+</style>

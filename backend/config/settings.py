@@ -117,3 +117,6 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_AGE = 1800
 SESSION_SAVE_EVERY_REQUEST = False
+
+# Raise the schema capability only after the deployed mini-program renderer has been verified.
+PAGE_RUNTIME_SCHEMA_VERSION = int(os.environ.get("PAGE_RUNTIME_SCHEMA_VERSION", "1"))

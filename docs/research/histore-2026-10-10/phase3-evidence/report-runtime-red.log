@@ -1,0 +1,33 @@
+
+ RUN  v5.0.2 /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin
+
+ ❯ tests/components/release-report-runtime.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/components/release-report-runtime.test.ts [ tests/components/release-report-runtime.test.ts ]
+Error: Failed to resolve import "../../src/views/pages/use-release-report" from "tests/components/release-report-runtime.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/hoo/Documents/Codex/产品策划/product_mall_0924/pc-admin/tests/components/release-report-runtime.test.ts:3:0
+  1  |  vi.mock("../../src/api", () => ({ api: vi.fn() }));
+  2  |  const __vi_import_0__ = await import("vue");
+  3  |  const __vi_import_1__ = await import("../../src/views/pages/use-release-report");
+     |                                       ^
+  4  |  const __vi_import_2__ = await import("../../src/api");
+  5  |  import { afterEach, describe, expect, it, vi } from "vitest";
+ ❯ TransformPluginContext._formatLog ../../../%E4%BA%A7%E5%93%81%E7%AD%96%E5%88%92/product_mall_0924/pc-admin/node_modules/.pnpm/vite@8.3.0_@types+node@26.6.3/node_modules/vite/dist/node/chunks/node.js:8393:39
+ ❯ TransformPluginContext.error ../../../%E4%BA%A7%E5%93%81%E7%AD%96%E5%88%92/product_mall_0924/pc-admin/node_modules/.pnpm/vite@8.3.0_@types+node@26.6.3/node_modules/vite/dist/node/chunks/node.js:8390:14
+ ❯ normalizeUrl ../../../%E4%BA%A7%E5%93%81%E7%AD%96%E5%88%92/product_mall_0924/pc-admin/node_modules/.pnpm/vite@8.3.0_@types+node@26.6.3/node_modules/vite/dist/node/chunks/node.js:26058:18
+ ❯ ../../../%E4%BA%A7%E5%93%81%E7%AD%96%E5%88%92/product_mall_0924/pc-admin/node_modules/.pnpm/vite@8.3.0_@types+node@26.6.3/node_modules/vite/dist/node/chunks/node.js:26128:30
+ ❯ TransformPluginContext.transform ../../../%E4%BA%A7%E5%93%81%E7%AD%96%E5%88%92/product_mall_0924/pc-admin/node_modules/.pnpm/vite@8.3.0_@types+node@26.6.3/node_modules/vite/dist/node/chunks/node.js:26094:4
+ ❯ EnvironmentPluginContainer.transform ../../../%E4%BA%A7%E5%93%81%E7%AD%96%E5%88%92/product_mall_0924/pc-admin/node_modules/.pnpm/vite@8.3.0_@types+node@26.6.3/node_modules/vite/dist/node/chunks/node.js:8172:14
+ ❯ loadAndTransform ../../../%E4%BA%A7%E5%93%81%E7%AD%96%E5%88%92/product_mall_0924/pc-admin/node_modules/.pnpm/vite@8.3.0_@types+node@26.6.3/node_modules/vite/dist/node/chunks/node.js:19634:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  10:42:51
+   Duration  293ms (environment 99%, worker 1%)
+
