@@ -72,7 +72,7 @@ Page({
   },
   async refresh() {
     if (this.pendingSubmission || this.data.submitting) return
-    if (((stores.selected() || {}).id || null) !== (this.checkoutStoreId || null)) { this.setData({ state: 'error', error: '门店已切换，请返回对应门店购物车重新结算。', canSubmit: false }); return }
+    if (((stores.selected() || {}).id || null) !== (this.checkoutStoreId || null)) { this.setData({ state: 'error', error: '前置仓已切换，请返回对应前置仓购物车重新结算。', canSubmit: false }); return }
     const token = this.quoteToken = (this.quoteToken || 0) + 1
     if (!Array.isArray(this.items) || !this.items.length) {
       this.setData({ state: 'empty', error: '未选择商品。', canSubmit: false }); return

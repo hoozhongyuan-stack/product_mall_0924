@@ -35,7 +35,7 @@ def set_available_stock(store,sku_id,available,expected,member):
             InventoryLedger.objects.create(warehouse_id=store.warehouse_id,sku=anchor,unit_version=anchor.current_unit,
                 movement_type='STORE_SET',store_adjustment_id=uuid.uuid4(),store_member=member,
                 operation_unit=pool.base_unit,operation_quantity=abs(delta),ratio=1,delta_base_units=delta,
-                balance_before=balance.on_hand_base_units,balance_after=after,reason='门店可售库存填写')
+                balance_before=balance.on_hand_base_units,balance_after=after,reason='前置仓可售库存填写')
             balance.on_hand_base_units = after
             balance.save(update_fields=['on_hand_base_units','updated_at'])
         return available

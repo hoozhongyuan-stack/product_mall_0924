@@ -40,7 +40,7 @@ class WithdrawalTests(TestCase):
         self.directory=tempfile.TemporaryDirectory();self.addCleanup(self.directory.cleanup)
         path=Path(self.directory.name)/'key';path.write_bytes(Fernet.generate_key())
         setting=override_settings(MALL_WECHAT_CREDENTIAL_KEY_FILE=str(path));setting.enable();self.addCleanup(setting.disable)
-        self.store=Store.objects.create(name='财务门店',warehouse=Warehouse.objects.create(code='FINANCE',name='门店'))
+        self.store=Store.objects.create(name='财务前置仓',warehouse=Warehouse.objects.create(code='FINANCE',name='前置仓'))
         from catalog.models import MemberGrade
         grade=MemberGrade.objects.first() or MemberGrade.objects.create(code='FINANCE',name='财务测试等级',rank=1)
         self.member=Member.objects.create(wechat_openid='finance',wechat_app_id='test',grade=grade)

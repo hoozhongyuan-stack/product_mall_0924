@@ -34,7 +34,7 @@ def list_orders(params, member=None):
         try:
             rows = rows.filter(store_id=UUID(store_id))
         except (ValueError, TypeError):
-            raise PaymentError('门店编号不正确。')
+            raise PaymentError('前置仓编号不正确。')
     order_kind=params.get('orderKind')
     if order_kind:
         if order_kind not in {'CASH','POINTS'}:raise PaymentError('订单类型不正确。')

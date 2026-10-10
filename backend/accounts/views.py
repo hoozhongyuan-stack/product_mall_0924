@@ -143,6 +143,7 @@ def confirm_view(request):
                 "stores.map.configure": "stores.manage",
                 "stores.settlement.configure": "stores.manage",
                 "stores.profit.configure": "stores.manage",
+                "stores.profit.batch.configure": "stores.manage",
                 "stores.withdrawal.review": "stores.accounts.manage",
                 "stores.withdrawal.pay": "stores.accounts.manage",
                 "stores.withdrawal.payee": "stores.accounts.manage",

@@ -13,11 +13,11 @@ def get_store(store_id, for_sale=False):
     try:
         store = Store.objects.select_related('warehouse').filter(pk=store_id).first()
     except (ValidationError,ValueError,TypeError) as exc:
-        raise StoreError('门店编号无效。') from exc
+        raise StoreError('前置仓编号无效。') from exc
     if store is None:
-        raise StoreError('门店不存在。','STORE_NOT_FOUND',404)
+        raise StoreError('前置仓不存在。','STORE_NOT_FOUND',404)
     if for_sale and (not store.enabled or not store.accepting_orders or not store.warehouse.enabled):
-        raise StoreError('该门店暂不接受新订单，请切换门店。','STORE_UNAVAILABLE',409)
+        raise StoreError('该前置仓暂不接受新订单，请切换前置仓。','STORE_UNAVAILABLE',409)
     return store
 
 
@@ -25,7 +25,7 @@ def require_staff(member,store_id,permission='orders'):
     store = get_store(store_id)
     membership = StoreStaff.objects.filter(store=store,member=member,enabled=True,member__enabled=True,member__auth_version=member.auth_version).first()
     if not membership or permission not in membership.permissions:
-        raise StoreError('没有该门店的操作权限。','STORE_FORBIDDEN',403)
+        raise StoreError('没有该前置仓的操作权限。','STORE_FORBIDDEN',403)
     return store
 
 

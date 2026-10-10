@@ -462,8 +462,8 @@ test('real isolated database: store creation and account readiness persist after
   await page.getByRole('button', {name:'登录',exact:true}).click()
   await expect(page.getByRole('button', {name:'退出',exact:true})).toBeVisible()
   await page.goto('/stores/new')
-  const name = `真实联调门店_${testInfo.project.name}_${Date.now()}`
-  await page.getByLabel('门店名称',{exact:true}).fill(name)
+  const name = `真实联调前置仓_${testInfo.project.name}_${Date.now()}`
+  await page.getByLabel('前置仓名称',{exact:true}).fill(name)
   await page.getByLabel('营业时间',{exact:true}).fill('09:00–21:00')
   await page.getByLabel('联系人',{exact:true}).fill('测试店长')
   await page.getByLabel('联系电话',{exact:true}).fill('13800000000')
@@ -471,10 +471,10 @@ test('real isolated database: store creation and account readiness persist after
   await page.getByLabel('详细地址',{exact:true}).fill('湘江路测试地址')
   await page.getByLabel('纬度',{exact:true}).fill('28.200000')
   await page.getByLabel('经度',{exact:true}).fill('112.900000')
-  await page.getByRole('button',{name:'保存门店',exact:true}).click()
+  await page.getByRole('button',{name:'保存前置仓',exact:true}).click()
   await expect(page).toHaveURL(/\/stores\/[0-9a-f-]{36}$/)
   await page.reload()
-  await expect(page.getByLabel('门店名称',{exact:true})).toHaveValue(name)
+  await expect(page.getByLabel('前置仓名称',{exact:true})).toHaveValue(name)
   const storeId = new URL(page.url()).pathname.split('/').pop()
   const persisted = await page.request.get(`/api/v1/admin/stores/${storeId}`)
   expect(persisted.status()).toBe(200)

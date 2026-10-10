@@ -113,7 +113,7 @@ class StoreFinanceFlowTests(TransactionTestCase):
         settle_order(second.pk,self.due(second)+timedelta(seconds=1))
         stores=[self.store]
         for index in range(15):
-            stores.append(Store.objects.create(name=f'财务列表{index}',warehouse=Warehouse.objects.create(code=f'FINLIST-{index}',name='门店')))
+            stores.append(Store.objects.create(name=f'财务列表{index}',warehouse=Warehouse.objects.create(code=f'FINLIST-{index}',name='前置仓')))
         with self.assertNumQueries(2):summaries=account_summaries(stores)
         self.assertEqual(len(summaries),16)
         self.assertTrue(all(row['income']==[] and row['withdrawals']==[] for row in summaries))

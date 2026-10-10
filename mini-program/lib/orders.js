@@ -25,7 +25,7 @@ function statusLabel(order) {
   return '状态待核实'
 }
 function fulfillmentCopy(order) {
-  return ({ WAITING_PREPARATION: '收款已确认，门店正在备货。', WAITING_PICKUP: '商品已备好，请到订单门店出示自提凭证。', WAITING_DELIVERY: '商品已备好，等待门店配送。', WAITING_SHIPMENT: '收款已确认，实物商品等待发货。',
+  return ({ WAITING_PREPARATION: '收款已确认，前置仓正在备货。', WAITING_PICKUP: '商品已备好，请到订单前置仓出示自提凭证。', WAITING_DELIVERY: '商品已备好，等待前置仓配送。', WAITING_SHIPMENT: '收款已确认，实物商品等待发货。',
     WAITING_REDEMPTION: '收款已确认，出示订单项的核销凭证后可到店使用。',
     IN_PROGRESS: '订单项分别履约；实物查看运单，核销服务查看剩余次数。',
     COMPLETED: order.afterSaleSummary && order.afterSaleSummary.refundedQuantity > 0 ?

@@ -18,20 +18,20 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
     store_id, mode = body.get('storeId'), body.get('deliveryMode', '')
     if store_id is None:
         if mode:
-            raise ValueError('请先选择门店。')
+            raise ValueError('请先选择前置仓。')
         return None, '', {}
     try:
         identifier = UUID(store_id) if isinstance(store_id, str) else None
     except ValueError as exc:
-        raise ValueError('门店编号格式不正确。') from exc
+        raise ValueError('前置仓编号格式不正确。') from exc
     if not identifier:
-        raise ValueError('门店编号格式不正确。')
+        raise ValueError('前置仓编号格式不正确。')
     if lock:
         # Keep policy stable until stock reservation commits.
         Store.objects.select_for_update().filter(pk=identifier).first()
     store = get_store(identifier, for_sale=True)
     if mode not in ('PICKUP', 'DELIVERY', 'EXPRESS') or mode not in store.supported_modes:
-        raise ValueError('请选择该门店支持的交付方式。')
+        raise ValueError('请选择该前置仓支持的交付方式。')
     snapshot = {'id': str(store.id), 'name': store.name, 'address': store.address,
                 'contactPhone': store.contact_phone, 'revision': store.revision,
                 'latitude': str(store.latitude) if store.latitude is not None else None,
@@ -40,16 +40,16 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
                 'deliveryFeeFen': store.delivery_fee_fen}
     if mode == 'DELIVERY':
         if store.delivery_fee_fen is None or not store.delivery_radius_meters:
-            raise ValueError('门店配送费用或范围尚未配置。')
+            raise ValueError('前置仓配送费用或范围尚未配置。')
         if store.latitude is None or store.longitude is None:
-            raise ValueError('门店定位尚未配置，无法验证配送范围。')
+            raise ValueError('前置仓定位尚未配置，无法验证配送范围。')
         addresses = CustomerAddress.objects.select_for_update() if lock else CustomerAddress.objects
         address = addresses.filter(pk=address_id, member=member, active=True).first() if member and address_id else None
         pending_reason = ''
         if not address or address.latitude is None or address.longitude is None:
             pending_reason = '配送到家需要选择已定位的收货地址。'
         elif distance_meters(store.latitude, store.longitude, address.latitude, address.longitude) > store.delivery_radius_meters:
-            pending_reason = '收货地址不在该门店配送范围内，请更换地址或交付方式。'
+            pending_reason = '收货地址不在该前置仓配送范围内，请更换地址或交付方式。'
         if pending_reason:
             if not allow_address_pending:
                 raise ValueError(pending_reason)

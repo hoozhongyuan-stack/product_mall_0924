@@ -17,7 +17,7 @@ def _shipment_data(shipment):
         "carrierCode": shipment.carrier_code, "carrierName": shipment.carrier_name,
         "trackingNo": shipment.tracking_no, "warehouseId": str(shipment.warehouse_id),
         "warehouseName": shipment.warehouse.name,
-        "shippedByName": shipment.shipped_by.display_name if shipment.shipped_by_id else "门店工作人员",
+        "shippedByName": shipment.shipped_by.display_name if shipment.shipped_by_id else "前置仓工作人员",
         "shippedAt": shipment.shipped_at.isoformat(),
         "autoConfirmAt": shipment.auto_confirm_at.isoformat(),
         "confirmedAt": shipment.confirmed_at.isoformat() if shipment.confirmed_at else None,

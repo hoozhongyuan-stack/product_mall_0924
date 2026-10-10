@@ -36,7 +36,7 @@
   },
   "permission": {
     "scope.userLocation": {
-      "desc": "用于推荐附近门店及核对配送地址"
+      "desc": "用于推荐附近前置仓及核对配送地址"
     }
   },
   "requiredPrivateInfos": [

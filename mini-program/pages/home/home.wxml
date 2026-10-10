@@ -2,7 +2,7 @@
 <view class="home-page" style="background-color: {{theme.pageBackgroundColor}};">
   <view class="home-header store-home-header" style="background-color: {{theme.headerBackgroundColor}}; color: {{theme.brandTextColor}}; padding-top: {{headerPadding}}px;">
     <view class="store-brand-row" style="padding-right: {{capsuleRight}}px;">
-      <view class="store-logo">店</view><view class="store-brand-body"><view class="store-name-line"><text class="brand">{{store ? store.name : '请选择门店'}}</text><button class="store-switch" bindtap="chooseStore">⇄ 切换</button></view><view class="store-hours">{{store ? (store.acceptingOrders ? '营业接单 · ' : '暂停接单 · ') + store.openingHours : '选择门店，查看商品与库存'}}</view></view>
+      <view class="store-logo">店</view><view class="store-brand-body"><view class="store-name-line"><text class="brand">{{store ? store.name : '请选择前置仓'}}</text><button class="store-switch" bindtap="chooseStore">⇄ 切换</button></view><view class="store-hours">{{store ? (store.acceptingOrders ? '营业接单 · ' : '暂停接单 · ') + store.openingHours : '选择前置仓，查看商品与库存'}}</view></view>
     </view><view wx:if="{{storeError}}" class="store-location-help" bindtap="chooseStore">{{storeError}}</view>
   </view>
 

@@ -234,7 +234,7 @@ def submit_order(member, body, key):
         except ValueError as exc:
             raise OrderError(str(exc), 'STORE_UNAVAILABLE', 409) from exc
         if store_snapshot != quote.store_snapshot:
-            raise OrderError('门店或配送规则已变化，请重新报价。', 'STORE_POLICY_CHANGED', 409)
+            raise OrderError('前置仓或配送规则已变化，请重新报价。', 'STORE_POLICY_CHANGED', 409)
         try:
             policy = current_shipping_policy(lock=True)
             shipping_fee = shipping_fee_for_lines(quote.lines, policy) if delivery_mode not in ('PICKUP', 'DELIVERY') else 0
@@ -260,7 +260,7 @@ def submit_order(member, body, key):
             selling = set(StoreProduct.objects.select_for_update().filter(
                 store=store, on_sale=True, product_id__in=[sku.product_id for sku, *_ in current]).values_list('product_id', flat=True))
             if any(sku.product_id not in selling or row['fulfillmentKind'] != 'SHIP' for sku, _, row, _, _ in current):
-                raise OrderError('该门店已停止销售部分商品，请重新报价。', 'STORE_NOT_SELLING', 409)
+                raise OrderError('该前置仓已停止销售部分商品，请重新报价。', 'STORE_NOT_SELLING', 409)
         # Recheck available stock only after the balances are locked in a
         # fixed order; a quote is never a reservation.
         from inventory.reservations import lock_default_balances

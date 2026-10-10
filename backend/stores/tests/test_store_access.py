@@ -9,7 +9,7 @@ from inventory.store_access import set_available_stock, available_base_units
 
 class StoreAccessTests(TestCase):
     def setUp(self):
-        self.store = Store.objects.create(name='门店', warehouse=Warehouse.objects.create(code='STORE-A',name='门店'))
+        self.store = Store.objects.create(name='前置仓', warehouse=Warehouse.objects.create(code='STORE-A',name='前置仓'))
         self.other = Store.objects.create(name='其他', warehouse=Warehouse.objects.create(code='STORE-B',name='其他'))
         self.member = Member.objects.create(wechat_openid='store-staff',wechat_app_id='test',grade=MemberGrade.objects.first())
         self.staff = StoreStaff.objects.create(store=self.store,member=self.member,permissions=['products'])

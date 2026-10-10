@@ -57,7 +57,7 @@ Page({
 
   async loadHome() {
     const token = ++this.homeToken
-    if (!this.data.store && stores.selected()) { this.setData({ state: 'error', error: this.data.storeError || '所选门店暂不可用，请重新选择门店。', components: [] }); return }
+    if (!this.data.store && stores.selected()) { this.setData({ state: 'error', error: this.data.storeError || '所选前置仓暂不可用，请重新选择前置仓。', components: [] }); return }
     sharing.hide()
     pageCoupons.discard(this)
     this.setData({ state: 'loading', error: '', versionId: '', share: { title: '商城首页', imageUrl: '' } })

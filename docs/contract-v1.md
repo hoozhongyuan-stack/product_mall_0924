@@ -750,19 +750,26 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 `POST /api/v1/admin/pages/{home|UUID}/release-report` 需要 page.read 与 CSRF，body 为 `{expectedRevision,expectedPublicationRevision}`。报告在页面／线上指针及发布链接图锁内读取一致快照，不保存、不发布、不领取、不创建业务审计事实。任一版本变化分别返回 409 `REVISION_CONFLICT`／`PUBLICATION_REVISION_CONFLICT`。响应为 `{pageId,revision,publicationRevision,publishedVersionId,schemaVersion,runtimeSchemaVersion,runtimeSupported,diff,issues,canPublish}`。`diff` 为 `{addedComponentIds,removedComponentIds,updatedComponentIds,orderChanged,themeChanged,metadataChanged,nameChanged}`；metadataChanged 包含后台标签变化，标签本身不展示在消费者页面；nameChanged 比较当前草稿页面名称与当前发布版本名称，无线上版本时为true，名称单独变化也属于公开页面变化。`issues` 每项为 `{componentId?,path,code,message,severity:'ERROR'|'WARNING'}`，分别收集配置、图片／分享封面、商品／分类、PAGE 未发布／循环、优惠券公开引用及运行时兼容问题。公开券当前领完／过期／未开始／停发为 WARNING；私有或失效引用为 ERROR。报告允许读取未补完整的草稿，`canPublish` 仅表示当前快照未发现 ERROR，不能取代提交发布时的完整校验、密码确认、双修订号和幂等协议。报告成功不证明已发布、部署或微信真机验收。
 
 
-## 门店扩展契约（2026-10-10）
+## 前置仓扩展契约（2026-10-10）
 
-门店产品授权规则和接口完整字段约定见 [门店模块](store-module.md)。本扩展保留历史无门店订单、默认仓及权益核销流程，门店实体订单单店单交付方式；Store 一对一关联库存仓库。
+前置仓产品授权规则和接口完整字段约定见 [前置仓模块](store-module.md)。本扩展保留历史无前置仓订单、默认仓及权益核销流程，前置仓实体订单单店单交付方式；Store 一对一关联库存仓库。
 
-- 公开商品、首页、微页面接口接受可选 `storeId`，指定门店时按本店销售授权和仓库库存读取，无效编号明确拒绝，不能回退默认仓。
-- 报价接受 `storeId/deliveryMode`，保存门店政策和配送地址资格快照。配送费用或范围未配置时拒绝报价；已配置但顾客地址未补全、未定位或超范围时返回商品报价及 `addressRequired=true/deliveryEligibilityPending=true/deliveryMessage`，用于进入地址修正步骤。此结果不授权提交；下单严格校验地址资格并比较新快照，地址补全后必须重新报价。
-- 统一订单列表支持 `storeId`；订单列表及详情提供 `storeId/storeName/deliveryMode`，详情增加 `store` 快照与 `storeDelivery`。订单门店及交付方式由数据库不可变约束保护。门店中心查询仅返回员工所属门店订单。
-- 门店中心履约 POST `/api/v1/app/store-center/stores/{storeId}/orders/{orderId}/fulfillment` 接受 `action/expectedRevision` 和 UUID `Idempotency-Key`，操作为 PREPARE、DISPATCH、COMPLETE、SHIP。PICKUP 完成需 `pickupCode`，DELIVERY 完成需交付 `note`；快递 SHIP 需 `carrierCode/trackingNo`。凭证仅向订单买家返回，门店端不能查询买家自提码。
-- 门店售后 GET 列表及详情和 POST `/aftersales/{caseId}/notes`：`kind=ADVICE|RECEIPT/note/expectedRevision/receivedQuantity/salableQuantity`，使用 UUID `Idempotency-Key`。RECEIPT 是门店实际收货证据，返回 `platformReviewRequired=true`；不直接执行退款或回库。统一平台售后详情公开 `storeNotes` 供审核及正式验收。
-- 后台权限 `stores.read/stores.manage/stores.accounts.read` 与会员员工的 `products/orders/accounts` 门店权限分离。后台 Cookie 写入保留 CSRF，员工接口使用会员会话并实时校验门店授权。
-- 分润口径已确认：平台比例作用于订单实付减规格进货成本后的利润；门店结算包括成本，等于订单实付减平台利润再减订单配置运费。多规格订单分摊整单运费后逐行计算平台利润（向下取整），保持平台利润、门店结算、运费合计等于订单实付。规格规则在下单时保存不可变快照，销售单位版本变化需重新配置，历史未配置订单不自动套用新规则。
-- 高德 `GET/PUT /api/v1/admin/stores/map-settings` 支持三项加密凭据，读取仅返回配置状态与末四位；正常写入空值保留现有值，JS 参数成对校验，使用 `stores.manage`、CSRF、`stores.map.configure` 密码确认和修订锁。托管配置优先，解密失败明确拒绝；未托管时兼容环境 `AMAP_WEB_SERVICE_KEY`。具体字段与恢复规则见门店模块文档。
+- 公开商品、首页、微页面接口接受可选 `storeId`，指定前置仓时按本店销售授权和仓库库存读取，无效编号明确拒绝，不能回退默认仓。
+- 报价接受 `storeId/deliveryMode`，保存前置仓政策和配送地址资格快照。配送费用或范围未配置时拒绝报价；已配置但顾客地址未补全、未定位或超范围时返回商品报价及 `addressRequired=true/deliveryEligibilityPending=true/deliveryMessage`，用于进入地址修正步骤。此结果不授权提交；下单严格校验地址资格并比较新快照，地址补全后必须重新报价。
+- 统一订单列表支持 `storeId`；订单列表及详情提供 `storeId/storeName/deliveryMode`，详情增加 `store` 快照与 `storeDelivery`。订单前置仓及交付方式由数据库不可变约束保护。前置仓中心查询仅返回员工所属前置仓订单。
+- 前置仓中心履约 POST `/api/v1/app/store-center/stores/{storeId}/orders/{orderId}/fulfillment` 接受 `action/expectedRevision` 和 UUID `Idempotency-Key`，操作为 PREPARE、DISPATCH、COMPLETE、SHIP。PICKUP 完成需 `pickupCode`，DELIVERY 完成需交付 `note`；快递 SHIP 需 `carrierCode/trackingNo`。凭证仅向订单买家返回，前置仓端不能查询买家自提码。
+- 前置仓售后 GET 列表及详情和 POST `/aftersales/{caseId}/notes`：`kind=ADVICE|RECEIPT/note/expectedRevision/receivedQuantity/salableQuantity`，使用 UUID `Idempotency-Key`。RECEIPT 是前置仓实际收货证据，返回 `platformReviewRequired=true`；不直接执行退款或回库。统一平台售后详情公开 `storeNotes` 供审核及正式验收。
+- 后台权限 `stores.read/stores.manage/stores.accounts.read` 与会员员工的 `products/orders/accounts` 前置仓权限分离。后台 Cookie 写入保留 CSRF，员工接口使用会员会话并实时校验前置仓授权。
+- 分润口径已确认：平台比例作用于订单实付减规格进货成本后的利润；前置仓结算包括成本，等于订单实付减平台利润再减订单配置运费。多规格订单分摊整单运费后逐行计算平台利润（向下取整），保持平台利润、前置仓结算、运费合计等于订单实付。规格规则在下单时保存不可变快照，销售单位版本变化需重新配置，历史未配置订单不自动套用新规则。
+- 高德 `GET/PUT /api/v1/admin/stores/map-settings` 支持三项加密凭据，读取仅返回配置状态与末四位；正常写入空值保留现有值，JS 参数成对校验，使用 `stores.manage`、CSRF、`stores.map.configure` 密码确认和修订锁。托管配置优先，解密失败明确拒绝；未托管时兼容环境 `AMAP_WEB_SERVICE_KEY`。具体字段与恢复规则见前置仓模块文档。
 - 售后期限 `GET/PUT /api/v1/admin/stores/settlement-settings` 复用平台现有售后策略，读取 `receivedWindowDays/revision/appliesTo=NEW_ORDERS`，写入 `receivedWindowDays/expectedRevision`（1–365 天），使用 `stores.manage`、CSRF、`stores.settlement.configure` 密码确认（对象 `aftersale-policy`）和修订锁。既有订单售后快照不变，结算以订单自身快照期限判断。
-- 商品规格分润 `GET /api/v1/admin/stores/profit-rules`、`PUT /profit-rules/{skuId}` 返回／保存 `purchaseCostFen/platformShareBps/revision`，写入使用 `expectedRevision`、`stores.manage`、CSRF 与 `stores.profit.configure` 密码确认（对象 SKU ID）；返回 `requiresReconfiguration` 标记单位版本变化。资金规则及完整提现字段见门店模块文档。
-- 门店账户返回实际可用、冻结、累计发放和待结算金额，收入及提现各最多100条；异常收入未知金额返回 null。提现 POST `/api/v1/app/store-center/stores/{storeId}/withdrawals` 接受 `requestKey/amountFen/payeeName/bankName/bankAccount`，原子冻结并对固定请求键防重复；普通读取脱敏，银行卡加密保存。
+- 商品规格分润 `GET /api/v1/admin/stores/profit-rules`、`PUT /profit-rules/{skuId}` 返回／保存 `purchaseCostFen/platformShareBps/revision`，写入使用 `expectedRevision`、`stores.manage`、CSRF 与 `stores.profit.configure` 密码确认（对象 SKU ID）；返回 `requiresReconfiguration` 标记单位版本变化。资金规则及完整提现字段见前置仓模块文档。
+- 前置仓账户返回实际可用、冻结、累计发放和待结算金额，收入及提现各最多100条；异常收入未知金额返回 null。提现 POST `/api/v1/app/store-center/stores/{storeId}/withdrawals` 接受 `requestKey/amountFen/payeeName/bankName/bankAccount`，原子冻结并对固定请求键防重复；普通读取脱敏，银行卡加密保存。
 - 平台提现 `POST /api/v1/admin/stores/{storeId}/withdrawals/{id}/{review|pay|payee}` 需要 `stores.accounts.manage`、CSRF、当前修订和各自密码确认。状态 `PENDING_REVIEW → APPROVED_PENDING_PAYMENT → PAID`，或审核驳回 `REJECTED` 并解冻。pay 必须提供线下付款凭证，审批不等于付款；payee 是单独敏感读取。结算命令接入现有维护调度，严格超过订单售后快照期限且无处理中售后才入账，读取账户不会写资金事实。
+
+### 前置仓操作体验修订（2026-10-10）
+
+- 人员查询：`GET /api/v1/admin/stores/{storeId}/staff?memberSearch=...` 要求 `stores.manage`；查询 2–100 字的会员编号、昵称或 UUID，最多返回 20 个启用会员，响应 `{members:[{id,memberNo,name}]}`，不包含手机号或微信身份，禁止缓存。无查询参数的人员列表仍返回 `{items:[...]}`。
+- 人员授权：`POST /api/v1/admin/stores/{storeId}/staff` 接受 `{memberId,permissions,enabled}` 或 `{memberNo,permissions,enabled}`，两种身份字段互斥；保存时重新校验管理权限和会员启用状态，页面先查找并选择会员。
+- 批量分润：`POST /api/v1/admin/stores/profit-rules` 接受 `{items:[{skuId,expectedRevision}],purchaseCostFen,platformShareBps}`，最多 100 个不同规格，整体事务保存；任一规格不存在、单位缺失或修订冲突时整批不保存。使用 `stores.manage`、CSRF 和密码确认动作 `stores.profit.batch.configure`，修订号 `0`，对象 ID 为 canonical JSON `[purchaseCostFen,platformShareBps,[[skuId,expectedRevision],...]]` 的 SHA-256；规格 UUID 转小写并排序。单项 PUT 保留。PC 当前页选择、单项与批量设置均使用弹窗。
+- 系统展示名称统一为“前置仓”；已有接口路径、权限代码及数据库标识保留，历史成交快照不重写。预置权限组展示名称通过 `accounts.0013_front_warehouse_labels` 更新，保留用户自定义名称。

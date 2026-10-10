@@ -51,7 +51,7 @@ class StoreDeliveryFlowTests(TransactionTestCase):
 
     def setUp(self):
         flow.FulfillmentFlowTests.setUp(self)
-        self.store = Store.objects.create(warehouse=self.balance.warehouse, name='测试门店', contact_name='店长', contact_phone='13800000000', address='测试路', supported_modes=['PICKUP','DELIVERY','EXPRESS'],latitude=30,longitude=120,delivery_radius_meters=5000,delivery_fee_fen=0)
+        self.store = Store.objects.create(warehouse=self.balance.warehouse, name='测试前置仓', contact_name='店长', contact_phone='13800000000', address='测试路', supported_modes=['PICKUP','DELIVERY','EXPRESS'],latitude=30,longitude=120,delivery_radius_meters=5000,delivery_fee_fen=0)
         StoreStaff.objects.create(store=self.store, member=self.member, permissions=['orders'])
 
     def local_order(self, mode, paid=True):
@@ -162,9 +162,9 @@ class StoreDeliveryFlowTests(TransactionTestCase):
         order,line=self.local_order('PICKUP')
         self.action(order,'PREPARE')
         self.action(order,'COMPLETE',pickupCode=delivery_data(order,include_code=True)['pickupCode'])
-        case=apply_case(self.member,line.id,'RETURN_REFUND',1,'门店自提商品退货申请',uuid.uuid4())
+        case=apply_case(self.member,line.id,'RETURN_REFUND',1,'前置仓自提商品退货申请',uuid.uuid4())
         case=review_case(case.id,self.owner,True,'同意退货后验收',case.revision)
-        body={'expectedRevision':case.revision,'mode':'RECEIVED','receivedQuantity':1,'salableQuantity':1,'refundQuantity':1,'refundAmountFen':None,'reason':'门店自提退货验收通过'}
+        body={'expectedRevision':case.revision,'mode':'RECEIVED','receivedQuantity':1,'salableQuantity':1,'refundQuantity':1,'refundAmountFen':None,'reason':'前置仓自提退货验收通过'}
         key=uuid.uuid4()
         accept_return(case.id,self.owner,body,key)
         accept_return(case.id,self.owner,body,key)
@@ -178,7 +178,7 @@ class StoreDeliveryFlowTests(TransactionTestCase):
         order,line=self.local_order('PICKUP')
         self.action(order,'PREPARE')
         self.action(order,'COMPLETE',pickupCode=delivery_data(order,include_code=True)['pickupCode'])
-        case=apply_case(self.member,line.id,'RETURN_REFUND',1,'门店自提商品退货申请',uuid.uuid4())
+        case=apply_case(self.member,line.id,'RETURN_REFUND',1,'前置仓自提商品退货申请',uuid.uuid4())
         case=review_case(case.id,self.owner,True,'同意退货后验收',case.revision)
         body={'expectedRevision':case.revision,'kind':'RECEIPT','receivedQuantity':1,'salableQuantity':1,'note':'已收到顾客退回商品，等待平台复核'}
         key=uuid.uuid4()
@@ -214,7 +214,7 @@ class StoreDeliveryFlowTests(TransactionTestCase):
         self.assertEqual(result.status_code,200,result.content)
         self.assertNotIn('pickupCode',result.json()['data']['storeDelivery'])
         from aftersales.service import apply_case
-        case=apply_case(self.member,line.id,'REFUND_ONLY',1,'门店商品申请仅退款',uuid.uuid4())
+        case=apply_case(self.member,line.id,'REFUND_ONLY',1,'前置仓商品申请仅退款',uuid.uuid4())
         casepath=f'/api/v1/app/store-center/stores/{self.store.id}/aftersales/{case.id}'
         self.assertEqual(client.get(casepath,**headers).status_code,200)
         afterlist=casepath.rsplit('/',1)[0]

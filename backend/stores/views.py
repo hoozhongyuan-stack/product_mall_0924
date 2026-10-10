@@ -10,6 +10,7 @@ from common.http import response,error,method,parse_json_object
 from accounts.security import require,require_live,audit
 from customers.auth import require_member
 from customers.models import Member
+from customers.store_access import search_staff_members, resolve_staff_member
 from .models import Store,StoreStaff
 from .access import StoreError,get_store,require_staff
 from .service import store_data,save_store,products_data,update_product,account_data,account_summaries
@@ -46,7 +47,7 @@ def admin_stores(request,store_id=None):
     with transaction.atomic():
         if store_id:
             if not Store.objects.select_for_update().filter(pk=store_id).first():
-                raise StoreError('门店不存在。','STORE_NOT_FOUND',404)
+                raise StoreError('前置仓不存在。','STORE_NOT_FOUND',404)
         actor,bad=require_live(request,'stores.manage')
         if bad:return bad
         store = save_store(parse_json_object(request),get_store(store_id) if store_id else None)
@@ -65,6 +66,8 @@ def staff_data(row):
     return {'id':str(row.id),'memberId':str(row.member_id),'name':row.member.nickname or row.member.member_no,'memberNo':row.member.member_no,'permissions':row.permissions,'enabled':row.enabled,'revision':row.revision}
 
 
+@cache_control(private=True, no_store=True)
+@vary_on_headers('Cookie')
 @guarded
 def admin_staff(request,store_id):
     bad = method(request,'GET','POST')
@@ -73,16 +76,29 @@ def admin_staff(request,store_id):
     if bad: return bad
     store = get_store(store_id)
     if request.method=='GET':
+        if 'memberSearch' in request.GET:
+            actor,bad = require(request,'stores.manage')
+            if bad: return bad
+            if set(request.GET) != {'memberSearch'} or len(request.GET.getlist('memberSearch')) != 1:
+                raise StoreError('会员查询参数不正确。')
+            try:
+                return response(request, {'members': search_staff_members(request.GET['memberSearch'])})
+            except ValueError as exc:
+                raise StoreError(str(exc)) from exc
         return response(request,{'items':[staff_data(row) for row in StoreStaff.objects.filter(store=store).select_related('member')]})
     body = parse_json_object(request)
-    if set(body)!={'memberId','permissions','enabled'} or type(body['enabled']) is not bool or not isinstance(body['permissions'],list) or any(item not in ['products','orders','accounts'] for item in body['permissions']):
-        raise StoreError('门店员工权限设置无效。')
-    member = Member.objects.filter(pk=body['memberId'],enabled=True).first()
-    if not member: raise StoreError('该会员不存在或已停用。')
+    keys = set(body)
+    identifier = 'memberNo' if 'memberNo' in body else 'memberId'
+    if keys != {identifier,'permissions','enabled'} or type(body['enabled']) is not bool or not isinstance(body['permissions'],list) or any(item not in ['products','orders','accounts'] for item in body['permissions']):
+        raise StoreError('前置仓员工权限设置无效。')
     with transaction.atomic():
         Store.objects.select_for_update().get(pk=store.id)
         actor,bad=require_live(request,'stores.manage')
         if bad:return bad
+        try:
+            member = resolve_staff_member(body[identifier], by_number=identifier == 'memberNo')
+        except ValueError as exc:
+            raise StoreError(str(exc)) from exc
         row,created = StoreStaff.objects.get_or_create(store=store,member=member)
         row.permissions = sorted(set(body['permissions']))
         row.enabled = body['enabled']
@@ -118,7 +134,7 @@ def public_stores(request,store_id=None):
         if not math.isfinite(lat) or not math.isfinite(lng) or abs(lat)>90 or abs(lng)>180: raise StoreError('定位坐标无效。')
     if store_id:
         store=get_store(store_id)
-        if not store.enabled: raise StoreError('门店不存在。','STORE_NOT_FOUND',404)
+        if not store.enabled: raise StoreError('前置仓不存在。','STORE_NOT_FOUND',404)
         return response(request,store_data(store,latitude=lat,longitude=lng))
     rows=Store.objects.filter(enabled=True,warehouse__enabled=True)
     query=request.GET.get('q','').strip()[:120]
@@ -162,7 +178,7 @@ def member_products(request,store_id,product_id=None):
     with transaction.atomic():
         # Serialize membership reassignment and stock updates on the store boundary.
         if not Store.objects.select_for_update().filter(pk=store_id).first():
-            raise StoreError('门店不存在。','STORE_NOT_FOUND',404)
+            raise StoreError('前置仓不存在。','STORE_NOT_FOUND',404)
         store=require_staff(member,store_id,'products')
         if request.method=='GET':
             from catalog.models import Product

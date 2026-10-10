@@ -34,7 +34,7 @@ def withdrawal_action(request,store_id,withdrawal_id,action):
         actor,bad=require_live(request,'stores.accounts.manage')
         if bad:return bad
         store=Store.objects.select_for_update().filter(pk=store_id).first()
-        if not store:raise StoreError('门店不存在。','STORE_NOT_FOUND',404)
+        if not store:raise StoreError('前置仓不存在。','STORE_NOT_FOUND',404)
         row=StoreWithdrawal.objects.select_for_update().filter(pk=withdrawal_id,store=store).first()
         if not row:raise StoreError('提现申请不存在。','WITHDRAWAL_NOT_FOUND',404)
         if row.revision!=body['expectedRevision']:return error(request,409,'REVISION_CONFLICT','提现状态已变化，请刷新后重试。')

@@ -12,7 +12,7 @@ def calculate_split(paid_fen,cost_fen,share_bps,freight_fen):
     # Platform floors to integer fen; store receives the exact remainder.
     platform=profit*share_bps//10000
     store=paid_fen-platform-freight_fen
-    if store<0:raise StoreError('门店结算金额不足承担运费，等待平台处理。','SETTLEMENT_HELD',409)
+    if store<0:raise StoreError('前置仓结算金额不足承担运费，等待平台处理。','SETTLEMENT_HELD',409)
     return {'platformFen':platform,'storeFen':store,'costFen':cost_fen,'profitFen':profit,'freightFen':freight_fen}
 
 
@@ -42,5 +42,5 @@ def order_split(order):
         split=calculate_split(line.payable_fen+allocated[line.id],snapshot.purchase_cost_fen*line.quantity,snapshot.platform_share_bps,0)
         platform+=split['platformFen'];cost+=split['costFen']
     store=order.payable_fen-platform-freight
-    if store<0:raise StoreError('门店结算金额不足承担运费。','SETTLEMENT_HELD',409)
+    if store<0:raise StoreError('前置仓结算金额不足承担运费。','SETTLEMENT_HELD',409)
     return {'paid_fen':order.payable_fen,'cost_fen':cost,'platform_fen':platform,'freight_fen':freight,'store_fen':store}

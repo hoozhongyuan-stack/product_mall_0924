@@ -33,9 +33,9 @@ def distance_meters(lat1,lng1,lat2,lng2):
 
 def validated_fields(body,update=False):
     if set(body)-set(FIELD_MAP)-({'revision'} if update else set()):
-        raise StoreError('包含未支持的门店字段。')
+        raise StoreError('包含未支持的前置仓字段。')
     if not update and not {'name','contactName','contactPhone','address'}.issubset(body):
-        raise StoreError('请填写门店名称、联系人、联系电话和地址。')
+        raise StoreError('请填写前置仓名称、联系人、联系电话和地址。')
     result = {}
     for key,value in body.items():
         if key == 'revision':
@@ -57,7 +57,7 @@ def validated_fields(body,update=False):
                     if not value.is_finite() or abs(value)>limit:
                         raise ValueError()
                 except (InvalidOperation,ValueError):
-                    raise StoreError('门店经纬度无效。')
+                    raise StoreError('前置仓经纬度无效。')
         else:
             limit = Store._meta.get_field(FIELD_MAP[key]).max_length
             if not isinstance(value,str) or len(value.strip())>limit or (key!='city' and not value.strip()):
@@ -80,7 +80,7 @@ def save_store(body,store=None):
         else:
             store = Store.objects.select_for_update().get(pk=store.pk)
             if type(body.get('revision')) is not int or body['revision']!=store.revision:
-                raise StoreError('门店已被修改，请刷新后重试。','REVISION_CONFLICT',409)
+                raise StoreError('前置仓已被修改，请刷新后重试。','REVISION_CONFLICT',409)
             for field,value in fields.items():
                 setattr(store,field,value)
             store.revision += 1

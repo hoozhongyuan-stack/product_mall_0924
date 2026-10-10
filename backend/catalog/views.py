@@ -678,7 +678,7 @@ def public_products_view(request):
         if 'storeId' in request.GET:
             from stores.access import get_store
             try:
-                store = get_store(uuid_field(request.GET['storeId'], '门店 ID'), for_sale=True)
+                store = get_store(uuid_field(request.GET['storeId'], '前置仓 ID'), for_sale=True)
             except ValueError as exc:
                 return error(request, 409, 'STORE_UNAVAILABLE', str(exc))
         cheapest_sku = Sku.objects.filter(
@@ -745,9 +745,9 @@ def public_product_detail_view(request, product_id):
     if 'storeId' in request.GET:
         from stores.access import get_store, sale_product_ids
         try:
-            store = get_store(uuid_field(request.GET['storeId'], '门店 ID'), for_sale=True)
+            store = get_store(uuid_field(request.GET['storeId'], '前置仓 ID'), for_sale=True)
             if product_id not in sale_product_ids(store):
-                return error(request, 404, 'STORE_NOT_SELLING', '该门店不销售此商品。')
+                return error(request, 404, 'STORE_NOT_SELLING', '该前置仓不销售此商品。')
         except ValueError as exc:
             return error(request, 409, 'STORE_UNAVAILABLE', str(exc))
     if request.headers.get("Authorization") and member is None:
@@ -759,7 +759,7 @@ def public_product_detail_view(request, product_id):
     if not item:
         return error(request, 404, "NOT_FOUND", "商品不可用。")
     if store and item.fulfillment_kind != 'SHIP':
-        return error(request, 404, 'STORE_NOT_SELLING', '门店暂不支持权益核销商品。')
+        return error(request, 404, 'STORE_NOT_SELLING', '前置仓暂不支持权益核销商品。')
     if not item.skus.filter(sale_status=Sku.SaleStatus.ON_SALE).exists():
         return error(request, 404, "PRODUCT_OFF_SALE", "商品暂无在售 SKU。")
     return response(request, public_product_data(item, member, store))

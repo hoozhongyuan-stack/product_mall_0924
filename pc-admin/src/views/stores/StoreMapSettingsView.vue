@@ -51,7 +51,7 @@ async function save() {
     const result = await confirmedWrite<MapSettings>('stores.map.configure', password.value, '/stores/map-settings', 'PUT', body, 'amap', revision)
     if (current === epoch) {
       if (result.revision !== revision + 1) throw new Error('Unexpected result')
-      config.value = result; notice.value = '配置已保存。请到门店详情验证地址搜索；保存不代表高德服务已验证。'
+      config.value = result; notice.value = '配置已保存。请到前置仓详情验证地址搜索；保存不代表高德服务已验证。'
     }
   } catch { if (current === epoch) { error.value = '保存未确认，请重新读取配置，核对当前状态后再操作。'; needsRead.value = true } }
   finally { if (current === epoch) { busy.value = false; clearInputs() } }
@@ -64,7 +64,7 @@ onUnmounted(() => { epoch++; clearInputs() })
 </script>
 <template>
   <section class="page-content stores-page">
-    <header class="page-heading"><div><h1>门店设置</h1><p>配置地址搜索、高德 Web 地图集成参数与新订单售后期。</p></div><button class="secondary-button" :disabled="loading || busy" @click="load">重新读取</button></header>
+    <header class="page-heading"><div><h1>前置仓设置</h1><p>配置地址搜索、高德 Web 地图集成参数与新订单售后期。</p></div><button class="secondary-button" :disabled="loading || busy" @click="load">重新读取</button></header>
     <p v-if="!canManage" role="alert">当前账号没有地图配置权限。</p>
     <p v-if="loading" role="status">正在读取地图配置…</p>
     <p v-if="error" role="alert">{{ error }}</p><p v-if="notice" role="status">{{ notice }}</p>
@@ -81,7 +81,7 @@ onUnmounted(() => { epoch++; clearInputs() })
       <div class="store-actions"><button class="primary-button" type="submit" :disabled="!saveAllowed || confirming">保存配置</button></div>
     </form>
     <form v-if="confirming" class="panel store-section" aria-label="确认保存地图配置" @submit.prevent="save">
-      <h2>确认保存地图配置</h2><p>修改后将用于门店定位。请输入当前账号密码确认本次操作。</p>
+      <h2>确认保存地图配置</h2><p>修改后将用于前置仓定位。请输入当前账号密码确认本次操作。</p>
       <label for="amap-password">当前账号密码 <input id="amap-password" v-model="password" type="password" autocomplete="current-password" :disabled="busy" /></label>
       <div class="store-actions"><button class="primary-button" type="submit" :disabled="busy || !password">{{ busy ? '正在保存…' : '确认保存' }}</button><button class="secondary-button" type="button" :disabled="busy" @click="clearInputs">取消</button></div>
     </form>
