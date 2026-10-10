@@ -41,6 +41,8 @@ test('phase2 boundary: saved tags shrink a filtered list back to its valid page'
     return false
   })
   await page.goto(`/pages/micro?pageId=${ids.a}`)
+  await expect(page.getByRole('heading', { name: '即时效果', exact: true })).toBeVisible()
+  await page.locator('.micro-page-list > summary').click()
   await page.getByLabel('筛选业务标签', { exact: true }).fill('活动')
   await page.getByRole('button', { name: '查询页面', exact: true }).click()
   await page.getByRole('button', { name: '下一页', exact: true }).click()
@@ -74,6 +76,8 @@ test('phase2 micro editor: saved search tags, share metadata and spacer', async 
     return false
   })
   await page.goto(`/pages/micro?pageId=${ids.a}`)
+  await expect(page.getByRole('heading', { name: '即时效果', exact: true })).toBeVisible()
+  await page.locator('.micro-page-list > summary').click()
   await page.getByLabel('搜索页面名称', { exact: true }).fill('浏览器')
   await page.getByLabel('筛选业务标签', { exact: true }).fill('活动')
   await page.getByRole('button', { name: '查询页面', exact: true }).click()
@@ -83,6 +87,8 @@ test('phase2 micro editor: saved search tags, share metadata and spacer', async 
   await page.getByLabel('业务标签', { exact: true }).fill('活动,品牌')
   await page.getByLabel('分享标题', { exact: true }).fill('夏日品牌活动')
   await page.getByLabel('分享描述', { exact: true }).fill('精选推荐与活动导购')
+  if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: '组件', exact: true }).click()
+  await page.getByRole('button', { name: '布局辅助', exact: true }).click()
   await page.locator('.home-component-library').getByRole('button', { name: '辅助空白', exact: true }).click()
   await expect(page.locator('.home-component-list')).toContainText('辅助空白')
   await page.getByRole('button', { name: '保存草稿', exact: true }).click()
@@ -125,6 +131,7 @@ test('micro editor: immediate selection, copy history, hotzone drawing and persi
   await page.goto(`/pages/micro?pageId=${ids.a}`)
   await expect(page.getByRole('heading', { name: '即时效果', exact: true })).toBeVisible()
   const library = page.locator('.home-component-library')
+  if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: '组件', exact: true }).click()
   await library.getByRole('button', { name: '标题文本' }).click()
   await page.getByLabel('标题', { exact: true }).fill('品牌专区')
   await expect(page.locator('.home-phone-body')).toContainText('品牌专区')
@@ -134,6 +141,8 @@ test('micro editor: immediate selection, copy history, hotzone drawing and persi
   await expect(page.locator('.home-component-list li')).toHaveCount(2)
   await page.getByRole('button', { name: '重做', exact: true }).click()
   await expect(page.locator('.home-component-list li')).toHaveCount(3)
+  if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: '组件', exact: true }).click()
+  await page.getByRole('button', { name: '内容', exact: true }).click()
   await library.getByRole('button', { name: '图片热区' }).click()
   await page.getByLabel('图片素材 ID', { exact: true }).fill('browser-asset')
   const canvas = page.getByLabel('热区绘制画布')
@@ -759,6 +768,10 @@ for (const pageType of ['HOME', 'MICRO']) {
       return false
     })
     await page.goto(pageType === 'HOME' ? '/pages/home' : `/pages/micro?pageId=${ids.a}`)
+    if (pageType === 'MICRO') {
+      if (testInfo.project.name === 'mobile') await page.getByRole('button', { name: '组件', exact: true }).click()
+      await page.getByRole('button', { name: '商品营销', exact: true }).click()
+    }
     await page.locator('.home-component-library').getByRole('button', { name: '优惠券列表', exact: true }).click()
     await page.getByLabel('优惠券来源', { exact: true }).selectOption('MANUAL')
     await page.getByLabel('优惠券活动 ID', { exact: true }).fill(ids.b)
