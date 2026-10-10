@@ -16,6 +16,20 @@ spec.loader.exec_module(fixtures)
 
 
 class UatCompositionTests(unittest.TestCase):
+    def test_page_runtime_schema_defaults_to_one_and_can_be_explicitly_raised(self):
+        with patch.dict(os.environ, {'PATH': os.environ.get('PATH', '')}, clear=True):
+            defaults = self.config()['services']
+            for row in defaults.values():
+                if 'DJANGO_SECRET_KEY_FILE' in row.get('environment', {}):
+                    self.assertEqual(row['environment'].get('PAGE_RUNTIME_SCHEMA_VERSION'), '1')
+        with patch.dict(os.environ, {'PAGE_RUNTIME_SCHEMA_VERSION': '4'}):
+            explicit = self.config()['services']
+            for row in explicit.values():
+                if 'DJANGO_SECRET_KEY_FILE' in row.get('environment', {}):
+                    self.assertEqual(row['environment'].get('PAGE_RUNTIME_SCHEMA_VERSION'), '4')
+        example = (ROOT / 'deploy/env.production.example').read_text()
+        self.assertIn('PAGE_RUNTIME_SCHEMA_VERSION=1', example)
+
     def config(self, recovery=False, code_release=False):
         env = {**os.environ, 'MALL_RELEASE_REVISION': 'a' * 40, 'MALL_ALLOWED_HOSTS': 'mall.example.com',
                'MALL_CSRF_TRUSTED_ORIGINS': 'https://mall.example.com', 'POSTGRES_DB': 'synthetic',
