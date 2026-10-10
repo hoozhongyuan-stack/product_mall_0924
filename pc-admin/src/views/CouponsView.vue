@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { api, type Account } from '../api'
-import { type Campaign, type Page, money, date, status, mode } from './coupons/types'
+import { type Campaign, type Page, money, date, mode } from './coupons/types'
 import './coupons/coupons.css'
+import { campaignLifecycle } from './coupons/lifecycle.mjs'
+import { useCampaignClock } from './coupons/clock'
+const now = useCampaignClock()
 const props = defineProps<{ account: Account }>()
 const data = ref<Page<Campaign> | null>(null), loading = ref(false), error = ref('')
 const q = ref(''), filter = ref(''), page = ref(1), pageSize = ref(20)
@@ -33,7 +36,7 @@ watch(() => `${props.account.accountId}:${props.account.permissionCodes.join(','
     </header>
     <form class="coupon-filters" @submit.prevent="load(true)">
       <label>活动名称或编码<el-input v-model="q" maxlength="100" clearable placeholder="查询优惠券活动" /></label>
-      <label>活动状态<el-select v-model="filter"><el-option label="全部状态" value="" /><el-option label="草稿" value="DRAFT" /><el-option label="已发布" value="PUBLISHED" /><el-option label="历史活动" value="LEGACY" /></el-select></label>
+      <label>发布状态<el-select v-model="filter"><el-option label="全部状态" value="" /><el-option label="草稿" value="DRAFT" /><el-option label="已发布" value="PUBLISHED" /><el-option label="历史活动" value="LEGACY" /></el-select></label>
       <el-button native-type="submit" type="primary" :loading="loading">查询</el-button>
       <el-button :disabled="loading" @click="resetFilters">重置</el-button>
     </form>
@@ -50,7 +53,7 @@ watch(() => `${props.account.accountId}:${props.account.permissionCodes.join(','
               <td class="coupon-date-cell"><time :datetime="c.validFrom">{{ date(c.validFrom) }}</time><small>至 {{ date(c.validUntil) }}</small></td>
               <td><span v-if="c.status === 'LEGACY'" class="coupon-note">历史发放额度未登记</span><template v-else><span>已发 <strong>{{ c.issuedQuantity }}</strong> / {{ c.totalQuantity }}</span><progress v-if="c.totalQuantity > 0" :value="c.issuedQuantity" :max="c.totalQuantity" :aria-label="`${c.title}发放进度`" /><small>剩余 {{ c.remainingQuantity }} 张</small></template></td>
               <td>{{ mode(c.claimMode) }}</td>
-              <td><span class="badge" :class="c.status === 'PUBLISHED' ? 'badge-good' : 'badge-muted'">{{ status(c.status) }}</span><small v-if="c.status === 'PUBLISHED'">{{ c.issuanceEnabled ? '发放开启' : '发放暂停' }}</small></td>
+              <td><span class="badge" :class="campaignLifecycle(c, now).active ? 'badge-good' : 'badge-muted'">{{ campaignLifecycle(c, now).label }}</span><small v-if="c.status === 'PUBLISHED'">{{ campaignLifecycle(c, now).reason || (c.claimMode === 'SELF' ? '仅支持用户领取' : '允许领取与发放') }}</small></td>
               <td class="coupon-operation"><RouterLink :to="`/coupons/${c.id}`" class="text-link">查看活动</RouterLink></td>
             </tr>
             <tr v-if="!data.items.length"><td colspan="7" class="empty-state">暂无匹配活动。可调整筛选条件。</td></tr>

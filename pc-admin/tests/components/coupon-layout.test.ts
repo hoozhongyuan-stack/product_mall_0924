@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -18,7 +18,8 @@ const account = { accountId: 'a', permissionCodes: ['coupon.read', 'coupon.manag
 const campaign = { id:'c', code:'AUTUMN', title:'秋日礼遇长名称活动', kind:'FULL_REDUCTION', minGoodsFen:10000, discountFen:1000, productIds:[], validFrom:'2026-10-01T00:00:00Z', validUntil:'2026-11-01T00:00:00Z', issuedQuantity:1, totalQuantity:100, remainingQuantity:99, status:'PUBLISHED', issuanceEnabled:false, claimMode:'BOTH', redeemEligible:false }
 const Pagination = defineComponent({ props:['currentPage','pageSize','total'], emits:['current-change','size-change'], template:'<div class="test-pagination"><button @click="$emit(\'size-change\',50)">50条</button><button @click="$emit(\'current-change\',2)">第2页</button></div>' })
 const wrappers: ReturnType<typeof mount>[] = []
-afterEach(() => { wrappers.splice(0).forEach(w=>w.unmount()); vi.clearAllMocks() })
+beforeEach(() => { vi.useFakeTimers({toFake:['Date']}); vi.setSystemTime(new Date('2026-10-10T00:00:00Z')) })
+afterEach(() => { wrappers.splice(0).forEach(w=>w.unmount()); vi.useRealTimers(); vi.clearAllMocks() })
 const global = { components: { ElInput, ElSelect, ElOption, ElButton }, stubs:{ RouterLink:{ template:'<a><slot/></a>' }, ElPagination:Pagination } }
 describe('coupon workspace layout',()=>{
  it('shows incomplete amounts and a fallback title before a coupon is filled in',()=>{
@@ -33,7 +34,7 @@ describe('coupon workspace layout',()=>{
   expect(wrapper.find('.table-wrap table').exists()).toBe(true)
   expect(wrapper.find('progress').attributes('max')).toBe('100')
   expect(wrapper.find('progress').attributes('value')).toBe('1')
-  expect(wrapper.text()).toContain('发放暂停')
+  expect(wrapper.text()).toContain('已暂停新增领取与发放')
   await wrapper.get('.test-pagination button').trigger('click');await flushPromises()
   expect(vi.mocked(api).mock.calls.at(-1)?.[0]).toContain('pageSize=50')
   expect(vi.mocked(api).mock.calls.at(-1)?.[0]).toContain('page=1')

@@ -10,6 +10,7 @@ import { applyCurrentPublication, currentPublication, publicationIntent, matches
 import { api, ApiError, type Account, type Confirmation } from '../api'
 import HomePagePreview from './pages/HomePagePreview.vue'
 import EditorActions from './pages/EditorActions.vue'
+import ComponentLibrary from './pages/ComponentLibrary.vue'
 import PageReusePanel from './pages/PageReusePanel.vue'
 import PageMetadataEditor from './pages/PageMetadataEditor.vue'
 import ReleaseReportPanel from './pages/ReleaseReportPanel.vue'
@@ -60,7 +61,7 @@ const publishIntent = ref<PublishIntent | null>(null)
 const publicationRefresh = ref<{ base: string; objectId: string } | null>(null)
 const publicationRecoveryBlocked = ref(false)
 const { categories, products, pages: linkPages, warning: targetWarning, loading: targetsLoading, load: loadTargets } = usePageTargets()
-const componentTypes: ComponentType[] = ['TITLE', 'IMAGE', 'NAVIGATION', 'PRODUCT_LIST', 'COUPON_LIST', 'MOSAIC', 'SPACER', 'CAROUSEL', 'IMAGE_HOTZONE', 'DIVIDER', 'SEARCH', 'NOTICE', 'FILING']
+const mobilePanel = ref('preview')
 const { canUndo, canRedo, reset: resetHistory, undo, redo } = useEditorHistory(editor)
 const { runtimeSchema, runtimeLoading, runtimeError, runtimeBlocked, loadRuntime } = useEditorRuntime(editor)
 const draggingId = ref('')
@@ -90,6 +91,21 @@ const dirty = computed(() => !!editor.value && !!draft.value &&
 const { report, reportLoading, reportError, reportStale, refreshReport } = useReleaseReport(draft, dirty, busy, () => `/pages/${draft.value?.pageId || ''}`, saveDraft)
 const previewReady = computed(() => !!preview.value && !dirty.value &&
   previewSnapshot.value === savedSnapshot.value && preview.value.revision === draft.value?.revision)
+const checkedForPublish = computed(() => !!report.value && !reportStale.value && report.value.canPublish && report.value.runtimeSupported)
+const publishGuidance = computed(() => {
+  if (publicationRecoveryBlocked.value) return '发布结果尚未确认，请先核对原发布请求。'
+  if (publishIntent.value) return '上次发布结果尚未确认，请恢复原发布请求，避免重复发布。'
+  if (publicationRefresh.value) return '发布请求已完成，请核对当前线上状态。'
+  if (dirty.value) return '还有未保存修改。先保存草稿，再检查并预览。'
+  if (runtimeLoading.value) return '正在确认小程序是否支持此页面内容…'
+  if (runtimeError.value) return '暂时无法确认小程序兼容状态，请重新检查。'
+  if (runtimeBlocked.value) return '当前小程序暂不支持此页面内容。可保存草稿和预览，暂不能上线。请由部署负责人完成新版小程序验证。'
+  if (reportError.value) return '发布检查失败，请重新检查并预览。'
+  if (report.value && !reportStale.value && !report.value.canPublish) return '发布检查未通过，请展开检查详情处理问题。'
+  if (draft.value?.publishedRevision === draft.value?.revision) return '当前草稿已上线。修改内容后可再次发布。'
+  if (!previewReady.value || !checkedForPublish.value) return '草稿已保存。点击检查并预览，确认效果和上线条件。'
+  return '检查已通过。核对画布效果后即可发布，发布前仍会确认权限和当前版本。'
+})
 const alreadyPublished = computed(() => !!draft.value && draft.value.publishedRevision === draft.value.revision)
 const selected = computed(() => editor.value?.components.find((item) => item.componentId === selectedId.value) || null)
 const publishedTargets = computed(() => linkPages.value.filter((item) =>
@@ -161,6 +177,7 @@ async function loadDetail(id: string) {
     preview.value = null
     previewSnapshot.value = ''
     selectedId.value = 'theme'
+    mobilePanel.value = 'preview'
   } catch (reason) { if (sequence === detailSequence) error.value = message(reason) }
   finally { if (sequence === detailSequence) detailLoading.value = false }
 }
@@ -236,6 +253,7 @@ function addComponent(type: ComponentType) {
   const component = createComponent(type, editor.value.components.length + 1)
   updateComponents([...editor.value.components, component])
   selectedId.value = component.componentId
+  mobilePanel.value = 'settings'
 }
 function moveComponent(index: number, offset: number) {
   if (!editor.value) return
@@ -295,21 +313,32 @@ async function saveDraft(): Promise<boolean> {
   } catch (reason) { error.value = message(reason); return false }
   finally { busy.value = '' }
 }
+async function checkAndPreview() {
+  const pageId = draft.value?.pageId
+  if (!pageId || busy.value) return
+  await refreshReport()
+  if (draft.value?.pageId !== pageId || dirty.value || reportError.value || !report.value || reportStale.value) return
+  await showPreview()
+}
 async function showPreview() {
   if (!draft.value || busy.value) return
   if (dirty.value && !(await saveDraft())) return
   if (!draft.value || dirty.value) return
+  const sequence = detailSequence, pageId = draft.value.pageId, revision = draft.value.revision, snapshot = savedSnapshot.value
+  const matches = () => sequence === detailSequence && draft.value?.pageId === pageId && draft.value.revision === revision && savedSnapshot.value === snapshot && !dirty.value
   busy.value = 'preview'
   error.value = ''
   try {
     const result = await api<HomePreview>(`/pages/${draft.value.pageId}/preview`, {
-      method: 'POST', body: JSON.stringify({ expectedRevision: draft.value.revision }),
+      method: 'POST', body: JSON.stringify({ expectedRevision: revision }),
     })
+    if (!matches()) return
+    if (result.revision !== revision) throw new Error('预览内容已变化，请重新检查并预览。')
     preview.value = result
     previewSnapshot.value = savedSnapshot.value
     notice.value = `服务端预览已生成 · 修订 ${result.revision}。预览中的链接不会跳转。`
-  } catch (reason) { error.value = message(reason); preview.value = null }
-  finally { busy.value = '' }
+  } catch (reason) { if (matches()) { error.value = message(reason); preview.value = null } }
+  finally { if (busy.value === 'preview') busy.value = '' }
 }
 function openPublish() {
   if (!draft.value || busy.value || publicationRefresh.value || publicationRecoveryBlocked.value) return
@@ -317,7 +346,7 @@ function openPublish() {
     if (publishIntent.value.objectId !== draft.value.pageId) { error.value = '另一个页面的发布结果尚未确认，请返回原页面恢复原发布请求。'; return }
     error.value = ''; publishPassword.value = ''; publishOpen.value = true; return
   }
-  if (runtimeBlocked.value || dirty.value || !previewReady.value || alreadyPublished.value) return
+  if (runtimeBlocked.value || dirty.value || !previewReady.value || !checkedForPublish.value || alreadyPublished.value) return
   error.value = ''
   publishPassword.value = ''
   publishOpen.value = true
@@ -360,7 +389,7 @@ async function syncPublication() {
 }
 async function publish() {
   if (!draft.value || !publishPassword.value || busy.value || publicationRefresh.value || publicationRecoveryBlocked.value) return
-  if (!publishIntent.value && (dirty.value || !previewReady.value || alreadyPublished.value)) return
+  if (!publishIntent.value && (runtimeBlocked.value || dirty.value || !previewReady.value || !checkedForPublish.value || alreadyPublished.value)) return
   if (publishIntent.value && publishIntent.value.objectId !== draft.value.pageId) { error.value = '另一个页面的发布结果尚未确认，请返回原页面恢复原发布请求。'; return }
   const recovering = !!publishIntent.value
   const intent = publishIntent.value || publicationIntent(`/pages/${draft.value.pageId}`, draft.value.pageId, draft.value, crypto.randomUUID())
@@ -427,8 +456,9 @@ function rolledBack(result: RollbackResult) {
       <RouterLink class="text-link" to="/pages/home">返回首页装修</RouterLink>
     </header>
 
-    <section class="panel micro-page-list" aria-labelledby="micro-list-title">
-      <div class="micro-list-heading"><div><h2 id="micro-list-title">页面列表</h2><p>草稿不会改变已发布内容。可查看发布历史并回退线上版本。</p></div>
+    <details :key="currentPageId || 'list'" class="panel micro-page-list" :open="!currentPageId" aria-labelledby="micro-list-title">
+      <summary id="micro-list-title">{{ draft ? `当前页面：${draft.name}` : '页面列表' }} <span>切换页面 / 新建 / 查询</span></summary>
+      <div class="micro-list-heading"><div><h2>页面列表</h2><p>草稿不会改变已发布内容。可查看发布历史并回退线上版本。</p></div>
         <form v-if="canEdit" class="micro-create" @submit.prevent="createPage"><label>新页面名称<input v-model="createName" maxlength="80" placeholder="例如 品牌故事" :disabled="creating || Boolean(busy)" /></label>
           <button type="submit" class="primary-button" :disabled="creating || Boolean(busy)">{{ creating ? '创建中…' : '创建微页面' }}</button></form></div>
       <form class="micro-list-filters" @submit.prevent="filterList"><label>搜索页面名称<input v-model="listQuery" maxlength="80" placeholder="输入页面名称" /></label><label>筛选业务标签<input v-model="listTag" maxlength="20" placeholder="精确标签，例如 活动" /></label><button type="submit" class="secondary-button" :disabled="listLoading">查询页面</button><button type="button" class="text-button" :disabled="listLoading" @click="resetFilters">重置筛选</button></form>
@@ -444,7 +474,7 @@ function rolledBack(result: RollbackResult) {
       <div v-if="listTotal > 10" class="micro-list-pagination"><span>共 {{ listTotal }} 张 · 第 {{ listPage }} 页</span>
         <button type="button" class="secondary-button" :disabled="listPage <= 1 || listLoading" @click="loadList(listPage - 1)">上一页</button>
         <button type="button" class="secondary-button" :disabled="listPage * 10 >= listTotal || listLoading" @click="loadList(listPage + 1)">下一页</button></div>
-    </section>
+    </details>
 
     <p v-if="detailLoading" class="loading-inline" role="status">正在读取微页面草稿…</p>
     <p v-else-if="currentPageId && !draft && error" class="error notice" role="alert">{{ error }} <button type="button" class="text-button" @click="loadDetail(currentPageId)">重新加载</button></p>
@@ -456,27 +486,27 @@ function rolledBack(result: RollbackResult) {
         <button type="button" class="text-button home-reload" :disabled="Boolean(busy)" @click="reloadDraft">重新读取</button></div>
       <div class="micro-editor-actions"><PublicationHistory :account="account" :base="`/pages/${draft.pageId}`" :object-id="draft.pageId" :draft-revision="draft.revision" :disabled="Boolean(busy)" @rolled-back="rolledBack" /><PageCopyPanel v-if="canEdit" :account-id="account.accountId" :page-id="draft.pageId" :name="draft.name" :revision="draft.revision" :published-revision="draft.publishedRevision" :disabled="Boolean(busy)" @copied="pageCopied" /><label>页面名称<input v-model="name" maxlength="80" :disabled="!canEdit || Boolean(busy)" /></label>
         <button type="button" class="secondary-button" :disabled="!canEdit || !dirty || Boolean(busy)" @click="saveDraft">{{ busy === 'save' ? '保存中…' : '保存草稿' }}</button>
-        <button type="button" class="secondary-button" :disabled="Boolean(busy)" @click="showPreview">{{ busy === 'preview' ? '预览中…' : '服务端预览' }}</button>
-        <button v-if="canPublish" type="button" class="primary-button" :disabled="Boolean(busy) || publicationRecoveryBlocked || Boolean(publicationRefresh) || (!publishIntent && (runtimeBlocked || dirty || !previewReady || alreadyPublished))" @click="openPublish">{{ publishIntent ? '恢复原发布请求' : publicationRefresh ? '线上状态待同步' : alreadyPublished ? '当前修订已发布' : '发布微页面' }}</button></div>
+        <button type="button" class="secondary-button" :disabled="Boolean(busy)" @click="checkAndPreview">{{ busy === 'preview' || reportLoading ? '检查预览中…' : '检查并预览' }}</button>
+        <button v-if="canPublish" type="button" class="primary-button" :disabled="Boolean(busy) || publicationRecoveryBlocked || Boolean(publicationRefresh) || (!publishIntent && (runtimeBlocked || dirty || !previewReady || !checkedForPublish || alreadyPublished))" @click="openPublish">{{ publishIntent ? '恢复原发布请求' : publicationRefresh ? '线上状态待同步' : alreadyPublished ? '当前修订已发布' : '发布微页面' }}</button></div>
+      <p class="micro-workflow-guide" role="status"><strong>保存草稿 → 检查并预览 → 发布</strong><span>{{ publishGuidance }}<template v-if="dirty"> 检查并预览会先保存当前修改。</template></span></p>
       <p v-if="error" class="error notice" role="alert">{{ error }}</p>
       <p v-if="notice" class="home-success" role="status">{{ notice }}</p>
     <p v-if="publicationRefresh" role="status">发布请求已完成，当前线上状态待同步。<button type="button" class="text-button" :disabled="Boolean(busy)" @click="syncPublication">重新读取线上状态</button></p>
-      <EditorActions :disabled="!canEdit || Boolean(busy)" :can-undo="canUndo" :can-redo="canRedo" :can-copy="Boolean(selected)" :count="editor.components.length" @undo="undo" @redo="redo" @copy="copySelected" @theme="selectedId = 'theme'" />
-      <p v-if="editor.schemaVersion > 1 && runtimeBlocked" class="editor-runtime-note" role="status">{{ runtimeLoading ? '正在读取小程序兼容状态…' : runtimeError || `新增组件草稿可编辑和预览；小程序当前支持配置版本 ${runtimeSchema}，发布暂不可用。` }}<button v-if="!runtimeLoading" type="button" class="text-button" @click="loadRuntime">重新检查</button></p>
-      <PageReusePanel :key="draft.pageId" :config="editor" :disabled="!canEdit || Boolean(busy)" @replace="replaceEditor" @append="appendCombination" />
-      <section class="panel page-metadata-panel" aria-label="分享与业务标签"><PageMetadataEditor :key="draft.pageId" :metadata="editor.metadata" :disabled="!canEdit || Boolean(busy)" @change="updateMetadata" /></section>
-      <ReleaseReportPanel :report="report" :stale="reportStale" :loading="reportLoading" :error="reportError" :disabled="Boolean(busy) || detailLoading" @refresh="refreshReport" />
-      <div class="home-editor-grid">
+      <EditorActions :disabled="!canEdit || Boolean(busy)" :can-undo="canUndo" :can-redo="canRedo" :can-copy="Boolean(selected)" :count="editor.components.length" @undo="undo" @redo="redo" @copy="copySelected" @theme="selectedId = 'theme'; mobilePanel = 'settings'" />
+      <p v-if="runtimeBlocked" class="micro-runtime-actions"><button type="button" class="text-button" :disabled="runtimeLoading || Boolean(busy)" @click="loadRuntime">重新检查兼容状态</button><RouterLink v-if="account.permissionCodes.includes('code.version.read')" to="/store/code-versions">查看小程序代码版本</RouterLink></p>
+      <p v-if="!editor.components.some(item => item.visible)" class="help-text" role="status">当前没有可见内容，发布后顾客将看到空白页。请添加组件，或确认空白用途。</p>
+      <div class="micro-mobile-panels" aria-label="编辑区域"><button v-for="tab in ([['preview', '预览'], ['components', '组件'], ['settings', '设置']] as const)" :key="tab[0]" type="button" :aria-pressed="mobilePanel === tab[0]" @click="mobilePanel = tab[0]">{{ tab[1] }}</button></div>
+      <div class="home-editor-grid" :data-mobile-panel="mobilePanel">
         <aside class="home-toolbox panel" aria-label="组件与顺序"><h2>可用组件</h2><p>添加后可调整顺序、显隐和内容。</p>
-          <div class="home-component-library"><button v-for="type in componentTypes" :key="type" type="button" :disabled="!canEdit || Boolean(busy) || editor.components.length >= 40" @click="addComponent(type)"><span>{{ componentNames[type] }}</span><strong aria-hidden="true">＋</strong></button></div>
+          <ComponentLibrary :disabled="!canEdit || Boolean(busy) || editor.components.length >= 40" @add="addComponent" />
           <div class="home-toolbox-title"><h3>页面组件</h3><small>{{ editor.components.length }} 项</small></div>
           <p v-if="!editor.components.length" class="help-text">还没有组件。请从上方添加。</p>
           <ol v-else class="home-component-list"><li v-for="(item, index) in editor.components" :key="item.componentId" :class="{ selected: selectedId === item.componentId }" :draggable="canEdit && !busy" @dragstart="startDrag($event, item.componentId)" @dragover.prevent @drop.prevent="dropComponent(item.componentId)" @dragend="draggingId = ''">
-            <button type="button" class="home-component-select" :aria-current="selectedId === item.componentId ? 'true' : undefined" @click="selectedId = item.componentId"><strong>{{ componentNames[item.type] }}</strong><small>{{ item.visible ? '显示中' : '已隐藏' }}</small></button>
+            <button type="button" class="home-component-select" :aria-current="selectedId === item.componentId ? 'true' : undefined" @click="selectedId = item.componentId; mobilePanel = 'settings'"><strong>{{ componentNames[item.type] }}</strong><small>{{ item.visible ? '显示中' : '已隐藏' }}</small></button>
             <div v-if="canEdit" class="home-row-tools"><button type="button" :disabled="index === 0 || Boolean(busy)" :aria-label="`上移${componentNames[item.type]}`" @click="moveComponent(index, -1)">↑</button><button type="button" :disabled="index === editor.components.length - 1 || Boolean(busy)" :aria-label="`下移${componentNames[item.type]}`" @click="moveComponent(index, 1)">↓</button></div>
           </li></ol></aside>
         <section class="home-preview-panel panel" aria-labelledby="micro-preview-title"><div class="home-panel-title"><div><h2 id="micro-preview-title">即时效果</h2><p>点击画布选中组件，编辑结果即时显示；链接不会跳转。</p></div><span :class="previewReady ? 'badge badge-good' : 'badge badge-muted'">{{ previewReady ? '服务端校验通过' : '待服务端校验' }}</span></div>
-          <HomePagePreview :config="editor" :stale="false" :page-name="name" :interactive="true" :selected-id="selectedId" @select="selectedId = $event" /></section>
+          <HomePagePreview :config="editor" :stale="false" :page-name="name" :interactive="true" :selected-id="selectedId" @select="selectedId = $event; mobilePanel = 'settings'" /></section>
         <section class="home-settings panel" aria-labelledby="micro-settings-title"><div class="home-panel-title"><div><h2 id="micro-settings-title">{{ selected ? `组件设置 · ${componentNames[selected.type]}` : '页面设置 · 主题' }}</h2><p>修改草稿不会改变线上版本。</p></div></div>
           <template v-if="selected"><label v-if="canEdit" class="home-toggle"><input type="checkbox" :checked="selected.visible" :disabled="Boolean(busy)" @change="updateComponent({ ...selected, visible: ($event.target as HTMLInputElement).checked })">显示此组件</label>
             <span v-else class="badge badge-muted">{{ selected.visible ? '显示中' : '已隐藏' }}</span>
@@ -484,10 +514,13 @@ function rolledBack(result: RollbackResult) {
             <p v-if="targetsLoading" class="help-text" role="status">正在读取目标列表…</p>
             <p v-else-if="targetWarning" class="help-text" role="alert">{{ targetWarning }} <button type="button" class="text-button" @click="loadTargets">重试读取目标</button></p>
             <button v-if="canEdit" type="button" class="text-button danger home-remove" :disabled="Boolean(busy)" @click="removeComponent(selected.componentId)">移除组件</button></template>
-          <div v-else class="home-theme-fields"><label v-for="field in ([['pageBackgroundColor', '页面背景色'], ['headerBackgroundColor', '顶部区域底色'], ['brandTextColor', '顶部文字色']] as const)" :key="field[0]">{{ field[1] }}<span class="home-color-control"><input type="color" :value="editor.theme[field[0]]" :disabled="!canEdit || Boolean(busy)" :aria-label="field[1]" @input="updateTheme(field[0], ($event.target as HTMLInputElement).value)"><input :value="editor.theme[field[0]]" maxlength="7" :disabled="!canEdit || Boolean(busy)" @change="updateTheme(field[0], ($event.target as HTMLInputElement).value.trim())"></span></label>
+          <div v-else class="home-theme-fields"><label v-for="field in ([['pageBackgroundColor', '页面背景色'], ['headerBackgroundColor', '顶部区域底色'], ['brandTextColor', '顶部文字色']] as const)" :key="field[0]">{{ field[1] }}<span class="home-color-control"><input type="color" :value="editor.theme[field[0]]" :disabled="!canEdit || Boolean(busy)" :aria-label="field[1]" @input="updateTheme(field[0], ($event.target as HTMLInputElement).value)"><input :value="editor.theme[field[0]]" :aria-label="`${field[1]}十六进制值`" maxlength="7" :disabled="!canEdit || Boolean(busy)" @change="updateTheme(field[0], ($event.target as HTMLInputElement).value.trim())"></span></label>
             <p class="help-text">主题色仅作用于此页面；发布前请在预览中检查文字可读性。</p></div>
         </section>
       </div>
+      <PageReusePanel :key="draft.pageId" :config="editor" :disabled="!canEdit || Boolean(busy)" @replace="replaceEditor" @append="appendCombination" />
+      <section class="panel page-metadata-panel" aria-label="分享与业务标签"><PageMetadataEditor :key="draft.pageId" :metadata="editor.metadata" :disabled="!canEdit || Boolean(busy)" @change="updateMetadata" /></section>
+      <ReleaseReportPanel :report="report" :stale="reportStale" :loading="reportLoading" :error="reportError" :disabled="Boolean(busy) || detailLoading" @refresh="refreshReport" />
     </template>
     <el-dialog v-model="publishOpen" title="确认发布独立微页面" width="min(480px, 92vw)" @closed="publishPassword = ''">
       <p>将“{{ draft?.name }}”的草稿修订 {{ draft?.revision }} 发布到小程序。发布后，站内链接才可指向这个页面。</p>

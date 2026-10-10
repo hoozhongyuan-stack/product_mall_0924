@@ -10,6 +10,7 @@ import StocktakePanel from './inventory/StocktakePanel.vue'
 import InventoryDateRange from './inventory/InventoryDateRange.vue'
 import InventoryListFooter from './inventory/InventoryListFooter.vue'
 import { csvTable } from './inventory/csv.mjs'
+import { summarizeBalances } from './inventory/summary.mjs'
 import type { InboundDetail, InboundSummary, InventoryBalance, InventoryLedger, OutboundDetail, OutboundSummary, Page, Warehouse, WarehouseList } from './inventory/types'
 import './inventory/inventory.css'
 
@@ -86,11 +87,7 @@ const confirmationKeys = new Map<string, string>()
 const canCreateDraft = computed(() => canManage.value && warehouses.value.some((row) => row.enabled))
 const dirty = computed(() => (createWarehouseOpen.value && !!(warehouseCode.value.trim() || warehouseName.value.trim()))
   || (inboundOpen.value && inboundDirty.value) || (outboundOpen.value && outboundDirty.value) || stocktakeDirty.value)
-const pageTotals = computed(() => balances.value.items.reduce((result, row) => ({
-  onHand: result.onHand + row.onHandBaseUnits,
-  reserved: result.reserved + row.reservedBaseUnits,
-  available: result.available + row.availableBaseUnits,
-}), { onHand: 0, reserved: 0, available: 0 }))
+const pageTotals = computed(() => summarizeBalances(balances.value.items))
 type SelectableRow = InventoryBalance | InboundSummary | OutboundSummary | InventoryLedger
 function rowKey(row: SelectableRow): string {
   if ('ledgerId' in row) return row.ledgerId
@@ -457,14 +454,14 @@ onUnmounted(() => { detailGeneration++; window.removeEventListener('beforeunload
 <template>
   <section class="page-content inventory-page">
     <div v-if="tab === 'balances'" class="inventory-section">
-      <div class="page-heading"><div><h1>库存查询</h1><p>账面 − 锁定 = 可售；以下汇总仅统计当前页。</p></div></div>
+      <div class="page-heading"><div><h1>库存查询</h1><p>账面 − 锁定 = 可售；当前页按基础单位分别汇总，共享库存池只统计一次。</p></div></div>
       <form class="inventory-filters" @submit.prevent="loadBalances(1)">
         <label>SKU 编码或商品名称<el-input v-model="balanceKeyword" clearable placeholder="输入关键词" /></label>
         <label>仓库<el-select v-model="balanceWarehouseId" placeholder="全部仓库"><el-option label="全部仓库" value="" /><el-option v-for="row in warehouses" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label><label>可售库存<el-select v-model="balanceAvailability"><el-option label="全部" value="" /><el-option label="有可售" value="AVAILABLE" /><el-option label="无可售" value="UNAVAILABLE" /><el-option label="有锁定" value="RESERVED" /></el-select></label>
         <el-button type="primary" native-type="submit" :loading="balanceLoading">查询</el-button>
         <el-button @click="balanceKeyword = ''; balanceWarehouseId = ''; balanceAvailability = ''; loadBalances(1)">重置</el-button>
       </form>
-      <div class="inventory-totals" aria-label="当前页库存汇总"><span>账面 <strong>{{ pageTotals.onHand }}</strong></span><span>锁定 <strong>{{ pageTotals.reserved }}</strong></span><span>可售 <strong>{{ pageTotals.available }}</strong></span></div>
+      <div v-if="!balanceLoading && !balanceError && pageTotals.length" aria-label="当前页库存汇总"><div v-for="total in pageTotals" :key="total.baseUnit" class="inventory-totals"><span>基础单位：<strong>{{ total.baseUnit || '单位未配置' }}</strong></span><span>账面 <strong>{{ total.onHand }} {{ total.baseUnit }}</strong></span><span>锁定 <strong>{{ total.reserved }} {{ total.baseUnit }}</strong></span><span>可售 <strong>{{ total.available }} {{ total.baseUnit }}</strong></span></div></div>
       <p v-if="balanceError" class="notice" role="alert">{{ balanceError }} <el-button link type="primary" @click="loadBalances(balances.page)">重试</el-button></p>
       <div class="panel table-wrap" v-loading="balanceLoading">
         <table><thead><tr><th><el-checkbox :model-value="allSelected" :disabled="balanceLoading" aria-label="全选当前页库存" @change="toggleAll" /></th><th>商品 / 规格</th><th>仓库</th><th>账面</th><th>锁定</th><th>可售</th></tr></thead>
