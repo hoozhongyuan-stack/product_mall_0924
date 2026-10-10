@@ -365,8 +365,12 @@ test('mock HTTP: workbench uses authorized real-shaped reports with error recove
   await expect(page.getByRole('alert')).toContainText('经营数据暂时不可用')
   fail = false
   await page.getByRole('button', { name: '重试', exact: true }).click()
+  await expect(page.getByLabel('区间经营合计')).not.toBeVisible()
+  await page.getByText('区间经营统计与每日明细', { exact: true }).click()
   await expect(page.getByLabel('区间经营合计')).toContainText('1,234.56')
-  const entries = page.getByRole('region', { name: '业务入口' })
+  await expect(page.getByRole('region', { name: '常用工作' }).getByRole('link', { name: '订单管理' })).toBeVisible()
+  await page.getByText('全部业务入口', { exact: true }).click()
+  const entries = page.locator('.dashboard-links')
   await expect(entries.getByRole('link', { name: '订单管理' })).toBeVisible()
   await expect(entries.getByRole('link', { name: '子账号' })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
