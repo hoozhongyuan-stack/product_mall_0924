@@ -293,6 +293,7 @@ for (const target of ['home', 'micro']) {
     })
     await page.goto(`/pages/${target}`)
     if (target === 'micro') await page.getByRole('button', { name: /浏览器微页面/ }).click()
+    if (target === 'micro' && testInfo.project.name === 'mobile') await page.getByRole('button', { name: '组件', exact: true }).click()
     await page.getByRole('button', { name: '公告栏 显示中', exact: true }).click()
     await expect(page.getByRole('alert').filter({ hasText: '部分目标列表暂不可用' })).toBeVisible()
     await page.getByLabel('公告文案').fill('重试也必须保留的编辑内容')
