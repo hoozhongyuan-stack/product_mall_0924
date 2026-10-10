@@ -1,3 +1,4 @@
+const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const home = require('../../lib/home')
 const sharing = require('../../lib/published-sharing')
@@ -11,23 +12,43 @@ Page({
     share: { title: '商城首页', imageUrl: '' }, state: 'loading', error: '', components: [], versionId: '',
     theme: { pageBackgroundColor: '#FFF5E8', headerBackgroundColor: '#B63F32',
       brandTextColor: '#FFF8EF' },
-    keyword: '', failedAssets: {},
+    keyword: '', failedAssets: {}, store: null, storeError: '', capsuleTop: 30, capsuleRight: 190, headerPadding: 52,
   },
 
   onLoad() {
     if (startup.redirectIfPending(() => this.onLoad())) return
     this.homeToken = 0
     this.shown = false
-    return this.loadHome()
+    return this.loadStore().then(() => this.loadHome())
   },
 
+  async loadStore() {
+    const generation = this.storeGeneration = (this.storeGeneration || 0) + 1
+    const originalId = (stores.selected() || {}).id || null
+    const valid = () => generation === this.storeGeneration && ((stores.selected() || {}).id || null) === originalId
+    try {
+      let selected = stores.selected()
+      if (!selected) {
+        const result = await api.get('/api/v1/app/stores')
+        let location = null
+        try { location = await stores.locate() } catch (e) { this.setData({ storeError: e.message }) }
+        selected = location ? stores.rank(result.items.filter(s => s.acceptingOrders && s.supportedModes && s.supportedModes.length), location)[0] || null : null
+        if (!valid()) return
+        if (selected) stores.select(selected)
+      } else { selected = await api.get(`/api/v1/app/stores/${encodeURIComponent(selected.id)}`); if (!valid()) return; stores.select(selected) }
+      const rect = wx.getMenuButtonBoundingClientRect ? wx.getMenuButtonBoundingClientRect() : null
+      const info = wx.getWindowInfo ? wx.getWindowInfo() : null
+      this.setData({ store: selected, ...(selected ? { storeError: '' } : {}), ...(rect ? { capsuleTop: rect.top, headerPadding: rect.top, capsuleRight: info ? info.windowWidth - rect.left + 12 : 190 } : {}) })
+    } catch (e) { if (valid()) this.setData({ store: null, storeError: e.message }) }
+  },
+  chooseStore() { wx.navigateTo({ url: '/pages/stores/list' }) },
   onShow() {
     if (startup.redirectIfPending()) return
-    if (this.shown) return this.loadHome()
+    if (this.shown) return this.loadStore().then(() => this.loadHome())
     this.shown = true
   },
 
-  onHide() { this.homeToken += 1; pageCoupons.discard(this) },
+  onHide() { this.storeGeneration = (this.storeGeneration || 0) + 1; this.homeToken += 1; pageCoupons.discard(this) },
   onUnload() { this.onHide() },
 
   onPullDownRefresh() {
@@ -36,11 +57,12 @@ Page({
 
   async loadHome() {
     const token = ++this.homeToken
+    if (!this.data.store && stores.selected()) { this.setData({ state: 'error', error: this.data.storeError || '所选门店暂不可用，请重新选择门店。', components: [] }); return }
     sharing.hide()
     pageCoupons.discard(this)
     this.setData({ state: 'loading', error: '', versionId: '', share: { title: '商城首页', imageUrl: '' } })
     try {
-      const data = await api.get('/api/v1/app/home', { schemaVersion: 4 })
+      const data = await api.get('/api/v1/app/home', { schemaVersion: 4, ...stores.query() })
       if (token !== this.homeToken) return
       if (!data.versionId || !data.config || typeof data.config !== 'object') throw new Error('首页内容暂不可用，请稍后重试。')
       const content = home.homeContent(data.config, api.baseUrl(), data.componentData)

@@ -234,8 +234,8 @@ def _finalize_case(case):
     from aftersales.service import finish_refund_locked
     line = case.order_line
     if line.fulfillment_kind == "SHIP":
-        from fulfillment.models import Shipment
-        if Shipment.objects.filter(order_id=line.order_id).exists():
+        from fulfillment.store_service import physical_handoff_fact
+        if physical_handoff_fact(line.order) is not None:
             from aftersales.models import ReturnAcceptance
             if case.kind != "RETURN_REFUND" or not ReturnAcceptance.objects.filter(case=case,refund_quantity__gt=0).exists():
                 raise RefundError("已发货退款须先完成退货验收或明确免寄回。", "RETURN_NOT_ACCEPTED", 409)

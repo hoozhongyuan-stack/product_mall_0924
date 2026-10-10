@@ -22,6 +22,9 @@ class Order(models.Model):
     order_kind = models.CharField(max_length=6,default="CASH")
     member = models.ForeignKey("customers.Member", on_delete=models.PROTECT)
     quote_id = models.UUIDField()
+    store = models.ForeignKey('stores.Store', null=True, blank=True, on_delete=models.PROTECT)
+    delivery_mode = models.CharField(max_length=8, blank=True)
+    store_snapshot = models.JSONField(default=dict)
     revision = models.PositiveIntegerField(default=1)
     payment_instructions = models.JSONField(default=dict)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING_PAYMENT)
@@ -50,6 +53,8 @@ class Order(models.Model):
                    models.Index(fields=["status", "expires_at"], name="order_status_expiry_idx"),
                    models.Index(fields=["paid_at"], condition=Q(status="PAID"), name="order_paid_fact_idx")]
         constraints = [
+            models.CheckConstraint(condition=(Q(store__isnull=True, delivery_mode='', store_snapshot={}) |
+                Q(store__isnull=False, delivery_mode__in=['PICKUP', 'DELIVERY', 'EXPRESS'])), name='order_store_mode_consistent'),
             models.CheckConstraint(condition=(Q(order_kind="CASH",payment_method__in=["OFFLINE","WECHAT"]) |
                 Q(order_kind="POINTS",payment_method="POINTS",goods_total_fen=0,shipping_fee_fen=0,coupon_id__isnull=True,
                   coupon_discount_fen=0,points_discount_fen=0,payable_fen=0,points_to_use__gte=1,points_to_use__lte=99000000)),name="order_kind_payment_valid"),

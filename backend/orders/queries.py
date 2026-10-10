@@ -28,6 +28,13 @@ def list_orders(params, member=None):
     rows = Order.objects.annotate(reported=Exists(OfflinePaymentReport.objects.filter(order_id=OuterRef('pk'))))
     if member:
         rows = rows.filter(member=member)
+    store_id = params.get('storeId')
+    if store_id:
+        from uuid import UUID
+        try:
+            rows = rows.filter(store_id=UUID(store_id))
+        except (ValueError, TypeError):
+            raise PaymentError('门店编号不正确。')
     order_kind=params.get('orderKind')
     if order_kind:
         if order_kind not in {'CASH','POINTS'}:raise PaymentError('订单类型不正确。')
@@ -57,6 +64,8 @@ def list_orders(params, member=None):
     page_rows = list(rows.order_by('-created_at', '-id')[(page-1)*size:page*size])
     summaries = page_fulfillment_summaries(page_rows)
     items = [{'orderId': str(o.id), 'orderNo': o.order_no, 'status': o.status, 'paymentMethod': o.payment_method,
+              'storeId': str(o.store_id) if o.store_id else None,
+              'storeName': o.store_snapshot.get('name') if o.store_id else None, 'deliveryMode': o.delivery_mode or None,
               'orderKind':o.order_kind,'exchangePoints':o.points_to_use if o.order_kind=='POINTS' else 0,
               'revision': o.revision, 'payableFen': o.payable_fen, 'createdAt': o.created_at.isoformat(),
               'expiresAt': o.expires_at.isoformat(), 'paymentReviewStatus': review_status(o, o.reported),

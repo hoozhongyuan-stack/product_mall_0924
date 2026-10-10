@@ -17,15 +17,16 @@ def default_available_base_units(sku_ids):
     return warehouse, {sku_id: available.get(anchor, 0) for sku_id, anchor in anchors.items()}
 
 
-def product_has_available_stock():
+def product_has_available_stock(warehouse_id=None):
     """Expression for a Product queryset; keeps the list to one data query."""
     anchor = StockPoolSku.objects.filter(sku_id=OuterRef("pk")).values("pool__anchor_sku_id")[:1]
     stocked_sku = Sku.objects.filter(
         product_id=OuterRef("pk"), sale_status=Sku.SaleStatus.ON_SALE,
         current_unit__isnull=False,
     ).annotate(stock_anchor=Coalesce(Subquery(anchor), F("id")))
+    warehouse_filter = {'warehouse_id': warehouse_id} if warehouse_id else {'warehouse__is_default': True}
     balance = InventoryBalance.objects.filter(
-        sku_id=OuterRef("stock_anchor"), warehouse__is_default=True,
+        sku_id=OuterRef("stock_anchor"), **warehouse_filter,
         warehouse__enabled=True,
         on_hand_base_units__gte=F("reserved_base_units") + OuterRef("current_unit__ratio"),
     )

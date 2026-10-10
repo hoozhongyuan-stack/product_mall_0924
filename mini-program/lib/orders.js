@@ -1,3 +1,4 @@
+const { MODE_LABELS } = require('./stores')
 const {presentBenefits}=require('./benefits')
 const { money } = require('./catalog')
 const PENDING_KEY = 'mall.pendingOrder.v1'
@@ -17,14 +18,14 @@ function dateLabel(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 function statusLabel(order) {
-  if (order.status === 'PAID') return ({ WAITING_SHIPMENT: '待发货', WAITING_REDEMPTION: '待核销',
+  if (order.status === 'PAID') return ({ WAITING_PREPARATION: '待备货', WAITING_PICKUP: '待自提', WAITING_DELIVERY: '待配送', WAITING_SHIPMENT: '待发货', WAITING_REDEMPTION: '待核销',
     IN_PROGRESS: '履约中', COMPLETED: '已完成', AFTER_SALE: '售后处理中', REFUNDED: '已退款' })[order.fulfillmentStatus] || (order.orderKind === 'POINTS' ? '已兑换' : '已付款')
   if (order.status === 'CLOSED') return '已关闭'
   if (order.status === 'PENDING_PAYMENT') return order.paymentReviewStatus === 'PENDING_REVIEW' ? '待付款 · 待核实' : '待付款'
   return '状态待核实'
 }
 function fulfillmentCopy(order) {
-  return ({ WAITING_SHIPMENT: '收款已确认，实物商品等待发货。',
+  return ({ WAITING_PREPARATION: '收款已确认，门店正在备货。', WAITING_PICKUP: '商品已备好，请到订单门店出示自提凭证。', WAITING_DELIVERY: '商品已备好，等待门店配送。', WAITING_SHIPMENT: '收款已确认，实物商品等待发货。',
     WAITING_REDEMPTION: '收款已确认，出示订单项的核销凭证后可到店使用。',
     IN_PROGRESS: '订单项分别履约；实物查看运单，核销服务查看剩余次数。',
     COMPLETED: order.afterSaleSummary && order.afterSaleSummary.refundedQuantity > 0 ?
@@ -33,7 +34,7 @@ function fulfillmentCopy(order) {
     REFUNDED: '订单退款已确认，请以退款凭证和实际资金流水核对到账。' })[order.fulfillmentStatus] || '收款已确认，后续履约信息以订单更新为准。'
 }
 const lineStatusLabels = {
-  SHIP: { AFTER_SALE: '售后处理中', REFUNDED: '已退款', WAITING_SHIPMENT: '待发货', IN_TRANSIT: '运输中', COMPLETED: '已收货' },
+  SHIP: { WAITING_PREPARATION: '待备货', WAITING_PICKUP: '待自提', WAITING_DELIVERY: '待配送', AFTER_SALE: '售后处理中', REFUNDED: '已退款', WAITING_SHIPMENT: '待发货', IN_TRANSIT: '运输中', COMPLETED: '已收货' },
   REDEEM: { AFTER_SALE: '售后处理中', REFUNDED: '已退款', WAITING_PAYMENT: '待确认收款', WAITING_VALIDITY: '有效期待核实',
     WAITING_REDEMPTION: '待核销', PARTIAL: '部分核销', COMPLETED: '核销完成', EXPIRED: '已过有效期' },
 }
@@ -60,7 +61,7 @@ function presentLine(item, order) {
     { ...item.fulfillment, voucherQrDataUrl: undefined } : item.fulfillment
   return { ...item, fulfillment: safeFulfillment, price: order.orderKind === 'POINTS' ? `${item.pointsUnitPrice} 积分` : money(item.unitPriceFen), amount: order.orderKind === 'POINTS' ? `${item.pointsTotal} 积分` : money(item.payableFen), redemption,
     specLabel: Array.isArray(item.specs) && item.specs.length ? item.specs.map((spec) => `${spec.name}：${spec.value}`).join(' · ') : '默认规格',
-    fulfillmentLabel: kind === 'SHIP' ? '快递发货' : '到店核销',
+    fulfillmentLabel: kind === 'SHIP' ? MODE_LABELS[order.deliveryMode] || '快递发货' : '到店核销',
     fulfillmentStatus: order.status === 'CLOSED' ? '已关闭' : !paid ? '收款确认后可履约' :
       (progress && lineStatusLabels[kind] && lineStatusLabels[kind][progress.status]) || '进度待核实',
   }
@@ -69,7 +70,7 @@ function orderProgress(order) {
   const paid = order.status === 'PAID'
   const fulfillment = order.fulfillmentStatus
   if (order.status !== 'PENDING_PAYMENT' && (!paid ||
-      !['WAITING_SHIPMENT', 'WAITING_REDEMPTION', 'IN_PROGRESS', 'COMPLETED'].includes(fulfillment))) return []
+      !['WAITING_PREPARATION', 'WAITING_PICKUP', 'WAITING_DELIVERY', 'WAITING_SHIPMENT', 'WAITING_REDEMPTION', 'IN_PROGRESS', 'COMPLETED'].includes(fulfillment))) return []
   const completed = fulfillment === 'COMPLETED'
   return [
     { label: '已下单', reached: true },
@@ -94,7 +95,7 @@ function present(order) {
     { ...item, fulfillment: { ...item.fulfillment, voucherQrDataUrl: undefined } } : item) }
   const isPoints = order.orderKind === 'POINTS'
   if (isPoints && (!Number.isSafeInteger(order.exchangePoints) || order.exchangePoints < 1 || order.paymentMethod !== 'POINTS' || order.items.some(item => !Number.isSafeInteger(item.pointsUnitPrice) || item.pointsUnitPrice < 1 || item.pointsTotal !== item.pointsUnitPrice * item.quantity))) throw new Error('积分兑换订单资料不完整，请重新加载。')
-  return { isPoints, progressSteps: orderProgress(order), canRequestExchangeCancel: isPoints && isPaid && ['WAITING_SHIPMENT', 'WAITING_REDEMPTION'].includes(order.fulfillmentStatus), order: safeOrder, orderBenefits:presentBenefits(order.orderBenefits), statusLabel: statusLabel(order), isPaid, isClosed: closed, isExpired,
+  return { storeDelivery: order.storeDelivery || null, deliveryLabel: MODE_LABELS[order.deliveryMode] || '', isPoints, progressSteps: orderProgress(order), canRequestExchangeCancel: isPoints && isPaid && ['WAITING_SHIPMENT', 'WAITING_REDEMPTION'].includes(order.fulfillmentStatus), order: safeOrder, orderBenefits:presentBenefits(order.orderBenefits), statusLabel: statusLabel(order), isPaid, isClosed: closed, isExpired,
     shipment: shipment && { ...shipment, shippedAtLabel: dateLabel(shipment.shippedAt),
       autoConfirmAtLabel: dateLabel(shipment.autoConfirmAt), confirmedAtLabel: dateLabel(shipment.confirmedAt) },
     canConfirmReceipt,

@@ -1,15 +1,17 @@
-const KEY = 'mall.cart.v1'
+const LEGACY_KEY = 'mall.cart.v1'
+const stores = require('./stores')
+function key(storeId) { const current = storeId === undefined ? stores.selected() : null; const id = storeId === undefined ? current && current.id : storeId; return id ? `${LEGACY_KEY}.store.${id}` : LEGACY_KEY }
 const MAX_ITEMS = 50
 
-function read() {
-  const value = wx.getStorageSync ? wx.getStorageSync(KEY) : []
+function read(storeId) {
+  const value = wx.getStorageSync ? wx.getStorageSync(key(storeId)) : []
   return Array.isArray(value) ? value.filter((row) => row && typeof row.skuId === 'string' &&
     Number.isInteger(row.quantity) && row.quantity > 0).slice(0, MAX_ITEMS) : []
 }
 
-function write(rows) {
+function write(rows, storeId) {
   const next = rows.slice(0, MAX_ITEMS)
-  wx.setStorageSync(KEY, next)
+  wx.setStorageSync(key(storeId), next)
   return next
 }
 

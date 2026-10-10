@@ -41,6 +41,7 @@ def preview(member, line_id, kind, scope, quantity):
 def options(member, order_id):
     from orders.models import Order
     from fulfillment.models import Shipment, RedeemVoucher
+    from fulfillment.store_service import physical_handoff_fact
 
     order = Order.objects.filter(pk=order_id, member=member).first()
     if not order:
@@ -78,7 +79,7 @@ def options(member, order_id):
     common = {
         "snapshot": OrderAfterSaleSnapshot.objects.filter(order=order).first(),
         "receipt": applied_receipt(order),
-        "shipment": Shipment.objects.filter(order=order).first(),
+        "shipment": physical_handoff_fact(order),
     }
     items = []
     for line in lines:
@@ -191,6 +192,9 @@ def case_data(case, admin=False, actor=None, detail=True):
     }
     from .refund_amounts import amount_components
     d.update(amount_components(case))
+    if detail and admin:
+        from .store_service import notes_data
+        d["storeNotes"] = notes_data(case)
     if detail:
         from benefits.lifecycle import order_benefit_data
         d["orderBenefits"] = order_benefit_data(order.id)

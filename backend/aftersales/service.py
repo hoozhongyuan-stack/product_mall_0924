@@ -58,7 +58,8 @@ def _eligibility(order, line, kind, scope, quantity, facts=None):
     if line.fulfillment_kind == "SHIP":
         if scope != "UNUSED":
             raise AfterSaleError("发货商品不支持核销范围。")
-        shipment = facts["shipment"] if facts is not None else Shipment.objects.filter(order=order).first()
+        from fulfillment.store_service import physical_handoff_fact
+        shipment = facts["shipment"] if facts is not None else physical_handoff_fact(order)
         if shipment is not None:
             if kind != "RETURN_REFUND":
                 _fail("已发货商品需申请退货退款。", "RETURN_REQUIRED")

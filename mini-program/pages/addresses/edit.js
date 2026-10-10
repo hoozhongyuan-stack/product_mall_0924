@@ -1,7 +1,7 @@
 const api = require('../../lib/api')
 
 const empty = { recipientName: '', phone: '', province: '', city: '', district: '',
-  detail: '', isDefault: false }
+  detail: '', latitude: null, longitude: null, isDefault: false }
 
 Page({
   data: { form: empty, state: 'ready', error: '', busy: false, revision: null, fieldErrors: {} },
@@ -14,20 +14,23 @@ Page({
       if (!item) throw new Error('地址已不存在。')
       this.setData({ form: { recipientName: item.recipientName, phone: item.phone,
         province: item.province, city: item.city, district: item.district,
-        detail: item.detail, isDefault: item.isDefault }, revision: item.revision, state: 'ready' })
+        detail: item.detail, latitude: item.latitude ?? null, longitude: item.longitude ?? null, isDefault: item.isDefault }, revision: item.revision, state: 'ready' })
     } catch (error) { this.setData({ state: 'error', error: error.message }) }
   },
   change(event) {
     const key = event.currentTarget.dataset.key
-    if (!Object.prototype.hasOwnProperty.call(empty, key) || key === 'isDefault') return
-    this.setData({ form: { ...this.data.form, [key]: event.detail.value }, fieldErrors: { ...this.data.fieldErrors, [key]: '' } })
+    if (!Object.prototype.hasOwnProperty.call(empty, key) || ['isDefault', 'latitude', 'longitude'].includes(key)) return
+    this.setData({ form: { ...this.data.form, [key]: event.detail.value, ...(key === 'detail' ? { latitude: null, longitude: null } : {}) }, fieldErrors: { ...this.data.fieldErrors, [key]: '' } })
   },
   changeRegion(event) {
     const values = event.detail.value
     if (!Array.isArray(values) || values.length !== 3 || values.some((value) => typeof value !== 'string' || !value.trim())) return
     const [province, city, district] = values
-    this.setData({ form: { ...this.data.form, province, city, district },
+    this.setData({ form: { ...this.data.form, province, city, district, latitude: null, longitude: null },
       fieldErrors: { ...this.data.fieldErrors, province: '', city: '', district: '' } })
+  },
+  chooseLocation() {
+    wx.chooseLocation({ success: value => this.setData({ form: { ...this.data.form, latitude: value.latitude, longitude: value.longitude } }), fail: () => this.setData({ error: '未获得位置，请允许地图定位后重试。配送到家需要准确坐标。' }) })
   },
   toggleDefault(event) { this.setData({ form: { ...this.data.form, isDefault: event.detail.value } }) },
   async save() {

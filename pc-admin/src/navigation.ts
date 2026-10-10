@@ -6,6 +6,7 @@ export const adminSections = [
   { name: '商品', paths: ['/catalog'] },
   { name: '库存', paths: ['/inventory', '/inventory/warehouses', '/inventory/inbounds', '/inventory/outbounds', '/inventory/stocktakes', '/inventory/ledgers'] },
   { name: '订单', paths: ['/orders', '/redemptions', '/aftersales', '/fulfillment/settings', '/store/payments'] },
+  { name: '门店', paths: ['/stores', '/stores/accounts', '/stores/map-settings'] },
   { name: '会员', paths: ['/members', '/members/rules'] },
   { name: '营销', paths: ['/coupons', '/exchange-offers'] },
   { name: '店铺', paths: ['/store/info', '/pages/home', '/pages/micro', '/store/navigation', '/assets', '/store/customer-service'] },

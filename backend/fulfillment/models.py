@@ -52,7 +52,8 @@ class Shipment(models.Model):
     carrier_name = models.CharField(max_length=80)
     tracking_no = models.CharField(max_length=80)
     warehouse = models.ForeignKey("inventory.Warehouse", on_delete=models.PROTECT)
-    shipped_by = models.ForeignKey("accounts.AdminAccount", on_delete=models.PROTECT, related_name="shipments")
+    shipped_by = models.ForeignKey("accounts.AdminAccount", on_delete=models.PROTECT, related_name="shipments", null=True, blank=True)
+    shipped_by_member = models.ForeignKey("customers.Member", on_delete=models.PROTECT, related_name="store_shipments", null=True, blank=True)
     shipped_at = models.DateTimeField()
     auto_confirm_days_snapshot = models.PositiveSmallIntegerField()
     auto_confirm_at = models.DateTimeField(db_index=True)
@@ -64,6 +65,7 @@ class Shipment(models.Model):
     class Meta:
         db_table = "fulfillment_shipment"
         constraints = [
+            models.CheckConstraint(condition=(Q(shipped_by__isnull=False, shipped_by_member__isnull=True) | Q(shipped_by__isnull=True, shipped_by_member__isnull=False)), name="shipment_actor_exactly_one"),
             models.CheckConstraint(condition=Q(auto_confirm_days_snapshot__gte=1,
                                                auto_confirm_days_snapshot__lte=30), name="shipment_auto_days_bounded"),
             models.CheckConstraint(condition=Q(confirmed_at__isnull=True) | Q(confirmed_at__gte=F("shipped_at")),
@@ -179,3 +181,38 @@ class VoucherRefundEvent(models.Model):
         db_table = "fulfillment_voucher_refund_event"
         constraints = [models.CheckConstraint(condition=Q(quantity__gt=0),
                                               name="voucher_refund_quantity_positive")]
+
+
+class StoreDelivery(models.Model):
+    """Physical pickup/local delivery fact, separate from rights vouchers."""
+    order = models.OneToOneField('orders.Order', primary_key=True, on_delete=models.PROTECT,
+                                related_name='store_delivery')
+    mode = models.CharField(max_length=8, choices=[('PICKUP', 'Pickup'), ('DELIVERY', 'Delivery')])
+    status = models.CharField(max_length=12, choices=[('READY', 'Ready'), ('IN_TRANSIT', 'In transit'), ('COMPLETED', 'Completed')])
+    nonce = models.CharField(max_length=32)
+    prepared_at = models.DateTimeField()
+    dispatched_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def confirmed_at(self):
+        return self.completed_at
+
+    class Meta:
+        db_table = 'fulfillment_store_delivery'
+        constraints = [models.CheckConstraint(condition=(Q(mode='PICKUP', status__in=['READY', 'COMPLETED'], dispatched_at__isnull=True) | Q(mode='DELIVERY')), name='store_delivery_mode_shape'),
+            models.CheckConstraint(condition=(Q(status='COMPLETED', completed_at__isnull=False) | Q(status__in=['READY', 'IN_TRANSIT'], completed_at__isnull=True)), name='store_delivery_completion_shape')]
+
+
+class StoreDeliveryEvent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    order = models.ForeignKey('orders.Order', on_delete=models.PROTECT, related_name='store_delivery_events')
+    actor = models.ForeignKey('customers.Member', on_delete=models.PROTECT)
+    action = models.CharField(max_length=12)
+    request_key = models.UUIDField(unique=True)
+    request_digest = models.CharField(max_length=64)
+    note = models.CharField(max_length=500, blank=True)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'fulfillment_store_delivery_event'

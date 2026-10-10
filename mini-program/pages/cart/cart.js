@@ -1,3 +1,4 @@
+const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const cart = require('../../lib/cart')
 const { money } = require('../../lib/catalog')
@@ -15,7 +16,7 @@ Page({
     const selected = cart.selected()
     if (!selected.length) { this.setData({ state: 'ready', total: '¥0' }); return }
     try {
-      const quote = await api.post('/api/v1/app/checkout/quotes', { items: cart.quoteItems(selected) })
+      const quote = await api.post('/api/v1/app/checkout/quotes', { items: cart.quoteItems(selected), ...stores.query(), ...(stores.selected() ? { deliveryMode: stores.modes(stores.selected())[0]?.value } : {}) })
       if (token !== this.refreshToken) return
       const lines = new Map(quote.lines.map((line) => [line.skuId, line]))
       this.setData({ state: 'ready', quote, total: money(quote.goodsTotalFen),

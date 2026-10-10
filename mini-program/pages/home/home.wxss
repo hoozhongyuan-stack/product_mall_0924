@@ -95,3 +95,5 @@
 .coupon-recovery { padding: 24rpx; background: var(--mall-brand-soft); font-size: 25rpx; }
 .coupon-message { color: var(--mall-success); font-size: 25rpx; }
 .coupon-error { color: var(--mall-danger); font-size: 25rpx; }
+
+.store-home-header{display:block;box-sizing:border-box;padding-bottom:24rpx}.store-brand-row{display:flex;align-items:center;gap:16rpx;box-sizing:border-box;min-height:92rpx}.store-logo{width:66rpx;height:66rpx;background:#fff2;border-radius:14rpx;display:flex;align-items:center;justify-content:center;font-size:34rpx;flex:none}.store-brand-body{min-width:0;flex:1}.store-name-line{display:flex;align-items:center;gap:12rpx}.store-name-line .brand{font-size:29rpx;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.store-switch{color:inherit;background:transparent;padding:0 8rpx;flex:none;font-size:23rpx;line-height:48rpx;margin:0}.store-switch::after{border:1rpx solid currentColor}.store-hours{font-size:23rpx;opacity:.85;margin-top:6rpx}.store-location-help{font-size:23rpx;margin-top:18rpx;}

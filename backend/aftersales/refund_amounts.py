@@ -2,13 +2,13 @@
 from django.db import transaction
 from django.db.models import Sum, Q, F
 from django.db.models.functions import Coalesce
-from fulfillment.models import Shipment
+from fulfillment.store_service import physical_handoff_fact
 from .models import AfterSaleCase, RefundAmountSnapshot, OrderShippingRefundClaim
 from .returns import effective_refund
 
 
 def _eligible_shipping(order, case):
-    if not order.shipping_fee_fen or case.order_line.fulfillment_kind != "SHIP" or Shipment.objects.filter(order=order).exists():
+    if not order.shipping_fee_fen or case.order_line.fulfillment_kind != "SHIP" or physical_handoff_fact(order) is not None:
         return 0
     if OrderShippingRefundClaim.objects.filter(order=order).exists():
         return 0

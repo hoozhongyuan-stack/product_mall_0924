@@ -2,5 +2,6 @@
   "navigationBarTitleText": "首页",
   "usingComponents": {
     "storefront-shell": "/components/storefront-shell/index"
-  }
+  },
+  "navigationStyle": "custom"
 }

@@ -6,13 +6,16 @@ from payments.availability import enabled_payment_methods
 from .models import Product, Sku
 
 
-def hydrate_products(props):
+def hydrate_products(props, store=None):
     if (props['source'] == 'MANUAL' and not props['productIds']) or (props['source'] == 'CATEGORY' and not props['categoryId']):
         return []
     cheapest = Sku.objects.filter(product_id=OuterRef('pk'), sale_status=Sku.SaleStatus.ON_SALE).order_by('list_price_fen', 'id')
     query = Product.objects.filter(status=Product.Status.ON_SALE, main_image__isnull=False,
         category__status='ACTIVE', category__parent__status='ACTIVE').annotate(
-            price_fen=Subquery(cheapest.values('list_price_fen')[:1]), has_stock=product_has_available_stock()).filter(price_fen__isnull=False)
+            price_fen=Subquery(cheapest.values('list_price_fen')[:1]), has_stock=product_has_available_stock(store.warehouse_id if store else None)).filter(price_fen__isnull=False)
+    if store:
+        from stores.access import sale_product_ids
+        query = query.filter(id__in=sale_product_ids(store), fulfillment_kind='SHIP')
     if props['source'] == 'MANUAL':
         query = query.filter(id__in=props['productIds']).order_by(Case(
             *[When(id=identifier, then=index) for index, identifier in enumerate(props['productIds'])],

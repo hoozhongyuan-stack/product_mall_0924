@@ -19,10 +19,11 @@ export function remaining(line) {
 }
 
 export function fulfillmentLabel(status) {
-  return ({ AFTER_SALE: '售后处理中', REFUNDED: '已退款', PENDING: '待履约', PARTIAL: '部分核销', IN_PROGRESS: '履约中', COMPLETED: '已完成', WAITING_PAYMENT: '待付款', CLOSED: '已关闭', WAITING_SHIPMENT: '待发货', IN_TRANSIT: '运输中', WAITING_VALIDITY: '待确认有效期', WAITING_REDEMPTION: '待核销', EXPIRED: '已过期', READY: '可核销', UNPAID: '未付款', VALIDITY_MISSING: '有效期未确认', FULLY_REDEEMED: '已全部核销' })[status] || '待履约'
+  return ({ WAITING_PREPARATION: '待备货', WAITING_PICKUP: '待自提', WAITING_DELIVERY: '待配送', DELIVERING: '配送中', AFTER_SALE: '售后处理中', REFUNDED: '已退款', PENDING: '待履约', PARTIAL: '部分核销', IN_PROGRESS: '履约中', COMPLETED: '已完成', WAITING_PAYMENT: '待付款', CLOSED: '已关闭', WAITING_SHIPMENT: '待发货', IN_TRANSIT: '运输中', WAITING_VALIDITY: '待确认有效期', WAITING_REDEMPTION: '待核销', EXPIRED: '已过期', READY: '可核销', UNPAID: '未付款', VALIDITY_MISSING: '有效期未确认', FULLY_REDEEMED: '已全部核销' })[status] || '待履约'
 }
 
 export function shipmentEligible(order) {
+  if (['PICKUP', 'DELIVERY'].includes(order.deliveryMode)) return false
   if (['AFTER_SALE', 'REFUNDED'].includes(order.fulfillmentStatus)) return false
   if (typeof order.shipEligible === 'boolean') return order.shipEligible
   if (Array.isArray(order.items)) return order.status === 'PAID' && order.items.some(line => line.fulfillmentKind === 'SHIP' && line.fulfillment?.status === 'WAITING_SHIPMENT')

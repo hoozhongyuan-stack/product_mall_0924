@@ -2,6 +2,8 @@ const test = require('node:test'), assert = require('node:assert/strict')
 const storage = new Map()
 global.getApp = () => ({ globalData: { apiBaseUrl: 'http://127.0.0.1:8000' } })
 global.wx = { getStorageSync: (key) => storage.get(key), removeStorageSync: (key) => storage.delete(key), navigateTo() {}, stopPullDownRefresh() {} }
+let requestHandler
+Object.defineProperty(global.wx, 'request', { configurable: true, get() { return (request) => request.url.includes('/store-center/stores') ? success(request, { items: [] }) : requestHandler(request) }, set(handler) { requestHandler = handler } })
 const overview = { id: 'member-A', grade: { name: '普通会员' }, enabled: true, effectiveSpendFen: 1500,
  points: { settledPoints: -20, frozenPoints: 0, availablePoints: 0, debtPoints: 20, expiredPendingPoints: 0, expiringPoints: 0, nextExpiryAt: null },
  rules: { revision: 3, grades: [{ name: '普通会员', minimumSpendFen: 0 }], points: { earnUnitFen: 100, earnPoints: 1, deductPoints: 100, deductFen: 100, maxPercent: 20, validDays: 365, refundValidDays: 7 } } }

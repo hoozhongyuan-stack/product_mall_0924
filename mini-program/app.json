@@ -20,7 +20,11 @@
     "pages/coupons/index",
     "pages/coupons/campaigns",
     "pages/exchange/index",
-    "pages/exchange/detail"
+    "pages/exchange/detail",
+    "pages/stores/list",
+    "pages/store-center/index",
+    "pages/store-center/order",
+    "pages/store-center/aftersale"
   ],
   "window": {
     "navigationBarTitleText": "首页",
@@ -29,5 +33,14 @@
     "backgroundColor": "#F4F5F5",
     "enablePullDownRefresh": true,
     "onReachBottomDistance": 120
-  }
+  },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于推荐附近门店及核对配送地址"
+    }
+  },
+  "requiredPrivateInfos": [
+    "getLocation",
+    "chooseLocation"
+  ]
 }

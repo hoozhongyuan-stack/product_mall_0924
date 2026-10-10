@@ -1,5 +1,6 @@
 import hashlib
 import re
+from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
 from django.db.models import F
@@ -31,13 +32,15 @@ def member_data(member):
 def address_data(item):
     return {"id": str(item.id), "recipientName": item.recipient_name, "phone": item.phone,
             "province": item.province, "city": item.city, "district": item.district,
-            "detail": item.detail, "isDefault": item.is_default, "revision": item.revision}
+            "detail": item.detail, "isDefault": item.is_default, "revision": item.revision,
+            'latitude': str(item.latitude) if item.latitude is not None else None,
+            'longitude': str(item.longitude) if item.longitude is not None else None}
 
 
 def address_fields(body, *, update=False):
     expected = {"recipientName", "phone", "province", "city", "district", "detail", "isDefault"}
     allowed = expected | ({"expectedRevision"} if update else set())
-    if set(body) != allowed:
+    if not allowed.issubset(body) or set(body) - allowed - {'latitude', 'longitude'}:
         raise ValueError("请填写完整的收货地址，且不要添加未支持的字段。")
     limits = {"recipientName": 40, "phone": 20, "province": 40, "city": 40,
               "district": 40, "detail": 200}
@@ -52,6 +55,17 @@ def address_fields(body, *, update=False):
     if type(body["isDefault"]) is not bool:
         raise ValueError("isDefault 必须为布尔值。")
     result["isDefault"] = body["isDefault"]
+    latitude, longitude = body.get('latitude'), body.get('longitude')
+    if (latitude is None) != (longitude is None):
+        raise ValueError('请填写完整的地址定位。')
+    for key, value, limit in [('latitude', latitude, 90), ('longitude', longitude, 180)]:
+        try:
+            coordinate = Decimal(str(value)) if value is not None else None
+            if coordinate is not None and (not coordinate.is_finite() or abs(coordinate) > limit or coordinate.as_tuple().exponent < -6):
+                raise ValueError('地址经纬度不正确。')
+        except InvalidOperation as exc:
+            raise ValueError('地址经纬度不正确。') from exc
+        result[key] = coordinate
     return result
 
 
@@ -69,6 +83,8 @@ def assign_address(item, fields):
     item.city = fields["city"]
     item.district = fields["district"]
     item.detail = fields["detail"]
+    item.latitude = fields['latitude']
+    item.longitude = fields['longitude']
 
 
 @csrf_exempt

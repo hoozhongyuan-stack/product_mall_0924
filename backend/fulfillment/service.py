@@ -115,6 +115,8 @@ def ship_order(order_id, actor, carrier_code, tracking_no, expected_revision, re
                 return _order_data(order)
             raise FulfillmentError("该订单已经发货。", "ALREADY_SHIPPED", 409)
         _paid(order)
+        if getattr(order, "delivery_mode", "") in ("PICKUP", "DELIVERY"):
+            raise FulfillmentError("自提或同城配送订单不能快递发货。", "DELIVERY_MODE_MISMATCH", 409)
         _revision(order, expected_revision)
         carrier = _carrier(carrier_code)
         lines = list(order.lines.filter(fulfillment_kind="SHIP"))

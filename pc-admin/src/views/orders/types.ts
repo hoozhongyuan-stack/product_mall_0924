@@ -45,6 +45,7 @@ export interface Reconciliation {
   actorId: string; actorName?: string; createdAt?: string; authorizedAt?: string | null; receiptId?: string | null; outcome?: string
 }
 export interface Order {
+  storeId?:string|null;storeName?:string;deliveryMode?:string
   orderKind?:'CASH'|'POINTS';exchangePoints?:number
   orderBenefits?:OrderBenefits | null
   orderId: string; orderNo: string; revision: number; status: 'PENDING_PAYMENT' | 'PAID' | 'CLOSED'; fulfillmentStatus?: string; shipEligible?: boolean

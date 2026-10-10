@@ -1,3 +1,4 @@
+const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const catalog = require('../../lib/catalog')
 const startup = require('../../lib/startup')
@@ -47,7 +48,7 @@ Page({
     this.closeSkuDrawer()
     this.setData({ state: 'loading', error: '' })
     try {
-      const result = await api.get(`/api/v1/app/products/${encodeURIComponent(this.productId)}`)
+      const result = await api.get(`/api/v1/app/products/${encodeURIComponent(this.productId)}`, stores.query())
       if (token !== this.detailToken) return
       const product = catalog.productDetail(result, api.baseUrl())
       const selected = product.skus.find((sku) => sku.id === this.data.selectedSkuId && sku.cartEligible && sku.availableQuantity > 0) ||

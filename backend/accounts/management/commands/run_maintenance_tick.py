@@ -99,6 +99,7 @@ def run_jobs(limit):
         ("auto_confirmed", lambda: auto_confirm_receipts(limit)),
         ("message_recovered", lambda: recover_expired_claims(limit=limit)),
         ("points", lambda: _management_job("expire_points", limit)),
+        ("store_settlements", lambda: _management_job("settle_store_orders", limit)),
         ("local_records", lambda: purge_local_records(limit)),
         ("read_quota", lambda: _management_job("purge_admin_read_quota", limit)),
         ("media_orphans", lambda: purge_expired_orphans(limit=limit)),

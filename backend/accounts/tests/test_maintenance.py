@@ -109,7 +109,7 @@ class MaintenanceTickTests(SimpleTestCase):
         claims.assert_called_once_with(limit=5)
         media.assert_called_once_with(limit=5)
         self.assertEqual([item.args[0] for item in command.call_args_list],
-                         ["expire_points", "purge_admin_read_quota"])
+                         ["expire_points", "settle_store_orders", "purge_admin_read_quota"])
         self.assertTrue(all(item.kwargs["limit"] == 5 for item in command.call_args_list))
 
     @patch("accounts.management.commands.run_maintenance_tick.purge_expired_orphans")

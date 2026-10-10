@@ -258,10 +258,11 @@ def public_home_view(request):
     full_config = publication.current_version.config_json
     try:
         visible_config = public_config(request, full_config)
+        products = component_data(visible_config, request.GET.get('storeId'))
     except PageConfigError as exc:
         return _failure(request, exc)
     return response(request, {"versionId": str(publication.current_version_id),
-                              "config": visible_config, "componentData": component_data(visible_config), "share": sharing(full_config)})
+                              "config": visible_config, "componentData": products, "share": sharing(full_config)})
 
 
 def pages_view(request):
@@ -360,8 +361,9 @@ def public_micro_view(request, page_id):
     full_config = publication.current_version.config_json
     try:
         visible_config = public_config(request, full_config)
+        products = component_data(visible_config, request.GET.get('storeId'))
     except PageConfigError as exc:
         return _failure(request, exc)
     return response(request, {"pageId": str(publication.page_id),
                               "versionId": str(publication.current_version_id),
-                              "name": publication.current_version.name, "config": visible_config, "componentData": component_data(visible_config), "share": sharing(full_config)})
+                              "name": publication.current_version.name, "config": visible_config, "componentData": products, "share": sharing(full_config)})

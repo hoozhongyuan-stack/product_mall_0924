@@ -24,8 +24,15 @@ def public_config(request, config):
     return {**public, 'components': [_public_component(item) for item in config['components'] if item['visible']]}
 
 
-def component_data(config):
-    return {item['componentId']: hydrate_products(item['props']) for item in config['components']
+def component_data(config, store_id=None):
+    store = None
+    if store_id is not None:
+        from stores.access import get_store, StoreError
+        try:
+            store = get_store(store_id, for_sale=True)
+        except StoreError as exc:
+            raise PageConfigError(str(exc), exc.code, exc.status) from exc
+    return {item['componentId']: hydrate_products(item['props'], store=store) for item in config['components']
             if item['visible'] and item['type'] == 'PRODUCT_LIST'}
 
 

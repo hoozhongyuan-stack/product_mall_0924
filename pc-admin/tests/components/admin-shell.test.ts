@@ -80,13 +80,23 @@ describe('pilot shell and login', () => {
     await flushPromises()
     expect(wrapper.find('[data-page]').exists()).toBe(true)
   })
-  it('groups all authorized entries into nine sections and selects the detail parent', async () => {
+  it('groups all authorized entries into ten sections and selects the detail parent', async () => {
     const permissions = applicationRouter.options.routes.flatMap(route => [String(route.meta?.permission || ''), ...(route.meta?.permissionsAny as string[] || [])])
     const { wrapper } = await setup(permissions, '/orders/one')
-    expect(wrapper.get('nav[aria-label="后台主导航"]').findAll('a').map(a => a.text())).toEqual(['工作台', '商品', '库存', '订单', '会员', '营销', '店铺', '小程序', '系统管理'])
+    expect(wrapper.get('nav[aria-label="后台主导航"]').findAll('a').map(a => a.text())).toEqual(['工作台', '商品', '库存', '订单', '门店', '会员', '营销', '店铺', '小程序', '系统管理'])
     expect(wrapper.get('nav[aria-label="订单功能"]').text()).toContain('付款配置')
     expect(wrapper.get('nav[aria-label="页面位置"]').text()).toContain('订单详情')
     expect(wrapper.get('nav[aria-label="后台主导航"] a[aria-current="true"]').text()).toBe('订单')
+  })
+  it('places map settings in the horizontal store subnavigation and guards direct access', async () => {
+    const { wrapper, router } = await setup(['stores.read', 'stores.accounts.read', 'stores.manage'], '/stores/map-settings')
+    expect(wrapper.get('nav[aria-label="门店功能"]').findAll('a').map(a => a.text())).toEqual(['门店管理', '门店账户', '门店设置'])
+    expect(wrapper.get('nav[aria-label="后台主导航"] a[aria-current="true"]').text()).toBe('门店')
+    await router.push('/stores/accounts/one'); await flushPromises()
+    expect(wrapper.get('nav[aria-label="页面位置"]').text()).toContain('账户详情')
+    const restricted = await setup(['stores.read'], '/stores/map-settings')
+    expect(restricted.wrapper.text()).toContain('无权访问门店设置')
+    expect(restricted.wrapper.find('[data-page]').exists()).toBe(false)
   })
   it('uses the existing route permission metadata for navigation and direct access', async () => {
     const { wrapper, router } = await setup(['asset.upload'])

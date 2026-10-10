@@ -14,6 +14,9 @@ def restore_unshipped_refund_locked(line, quantity, case_id):
         raise ValueError("退款回库数量或来源不正确。")
     if line.fulfillment_kind != "SHIP":
         raise ValueError("此入口只回补未发货实物。")
+    from fulfillment.store_service import physical_handoff_fact
+    if physical_handoff_fact(line.order) is not None:
+        raise ValueError("已经交付的实物须通过退货验收回库。")
     previous = InventoryLedger.objects.filter(refund_case_id=case_id).first()
     if previous:
         if previous.refund_order_line_id != line.id or previous.operation_quantity != quantity:

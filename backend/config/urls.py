@@ -1,4 +1,4 @@
-from django.urls import path, re_path
+from django.urls import path, re_path, include
 
 from accounts import views
 from accounts import audit_read
@@ -40,6 +40,8 @@ from wechat_open_platform import views as open_platform_views
 from config.health import health_view
 
 urlpatterns = [
+    path("", include("stores.urls")),
+    path("", include("fulfillment.store_urls")),
     path("healthz", health_view),
     path("api/v1/app/member/profile", customer_profile_views.profile_view),
     path("api/v1/app/member/avatar", customer_profile_views.avatar_view),

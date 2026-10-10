@@ -674,6 +674,13 @@ def public_products_view(request):
         return bad
     try:
         page, size = page_args(request)
+        store = None
+        if 'storeId' in request.GET:
+            from stores.access import get_store
+            try:
+                store = get_store(uuid_field(request.GET['storeId'], '门店 ID'), for_sale=True)
+            except ValueError as exc:
+                return error(request, 409, 'STORE_UNAVAILABLE', str(exc))
         cheapest_sku = Sku.objects.filter(
             product_id=OuterRef("pk"), sale_status=Sku.SaleStatus.ON_SALE,
         ).order_by("list_price_fen", "created_at", "id")
@@ -683,8 +690,11 @@ def public_products_view(request):
             category__parent__status=Category.Status.ACTIVE).annotate(
                 min_list_price_fen=Subquery(cheapest_sku.values("list_price_fen")[:1]),
                 preview_sku_id=Subquery(cheapest_sku.values("id")[:1]),
-                has_available_stock=product_has_available_stock(),
+                has_available_stock=product_has_available_stock(store.warehouse_id if store else None),
             ).filter(min_list_price_fen__isnull=False).order_by("-created_at", "id")
+        if store:
+            from stores.access import sale_product_ids
+            products = products.filter(id__in=sale_product_ids(store), fulfillment_kind='SHIP')
         category_id = request.GET.get("categoryId")
         if category_id:
             identifier = uuid_field(category_id, "分类 ID")
@@ -731,6 +741,15 @@ def public_product_detail_view(request, product_id):
         return bad
     from customers.auth import resolve_member
     member = resolve_member(request)
+    store = None
+    if 'storeId' in request.GET:
+        from stores.access import get_store, sale_product_ids
+        try:
+            store = get_store(uuid_field(request.GET['storeId'], '门店 ID'), for_sale=True)
+            if product_id not in sale_product_ids(store):
+                return error(request, 404, 'STORE_NOT_SELLING', '该门店不销售此商品。')
+        except ValueError as exc:
+            return error(request, 409, 'STORE_UNAVAILABLE', str(exc))
     if request.headers.get("Authorization") and member is None:
         return error(request, 401, "SESSION_EXPIRED", "登录已失效，请重新登录。")
     item = Product.objects.filter(id=product_id, status=Product.Status.ON_SALE,
@@ -739,6 +758,8 @@ def public_product_detail_view(request, product_id):
         category__parent__status=Category.Status.ACTIVE).first()
     if not item:
         return error(request, 404, "NOT_FOUND", "商品不可用。")
+    if store and item.fulfillment_kind != 'SHIP':
+        return error(request, 404, 'STORE_NOT_SELLING', '门店暂不支持权益核销商品。')
     if not item.skus.filter(sale_status=Sku.SaleStatus.ON_SALE).exists():
         return error(request, 404, "PRODUCT_OFF_SALE", "商品暂无在售 SKU。")
-    return response(request, public_product_data(item, member))
+    return response(request, public_product_data(item, member, store))

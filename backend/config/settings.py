@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "catalog",
     "pages",
     "inventory",
+    "stores",
     "customers",
     "wechat_integration",
     "wechat_open_platform",
@@ -120,3 +121,7 @@ SESSION_SAVE_EVERY_REQUEST = False
 
 # Raise the schema capability only after the deployed mini-program renderer has been verified.
 PAGE_RUNTIME_SCHEMA_VERSION = int(os.environ.get("PAGE_RUNTIME_SCHEMA_VERSION", "1"))
+
+AMAP_WEB_SERVICE_KEY = os.environ.get("AMAP_WEB_SERVICE_KEY", "")
+AMAP_JS_API_KEY = os.environ.get("AMAP_JS_API_KEY", "")
+AMAP_JS_SECURITY_CODE = os.environ.get("AMAP_JS_SECURITY_CODE", "")

@@ -1,0 +1,3 @@
+@import "../../styles/store.wxss";
+
+.account-amount{font-weight:700;color:#a3202b}.finance-record{padding:24rpx 0;border-bottom:1rpx solid #e7e9eb}.finance-record:last-child{border-bottom:0}.finance-reference{max-width:65%;overflow-wrap:anywhere}.finance-record .row{gap:24rpx}.finance-record .caption,.finance-record .muted{overflow-wrap:anywhere}

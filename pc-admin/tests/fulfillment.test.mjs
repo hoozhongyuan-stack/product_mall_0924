@@ -43,3 +43,12 @@ test('after-sale and refund states are distinct from completed fulfillment', () 
 })
 test('shipment quantities preserve purchased units and subtract only confirmed refunded units',async()=>{const {shippingQuantity,shipmentQuantityError}=await import('../src/views/orders/fulfillment.mjs');assert.deepEqual(shippingQuantity({quantity:2,fulfillment:{refundedQuantity:1}}),{purchased:2,refunded:1,remaining:1});assert.deepEqual(shippingQuantity({quantity:2,fulfillment:{refundedQuantity:0,heldQuantity:1}}),{purchased:2,refunded:0,remaining:2});assert.equal(shipmentQuantityError([{fulfillmentKind:'SHIP',quantity:2,fulfillment:{refundedQuantity:1}}]),'');assert.match(shipmentQuantityError([{fulfillmentKind:'SHIP',quantity:2,fulfillment:{refundedQuantity:2}}]),/没有待发/);assert.equal(shipmentQuantityError([{fulfillmentKind:'SHIP',quantity:2,fulfillment:{refundedQuantity:0}},{fulfillmentKind:'REDEEM',quantity:4}]),'')})
 test('missing malformed or out of range refund quantities block shipment instead of becoming zero',async()=>{const {shippingQuantity,shipmentQuantityError}=await import('../src/views/orders/fulfillment.mjs');for(const refundedQuantity of [undefined,null,-1,3,0.5,'1',NaN]){const line={quantity:2,fulfillmentKind:'SHIP',fulfillment:{refundedQuantity}};assert.equal(shippingQuantity(line),null);assert.match(shipmentQuantityError([line]),/待核查/)}assert.equal(shippingQuantity({quantity:0,fulfillment:{refundedQuantity:0}}),null);assert.match(shipmentQuantityError([]),/没有待发/);assert.match(shipmentQuantityError(undefined),/待核查/)})
+
+test('store physical fulfillment labels and shipping guards remain separate from redemption',()=>{
+ assert.equal(fulfillmentLabel('WAITING_PREPARATION'),'待备货')
+ assert.equal(fulfillmentLabel('WAITING_PICKUP'),'待自提')
+ assert.equal(fulfillmentLabel('WAITING_DELIVERY'),'待配送')
+ assert.equal(fulfillmentLabel('DELIVERING'),'配送中')
+ assert.equal(shipmentEligible({status:'PAID',deliveryMode:'PICKUP',shipEligible:true}),false)
+ assert.equal(shipmentEligible({status:'PAID',deliveryMode:'DELIVERY',shipEligible:true}),false)
+})

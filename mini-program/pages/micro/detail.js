@@ -1,3 +1,4 @@
+const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const home = require('../../lib/home')
 const sharing = require('../../lib/published-sharing')
@@ -51,7 +52,7 @@ Page({
     pageCoupons.discard(this)
     this.setData({ state: 'loading', error: '', versionId: '', share: { title: '商城首页', imageUrl: '' } })
     try {
-      const data = await api.get(`/api/v1/app/pages/${this.pageId}`, { schemaVersion: 4 })
+      const data = await api.get(`/api/v1/app/pages/${this.pageId}`, { schemaVersion: 4, ...stores.query() })
       if (token !== this.requestToken) return
       if (data.pageId !== this.pageId || !data.versionId || !data.config ||
           typeof data.config !== 'object') throw new Error('页面内容暂不可用，请稍后重试。')

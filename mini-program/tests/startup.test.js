@@ -153,7 +153,7 @@ test('failed startup redirect resumes the original target instead of leaving it 
   const page = mount('../pages/home/home.js')
   await page.onLoad()
   await new Promise((resolve) => setImmediate(resolve))
-  assert.equal(requests, 1)
+  assert.equal(requests, 2) // store discovery and published home, without duplicate home loads
   assert.equal(page.data.state, 'ready')
   assert.equal(startup.redirectIfPending(), false)
 })

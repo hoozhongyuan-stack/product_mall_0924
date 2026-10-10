@@ -77,7 +77,7 @@ def product_data(product):
     }
 
 
-def public_product_data(product, member=None):
+def public_product_data(product, member=None, store=None):
     from inventory.availability import default_available_base_units
     from django.utils import timezone
 
@@ -86,7 +86,11 @@ def public_product_data(product, member=None):
             "axis", "option").order_by("axis__sort_order", "axis_id"))
     ).order_by("created_at", "id")
     visible_skus = list(available_skus)
-    warehouse, balances = default_available_base_units([sku.id for sku in visible_skus])
+    if store:
+        from stores.access import available_base_units
+        warehouse, balances = store.warehouse, available_base_units(store, [sku.id for sku in visible_skus])
+    else:
+        warehouse, balances = default_available_base_units([sku.id for sku in visible_skus])
     grade_prices = {}
     if member and member.grade.enabled:
         grade_prices = {row.sku_id: row.price_fen for row in SkuGradePrice.objects.filter(

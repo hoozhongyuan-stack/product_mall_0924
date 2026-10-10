@@ -158,3 +158,21 @@ class BenefitOnlySettlement(models.Model):
     class Meta:
         db_table = "aftersale_benefit_settlement"
         constraints = [models.UniqueConstraint(fields=["actor","request_key"], name="benefit_settlement_actor_key")]
+
+
+class StoreAfterSaleNote(models.Model):
+    """Store staff advice/receipt facts; platform owns final stock and money decisions."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    case = models.ForeignKey(AfterSaleCase, on_delete=models.PROTECT, related_name='store_notes')
+    actor = models.ForeignKey('customers.Member', on_delete=models.PROTECT)
+    kind = models.CharField(max_length=7, choices=[('ADVICE','Advice'),('RECEIPT','Receipt')])
+    note = models.CharField(max_length=500)
+    received_quantity = models.PositiveIntegerField(default=0)
+    salable_quantity = models.PositiveIntegerField(default=0)
+    request_key = models.UUIDField(unique=True)
+    request_digest = models.CharField(max_length=64)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'aftersale_store_note'
+        constraints = [models.CheckConstraint(condition=models.Q(salable_quantity__lte=models.F('received_quantity')),name='store_note_salable_bounded')]

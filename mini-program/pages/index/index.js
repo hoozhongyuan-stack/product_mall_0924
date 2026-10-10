@@ -1,3 +1,4 @@
+const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const catalog = require('../../lib/catalog')
 const startup = require('../../lib/startup')
@@ -69,7 +70,7 @@ Page({
     this.setData(reset ? { listState: 'loading', listError: '', products: [], page: 0, hasMore: false, failedImages: {} } :
       { loadingMore: true, listError: '' })
     try {
-      const query = { page, pageSize: 20, keyword: this.data.keyword }
+      const query = { page, pageSize: 20, keyword: this.data.keyword, ...stores.query() }
       if (!this.data.keyword) query.categoryId = this.data.activeLeafId || this.data.activeRootId
       const result = await api.get('/api/v1/app/products', query)
       if (token !== this.listToken) return

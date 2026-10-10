@@ -61,6 +61,9 @@ def _key_lock(member_id, key):
 def _business_digest(quote, method):
     source = {
         "method": method,
+        'storeId': str(quote.store_id) if quote.store_id else None,
+        'deliveryMode': quote.delivery_mode,
+        'storeSnapshot': quote.store_snapshot,
         "addressId": str(quote.address_id) if quote.address_id else None,
         "shippingFeeFen": quote.shipping_fee_fen,
         "shippingPolicyRevision": quote.shipping_policy_revision,
@@ -89,6 +92,10 @@ def order_data(order, *, include_voucher_code=False):
         "afterSaleSummary": fulfillment["afterSaleSummary"],
         "shipment": fulfillment["shipment"],
         "orderId": str(order.id), "orderNo": order.order_no, "status": order.status,
+        'storeId': str(order.store_id) if order.store_id else None,
+        'storeName': order.store_snapshot.get('name') if order.store_id else None,
+        'deliveryMode': order.delivery_mode or None, 'store': order.store_snapshot or None,
+        'storeDelivery': fulfillment.get('storeDelivery'),
         "orderKind": order.order_kind, "exchangePoints": order.points_to_use if order.order_kind == "POINTS" else 0,
         "revision": order.revision, "paymentInstructions": order.payment_instructions or None,
         "paymentReviewStatus": ("PAID" if order.status == "PAID" else "CLOSED" if order.status == "CLOSED"
@@ -219,24 +226,41 @@ def submit_order(member, body, key):
             raise OrderError("该支付方式的收款确认尚未开放，暂不能提交订单。", "SETTLEMENT_NOT_READY", 503)
         if quote.expires_at <= timezone.now():
             raise OrderError("报价已过期，请重新核对。", "QUOTE_EXPIRED", 409)
+        from checkout.store_context import store_context, store_shipping_fee
+        try:
+            store, delivery_mode, store_snapshot = store_context(
+                {'storeId': str(quote.store_id), 'deliveryMode': quote.delivery_mode} if quote.store_id else {},
+                member, quote.address_id, lock=True)
+        except ValueError as exc:
+            raise OrderError(str(exc), 'STORE_UNAVAILABLE', 409) from exc
+        if store_snapshot != quote.store_snapshot:
+            raise OrderError('门店或配送规则已变化，请重新报价。', 'STORE_POLICY_CHANGED', 409)
         try:
             policy = current_shipping_policy(lock=True)
-            shipping_fee = shipping_fee_for_lines(quote.lines, policy)
+            shipping_fee = shipping_fee_for_lines(quote.lines, policy) if delivery_mode not in ('PICKUP', 'DELIVERY') else 0
+            if store:
+                shipping_fee = store_shipping_fee(store, delivery_mode, shipping_fee)
         except ShippingUnavailable as exc:
             raise OrderError(str(exc), "SHIPPING_UNAVAILABLE", 503) from exc
-        if (policy.revision != quote.shipping_policy_revision or
+        if ((delivery_mode not in ('PICKUP', 'DELIVERY') and policy.revision != quote.shipping_policy_revision) or
                 shipping_fee != quote.shipping_fee_fen):
             raise OrderError("运费已变化，请重新报价。", "SHIPPING_CHANGED", 409)
         from benefits.policy import current_policy
         benefit_policy = current_policy(lock=True)
         if quote.benefit_policy_snapshot != benefit_policy:
             raise OrderError("等级或积分规则已变化，请重新报价。", "BENEFIT_POLICY_CHANGED", 409)
-        warehouse = Warehouse.objects.filter(is_default=True, enabled=True).first()
+        warehouse = store.warehouse if store else Warehouse.objects.filter(is_default=True, enabled=True).first()
         if not warehouse:
             raise OrderError("默认仓不可用。", "WAREHOUSE_UNAVAILABLE", 409)
-        needs_shipping = any(line.get("fulfillmentKind") == "SHIP" for line in quote.lines)
+        needs_shipping = delivery_mode != 'PICKUP' and any(line.get("fulfillmentKind") == "SHIP" for line in quote.lines)
         address = _address_snapshot(quote, member, needs_shipping)
         current = _current_lines(quote, member)
+        if store:
+            from stores.models import StoreProduct
+            selling = set(StoreProduct.objects.select_for_update().filter(
+                store=store, on_sale=True, product_id__in=[sku.product_id for sku, *_ in current]).values_list('product_id', flat=True))
+            if any(sku.product_id not in selling or row['fulfillmentKind'] != 'SHIP' for sku, _, row, _, _ in current):
+                raise OrderError('该门店已停止销售部分商品，请重新报价。', 'STORE_NOT_SELLING', 409)
         # Recheck available stock only after the balances are locked in a
         # fixed order; a quote is never a reservation.
         from inventory.reservations import lock_default_balances
@@ -278,6 +302,7 @@ def submit_order(member, body, key):
             raise OrderError(str(exc), exc.code, exc.status) from exc
         order = Order.objects.create(
             payment_instructions=payment_snapshot,
+            store=store, delivery_mode=delivery_mode, store_snapshot=store_snapshot,
             order_no=f"O{uuid4().hex.upper()}", member=member, quote_id=quote_id,
             payment_method=method, address_snapshot=address,
             goods_total_fen=total, shipping_fee_fen=shipping_fee,
@@ -305,6 +330,8 @@ def submit_order(member, body, key):
                 coupon_discount_fen=allocation["couponDiscountFen"],
                 points_discount_fen=allocation["pointsDiscountFen"],
                 payable_fen=allocation["payableFen"]))
+        from stores.finance import snapshot_lines
+        snapshot_lines(order, lines)
         try:
             reserve_order_lines(lines, locked_balances)
         except ReservationError as exc:

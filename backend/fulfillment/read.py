@@ -4,7 +4,8 @@ from django.db.models import F, Window
 from django.db.models.functions import RowNumber
 from orders.models import OrderLine
 from .codes import voucher_code
-from .models import RedeemEvent, RedeemVoucher, Shipment
+from .models import RedeemEvent, RedeemVoucher, Shipment, StoreDelivery
+from .store_service import delivery_data, local_status
 from .qr import voucher_qr_data_url
 
 
@@ -16,7 +17,7 @@ def _shipment_data(shipment):
         "carrierCode": shipment.carrier_code, "carrierName": shipment.carrier_name,
         "trackingNo": shipment.tracking_no, "warehouseId": str(shipment.warehouse_id),
         "warehouseName": shipment.warehouse.name,
-        "shippedByName": shipment.shipped_by.display_name,
+        "shippedByName": shipment.shipped_by.display_name if shipment.shipped_by_id else "门店工作人员",
         "shippedAt": shipment.shipped_at.isoformat(),
         "autoConfirmAt": shipment.auto_confirm_at.isoformat(),
         "confirmedAt": shipment.confirmed_at.isoformat() if shipment.confirmed_at else None,
@@ -32,6 +33,7 @@ def fulfillment_data(order, *, include_code=False):
     aftersale = summaries([order.id]).get(order.id, {"activeCount": 0, "refundedQuantity": 0, "refundedFen": 0})
     holds = line_summaries(line_ids)
     shipment = Shipment.objects.select_related("warehouse", "shipped_by").filter(order=order).first()
+    local = StoreDelivery.objects.filter(order=order).first() if getattr(order, "delivery_mode", "") in ("PICKUP", "DELIVERY") else None
     events = {voucher.id: [] for voucher in vouchers.values()}
     if vouchers:
         # PostgreSQL window keeps one bounded query for every voucher on the order.
@@ -52,6 +54,7 @@ def fulfillment_data(order, *, include_code=False):
         if line.fulfillment_kind == "SHIP":
             status = ("WAITING_PAYMENT" if order.status == "PENDING_PAYMENT" else
                       "CLOSED" if order.status == "CLOSED" else
+                      local_status(order.delivery_mode, local) if getattr(order, "delivery_mode", "") in ("PICKUP", "DELIVERY") else
                       "WAITING_SHIPMENT" if shipment is None else
                       "COMPLETED" if shipment.confirmed_at else "IN_TRANSIT")
             if refunded >= line.quantity:
@@ -100,13 +103,17 @@ def fulfillment_data(order, *, include_code=False):
         status = "REFUNDED"
     elif result and all(item["status"] in ("COMPLETED", "REFUNDED") for item in result.values()):
         status = "COMPLETED"
+    elif getattr(order, "delivery_mode", "") == "DELIVERY" and local and local.status == "IN_TRANSIT":
+        status = "DELIVERING"
     elif any(item["status"] in ("IN_TRANSIT", "PARTIAL", "COMPLETED") for item in result.values()):
         status = "IN_PROGRESS"
     elif any(item["status"] == "WAITING_SHIPMENT" for item in result.values()):
         status = "WAITING_SHIPMENT"
+    elif any(item["status"] in ("WAITING_PREPARATION", "WAITING_PICKUP", "WAITING_DELIVERY") for item in result.values()):
+        status = next(item["status"] for item in result.values() if item["kind"] == "SHIP")
     else:
         status = "WAITING_REDEMPTION"
-    return {"fulfillmentStatus": status, "shipment": _shipment_data(shipment), "items": result,
+    return {"storeDelivery": delivery_data(order, include_code=include_code), "fulfillmentStatus": status, "shipment": _shipment_data(shipment), "items": result,
             "afterSaleSummary": aftersale}
 
 
@@ -122,6 +129,8 @@ def page_fulfillment_summaries(orders):
             "order_line_id", "redeemed_quantity", "voided_quantity", "valid_until")}
     shipments = {row["order_id"]: row for row in Shipment.objects.filter(order_id__in=order_ids).values(
         "order_id", "confirmed_at")}
+    local_ids = [order.id for order in orders if getattr(order, "delivery_mode", "") in ("PICKUP", "DELIVERY")]
+    local_deliveries = {row.order_id: row for row in StoreDelivery.objects.filter(order_id__in=local_ids)} if local_ids else {}
     from aftersales.read import summaries, line_summaries
     aftersales = summaries(order_ids)
     holds = line_summaries([line["id"] for line in lines])
@@ -149,7 +158,7 @@ def page_fulfillment_summaries(orders):
                     states.append("REFUNDED")
                     continue
                 if line["fulfillment_kind"] == "SHIP":
-                    states.append("WAITING_SHIPMENT" if not shipment else
+                    states.append(local_status(order.delivery_mode, local_deliveries.get(order.id)) if getattr(order, "delivery_mode", "") in ("PICKUP", "DELIVERY") else "WAITING_SHIPMENT" if not shipment else
                                   "COMPLETED" if shipment["confirmed_at"] else "IN_TRANSIT")
                 else:
                     voucher = vouchers.get(line["id"])
@@ -162,10 +171,12 @@ def page_fulfillment_summaries(orders):
             state = ("AFTER_SALE" if sale["activeCount"] else
                      "REFUNDED" if states and all(value == "REFUNDED" for value in states) else
                      "COMPLETED" if states and all(value in ("COMPLETED", "REFUNDED") for value in states) else
+                     "DELIVERING" if getattr(order, "delivery_mode", "") == "DELIVERY" and local_deliveries.get(order.id) and local_deliveries[order.id].status == "IN_TRANSIT" else
                      "IN_PROGRESS" if any(value in ("IN_TRANSIT", "PARTIAL", "COMPLETED") for value in states) else
-                     "WAITING_SHIPMENT" if "WAITING_SHIPMENT" in states else "WAITING_REDEMPTION")
+                     "WAITING_SHIPMENT" if "WAITING_SHIPMENT" in states else
+                     next((value for value in states if value in ("WAITING_PREPARATION", "WAITING_PICKUP", "WAITING_DELIVERY")), "WAITING_REDEMPTION"))
         result[order.id] = {"fulfillmentStatus": state,
-                            "shipEligible": order.status == "PAID" and has_ship and not shipment and not ship_held,
+                            "shipEligible": order.status == "PAID" and has_ship and not shipment and not ship_held and getattr(order, "delivery_mode", "") not in ("PICKUP", "DELIVERY"),
                             "afterSaleSummary": sale}
     return result
 
@@ -177,7 +188,9 @@ def completion_fact(order):
     from aftersales.read import line_summaries
     lines = list(order.lines.order_by("id"))
     refunds = line_summaries([line.id for line in lines])
-    shipment = Shipment.objects.filter(order=order).values_list("confirmed_at", flat=True).first()
+    from .store_service import physical_handoff_fact
+    handoff = physical_handoff_fact(order)
+    shipment = handoff.confirmed_at if handoff else None
     vouchers = {row["order_line_id"]: row for row in RedeemVoucher.objects.filter(
         order_line_id__in=[line.id for line in lines]).values(
         "order_line_id", "redeemed_quantity", "voided_quantity")}

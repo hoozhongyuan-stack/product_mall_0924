@@ -35,7 +35,7 @@ def _uuid(value):
 
 
 def _input_lines(body):
-    if set(body) - {"items", "addressId", "couponId", "pointsToUse"}:
+    if set(body) - {"items", "addressId", "couponId", "pointsToUse", "storeId", "deliveryMode"}:
         raise QuoteValidationError("报价字段不正确。")
     items = body.get("items")
     if not isinstance(items, list) or not 1 <= len(items) <= MAX_LINES:
@@ -90,8 +90,18 @@ def create_quote(body, member, source_digest=""):
     coupon_id, points_to_use = _benefit_selection(body, member)
     address_id = _address_id(body, member)
     ids = [item[0] for item in requested]
+    from .store_context import store_context, store_shipping_fee
+    try:
+        store, delivery_mode, store_snapshot = store_context(body, member, address_id, allow_address_pending=True)
+    except ValueError as exc:
+        raise QuoteValidationError(str(exc)) from exc
     skus = quote_catalog_rows(ids, member)
-    warehouse, balances = default_available_base_units(ids)
+    if store:
+        from stores.access import available_base_units, sale_product_ids
+        warehouse, balances = store.warehouse, available_base_units(store, ids)
+        sale_ids = {str(identifier) for identifier in sale_product_ids(store)}
+    else:
+        warehouse, balances = default_available_base_units(ids)
     anchors = resolve_anchor_ids(ids)
     pool_demand = {}
     pool_available = {}
@@ -122,6 +132,8 @@ def create_quote(body, member, source_digest=""):
         status = "OK"
         if not sku["onSale"]:
             status = "OFF_SALE"
+        elif store and (sku['productId'] not in sale_ids or sku['fulfillmentKind'] != 'SHIP'):
+            status = 'STORE_NOT_SELLING'
         elif (sku["fulfillmentKind"] == "REDEEM" and
                 (not sku["redeemValidUntil"] or sku["redeemValidUntil"] < timezone.localdate().isoformat())):
             status = "REDEEM_VALIDITY_UNAVAILABLE"
@@ -150,7 +162,9 @@ def create_quote(body, member, source_digest=""):
             "priceChanged": line_changed, "status": status,
         })
     policy = current_shipping_policy()
-    shipping_fee = shipping_fee_for_lines(lines, policy)
+    shipping_fee = shipping_fee_for_lines(lines, policy) if delivery_mode not in ('PICKUP', 'DELIVERY') else 0
+    if store:
+        shipping_fee = store_shipping_fee(store, delivery_mode, shipping_fee)
     if ready:
         benefit_lines = sorted([{"skuId": line["skuId"], "productId": line["productId"],
                                  "fulfillmentKind": line["fulfillmentKind"],
@@ -179,6 +193,7 @@ def create_quote(body, member, source_digest=""):
     with transaction.atomic():
         quote = CheckoutQuote.objects.create(member_id=member.id if member else None,
                                              source_digest=source_digest,
+                                             store=store, delivery_mode=delivery_mode, store_snapshot=store_snapshot,
                                              address_id=address_id, lines=lines,
                                              goods_total_fen=goods_total,
                                              shipping_fee_fen=shipping_fee,
@@ -191,9 +206,11 @@ def create_quote(body, member, source_digest=""):
                                              allocations=benefits["allocations"],
                                              payable_fen=payable,
                                              ready=ready, expires_at=expires)
-    needs_shipping = any(line["fulfillmentKind"] == "SHIP" for line in lines)
+    needs_shipping = delivery_mode != 'PICKUP' and any(line["fulfillmentKind"] == "SHIP" for line in lines)
     available_methods = enabled_payment_methods()
     return {"quoteId": str(quote.id), "expiresAt": expires.isoformat(), "lines": lines,
+            'storeId': str(store.id) if store else None, 'storeName': store.name if store else None,
+            'deliveryMode': delivery_mode or None,
             "goodsTotalFen": goods_total, "payableFen": payable,
             "shippingFeeFen": shipping_fee, "shippingFeePending": False,
             "shippingPolicyRevision": policy.revision,
@@ -204,7 +221,9 @@ def create_quote(body, member, source_digest=""):
             "availablePoints": benefits["availablePoints"],
             "availableCoupons": benefits["availableCoupons"],
             "ready": ready, "confirmRequired": changed,
-            "addressRequired": needs_shipping and address_id is None,
+            'deliveryEligibilityPending': bool(store_snapshot.get('deliveryEligibilityPending')),
+            'deliveryMessage': store_snapshot.get('deliveryMessage', ''),
+            "addressRequired": needs_shipping and (address_id is None or bool(store_snapshot.get('deliveryEligibilityPending'))),
             "availablePaymentMethods": available_methods,
-            "orderSubmissionAvailable": bool(available_methods),
+            "orderSubmissionAvailable": bool(available_methods) and not bool(store_snapshot.get('deliveryEligibilityPending')),
             "message": "报价仅供核对，不预留库存；可用支付方式以服务端结果为准。"}

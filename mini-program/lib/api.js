@@ -43,6 +43,7 @@ function request(method, path, body, query = {}, headers = {}) {
 
 function get(path, query = {}) { return request('GET', path, null, query) }
 function post(path, body, headers = {}) { return request('POST', path, body, {}, headers) }
+function patch(path, body) { return request('PATCH', path, body) }
 function put(path, body) { return request('PUT', path, body) }
 function remove(path, body) { return request('DELETE', path, body) }
 
@@ -66,4 +67,4 @@ function upload(path, filePath, formData = {}) {
     })
   })
 }
-module.exports = { baseUrl, get, post, put, remove, upload }
+module.exports = { baseUrl, get, post, put, patch, remove, upload }

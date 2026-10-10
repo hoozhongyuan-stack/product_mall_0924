@@ -109,6 +109,8 @@ class CustomerAddress(models.Model):
     city = models.CharField(max_length=40)
     district = models.CharField(max_length=40)
     detail = models.CharField(max_length=200)
+    latitude = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
     is_default = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
     revision = models.PositiveIntegerField(default=1)

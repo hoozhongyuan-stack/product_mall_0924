@@ -1,0 +1,17 @@
+const api = require('../../lib/api')
+const orders = require('../../lib/orders')
+const stores = require('../../lib/stores')
+Page({
+ data:{state:'loading',error:'',order:null,items:[],delivery:null,busy:false,note:'',pickupCode:'',carrierCode:'',trackingNo:'',uncertain:false,canPrepare:false,canDispatch:false,canComplete:false,canShip:false},
+ onLoad(o){this.storeId=o.storeId;this.orderId=o.id;this.identity=wx.getStorageSync('mall.memberToken');return this.load()},
+ onHide(){this.hidden=true;this.generation=(this.generation||0)+1;this.setData({order:null,items:[],delivery:null})},
+ onShow(){if(this.hidden){this.hidden=false;return this.load()}},
+ onUnload(){this.disposed=true;this.onHide()},
+ valid(g){return !this.disposed&&g===this.generation&&this.identity===wx.getStorageSync('mall.memberToken')},
+ root(){return `/api/v1/app/store-center/stores/${encodeURIComponent(this.storeId)}/orders/${encodeURIComponent(this.orderId)}`},
+ async load(){const gen=this.generation=(this.generation||0)+1;this.setData({state:'loading',error:''});try{const r=await api.get(this.root());if(!this.valid(gen))return;this.present(r)}catch(e){if(this.valid(gen))this.setData({state:'error',error:e.message})}},
+ present(r){const d=r.storeDelivery;const paid=r.status==='PAID';this.setData({state:'ready',order:r,items:r.items||[],delivery:d,statusLabel:({PAID:'已付款',PENDING_PAYMENT:'待付款',CLOSED:'已关闭'})[r.status]||r.status,deliveryStatus:({WAITING_PREPARATION:'待备货',WAITING_PICKUP:'待自提',WAITING_DELIVERY:'待配送',IN_TRANSIT:'配送中',COMPLETED:'已交付',WAITING_SHIPMENT:'待发货',AFTER_SALE:'售后处理中'})[d?d.status:r.fulfillmentStatus]||r.fulfillmentStatus,deliveryLabel:stores.MODE_LABELS[r.deliveryMode]||r.deliveryMode,canPrepare:paid&&d&&d.status==='WAITING_PREPARATION',canDispatch:paid&&r.deliveryMode==='DELIVERY'&&d&&d.status==='WAITING_DELIVERY',canComplete:paid&&d&&(d.status==='WAITING_PICKUP'||d.status==='IN_TRANSIT'),canShip:paid&&r.deliveryMode==='EXPRESS'&&!r.shipment})},
+ input(e){const k=e.currentTarget.dataset.key;if(['note','pickupCode','carrierCode','trackingNo'].includes(k))this.setData({[k]:e.detail.value})},
+ async act(e){if(this.data.busy||!this.data.order)return;if(this.pending){this.setData({error:'上次操作结果待确认，请先重试同一操作。'});return}const action=e.currentTarget.dataset.action;const body={action,expectedRevision:this.data.order.revision,note:this.data.note};if(action==='COMPLETE'&&this.data.order.deliveryMode==='PICKUP')body.pickupCode=this.data.pickupCode;if(action==='SHIP'){body.carrierCode=this.data.carrierCode;body.trackingNo=this.data.trackingNo}this.pending={key:orders.requestKey(),body};return this.send()},
+ async send(){if(!this.pending||this.data.busy)return;if(this.identity!==wx.getStorageSync('mall.memberToken')){this.setData({error:'登录状态已改变，请重新打开门店中心。'});return;}this.setData({busy:true,error:''});const identity=this.identity;try{const r=await api.post(`${this.root()}/fulfillment`,this.pending.body,{'Idempotency-Key':this.pending.key});if(identity!==wx.getStorageSync('mall.memberToken'))return;this.pending=null;this.present(r);this.setData({uncertain:false,pickupCode:'',note:''});await this.load()}catch(e){if(identity!==wx.getStorageSync('mall.memberToken'))return;if(e.statusCode&&e.statusCode<500&&![408,429].includes(e.statusCode)){this.pending=null;this.setData({uncertain:false,error:e.message})}else{this.setData({uncertain:true,error:'操作结果尚未确认，请使用同一请求重试。'})}}finally{this.setData({busy:false})}},
+})

@@ -1,6 +1,8 @@
 const api = require('./api')
 
 const RECOVERY_KEY = 'mall.checkoutRecovery.v1'
+const RECOVERY_STORE = 'mall.checkoutRecovery.store.v1'
+const stores = require('./stores')
 
 function loggedIn() { return Boolean(wx.getStorageSync && wx.getStorageSync('mall.memberToken')) }
 
@@ -11,12 +13,15 @@ function rememberCheckout(items) {
       ...(Number.isSafeInteger(row.seenPriceFen) && row.seenPriceFen >= 0 ?
         { seenPriceFen: row.seenPriceFen } : {}) }))
   wx.setStorageSync(RECOVERY_KEY, safe)
+  wx.setStorageSync(RECOVERY_STORE, (stores.selected() || {}).id || null)
 }
 
 function recoverCheckout() {
   const rows = wx.getStorageSync(RECOVERY_KEY)
+  const storeId = wx.getStorageSync(RECOVERY_STORE) || null
+  wx.removeStorageSync(RECOVERY_STORE)
   wx.removeStorageSync(RECOVERY_KEY)
-  return Array.isArray(rows) ? rows : []
+  return storeId === ((stores.selected() || {}).id || null) && Array.isArray(rows) ? rows : []
 }
 
 function login() {
@@ -33,7 +38,7 @@ async function logout() {
   catch (error) { if (error.statusCode !== 401) throw error }
   const current = wx.getStorageSync('mall.memberToken')
   if (current && token !== current) return false
-  for (const key of ['mall.memberToken', RECOVERY_KEY, 'mall.wechatPaymentIntent.v1']) wx.removeStorageSync(key)
+  for (const key of ['mall.memberToken', RECOVERY_KEY, RECOVERY_STORE, 'mall.wechatPaymentIntent.v1']) wx.removeStorageSync(key)
   return true
 }
 module.exports = { loggedIn, rememberCheckout, recoverCheckout, login, logout }
