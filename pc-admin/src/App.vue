@@ -6,6 +6,7 @@ import { api, type Account } from './api'
 import { useRoute, useRouter } from 'vue-router'
 import { authorizedSections, canAccessRoute } from './navigation'
 import PasswordDialog from './components/PasswordDialog.vue'
+import { clearProcurementSnapshots } from './views/stores/procurement/domain.mjs'
 
 const account = ref<Account | null>(null)
 provide('admin-account', account)
@@ -37,6 +38,7 @@ watch(rememberLogin, value => {
 })
 
 function sessionExpired() {
+  if (!clearProcurementSnapshots(sessionStorage)) ElMessage.warning('本机采购操作记录未能清除，请关闭此浏览器窗口。')
   if (!account.value) return
   account.value = null
   passwordDialogOpen.value = false
@@ -45,6 +47,7 @@ function sessionExpired() {
 }
 
 async function passwordChanged() {
+  if (!clearProcurementSnapshots(sessionStorage)) ElMessage.warning('本机采购操作记录未能清除，请关闭此浏览器窗口。')
   passwordDialogOpen.value = false
   account.value = null
   password.value = ''
@@ -100,6 +103,7 @@ async function signOut() {
   busy.value = true
   try {
     await api('/auth/logout', { method: 'POST', body: '{}' })
+    if (!clearProcurementSnapshots(sessionStorage)) ElMessage.warning('本机采购操作记录未能清除，请关闭此浏览器窗口。')
     account.value = null
     password.value = ''
     await router.push('/')

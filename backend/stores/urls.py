@@ -6,8 +6,22 @@ from .finance_views import withdrawal_action
 from .map_views import map_search, map_reverse, map_runtime, amap_proxy
 from .map_configuration import map_settings
 from .settlement_settings import settlement_settings
+from .procurement import views as procurement
+from .procurement import proofs
 
 urlpatterns=[
+    path('api/v1/admin/stores/procurement/settings', procurement.settings),
+    path('api/v1/admin/stores/procurement/orders', procurement.admin_orders),
+    path('api/v1/admin/stores/procurement/orders/<uuid:order_id>', procurement.admin_orders),
+    path('api/v1/admin/stores/procurement/orders/<uuid:order_id>/operations/<uuid:request_key>', procurement.admin_orders),
+    path('api/v1/admin/stores/procurement/orders/<uuid:order_id>/<str:action>', procurement.admin_orders),
+    path('api/v1/admin/stores/procurement/proofs/<uuid:proof_id>/file', proofs.file),
+    path('api/v1/app/store-center/stores/<uuid:store_id>/procurement/products', procurement.member_products),
+    path('api/v1/app/store-center/stores/<uuid:store_id>/procurement/orders', procurement.member_orders),
+    path('api/v1/app/store-center/stores/<uuid:store_id>/procurement/orders/<uuid:order_id>', procurement.member_orders),
+    path('api/v1/app/store-center/stores/<uuid:store_id>/procurement/orders/<uuid:order_id>/<str:action>', procurement.member_orders),
+    path('api/v1/app/store-center/stores/<uuid:store_id>/procurement/proofs', proofs.upload),
+    path('api/v1/app/store-center/stores/<uuid:store_id>/procurement/proofs/<uuid:proof_id>/file', proofs.file),
     path('api/v1/admin/stores',views.admin_stores),
     path('api/v1/admin/stores/product-profit-rules', product_rules),
     path('api/v1/admin/stores/purchase-costs', configure, {'kind': 'cost'}),

@@ -76,3 +76,4 @@ class StoreMapConfiguration(models.Model):
         constraints = [models.CheckConstraint(condition=models.Q(id=1), name='store_map_singleton')]
 
 from .finance_models import StoreSkuProfitRule, StoreProductProfitRule
+from .procurement.models import ProcurementOrder, ProcurementLine, ProcurementEvent, ProcurementProof, ProcurementSettings

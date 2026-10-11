@@ -26,7 +26,9 @@
     "pages/stores/list",
     "pages/store-center/index",
     "pages/store-center/order",
-    "pages/store-center/aftersale"
+    "pages/store-center/aftersale",
+    "pages/procurement/index",
+    "pages/procurement/detail"
   ],
   "window": {
     "navigationBarTitleText": "首页",

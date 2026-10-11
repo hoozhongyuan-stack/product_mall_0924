@@ -1,0 +1,11 @@
+const api=require('./api'),p=require('./procurement'),pending=require('./procurement-pending')
+const guard={
+ onLoad(o={}){this.storeId=o.storeId;this.orderId=o.id;this.hidden=false;this.identity=wx.getStorageSync('mall.memberToken');try{p.root(this.storeId)}catch(e){this.invalid=true;this.setData({state:'error',error:e.message})}},
+ async authorize(){if(this.invalid)return false;this.identity=wx.getStorageSync('mall.memberToken');if(!this.identity){this.clearPrivate();this.setData({state:'auth',error:'请登录后进入前置仓进货。'});return false}const g=this.generation=(this.generation||0)+1;this.setData({state:'loading',error:''});try{const r=await api.get('/api/v1/app/store-center/stores');if(!this.valid(g))return false;const store=r.items.find(s=>s.id===this.storeId),permissions=store&&store.permissions||[];if(!store||!permissions.some(x=>['procurement','receiving'].includes(x))){this.clearPrivate();this.setData({state:'forbidden',error:'当前账号未获本仓进货 / 收货授权，请联系平台管理员。'});return false}this.setData({store,canProcure:permissions.includes('procurement'),canReceive:permissions.includes('receiving'),uncertain:!!pending.read(this.storeId)});return true}catch(e){this.failed(g,e);return false}},
+ valid(g){return !this.hidden&&!this.disposed&&g===this.generation&&this.identity===wx.getStorageSync('mall.memberToken')},
+ failed(g,e){if(this.disposed||this.hidden||g!==this.generation)return;if(e.statusCode===401||this.identity!==wx.getStorageSync('mall.memberToken')){this.clearPrivate();pending.read(this.storeId);this.setData({state:'auth',error:'登录状态已改变，请重新登录。'})}else if(e.statusCode===403){this.clearPrivate();this.setData({state:'forbidden',error:'本仓授权已改变，请重新进入前置仓中心。'})}else this.setData({state:'error',error:e.message})},
+ async leave(){if(this.data.busy||this.data.uncertain){this.setData({error:'操作结果待确认，请先重试原请求。'});return}if(this.hasDraft&&this.hasDraft()){const yes=await new Promise(resolve=>wx.showModal({title:'离开当前页面？',content:'尚未提交的进货信息会丢失。',confirmText:'离开',success:r=>resolve(r.confirm),fail:()=>resolve(false)}));if(!yes)return}wx.navigateBack({delta:1})},
+ protect(dirty){if(dirty&&wx.enableAlertBeforeUnload)wx.enableAlertBeforeUnload({message:'进货信息尚未提交，请先核对操作结果。'});else if(wx.disableAlertBeforeUnload)wx.disableAlertBeforeUnload()},
+ login(){wx.navigateTo({url:'/pages/login/login?returnTo=member'})},
+}
+module.exports={guard}

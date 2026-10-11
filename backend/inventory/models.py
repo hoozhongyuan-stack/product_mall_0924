@@ -301,6 +301,7 @@ class InventoryLedger(models.Model):
         REFUND = "REFUND", "Unshipped refund"
         RETURN = "RETURN", "Accepted return"
         STORE_SET = "STORE_SET", "Store available stock set"
+        PROCURE = "PROCURE", "Store procurement received"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.PROTECT)
@@ -315,6 +316,7 @@ class InventoryLedger(models.Model):
     refund_case_id = models.UUIDField(null=True, blank=True, unique=True)
     store_adjustment_id = models.UUIDField(null=True, blank=True, unique=True)
     store_member = models.ForeignKey("customers.Member", null=True, blank=True, on_delete=models.PROTECT)
+    procurement_line = models.OneToOneField('stores.ProcurementLine', null=True, blank=True, on_delete=models.PROTECT)
     return_case_id = models.UUIDField(null=True, blank=True, unique=True)
     return_order_line = models.ForeignKey("orders.OrderLine", null=True, blank=True, on_delete=models.PROTECT, related_name="return_ledgers")
     movement_type = models.CharField(max_length=10, choices=MovementType.choices,
@@ -337,9 +339,9 @@ class InventoryLedger(models.Model):
                    models.Index(fields=["movement_type", "-occurred_at"],
                                 name="ledger_type_occurred_idx")]
         constraints = [
-            models.CheckConstraint(condition=(Q(movement_type="STORE_SET",store_adjustment_id__isnull=False,store_member__isnull=False) | (~Q(movement_type="STORE_SET") & Q(store_adjustment_id__isnull=True,store_member__isnull=True))),name="ledger_store_source_shape"),
+            models.CheckConstraint(condition=(Q(movement_type="STORE_SET",store_adjustment_id__isnull=False,store_member__isnull=False) | Q(movement_type="PROCURE",store_adjustment_id__isnull=True,store_member__isnull=False,procurement_line__isnull=False) | (~Q(movement_type__in=["STORE_SET","PROCURE"]) & Q(store_adjustment_id__isnull=True,store_member__isnull=True))),name="ledger_store_source_shape"),
             models.CheckConstraint(condition=Q(operation_quantity__gt=0), name="ledger_operation_positive"),
-            models.CheckConstraint(condition=(Q(movement_type="STORE_SET",store_adjustment_id__isnull=False,store_member__isnull=False,inbound_line__isnull=True,outbound_line__isnull=True,stocktake_line__isnull=True,order_line__isnull=True,actor__isnull=True) & (Q(delta_base_units__gt=0)|Q(delta_base_units__lt=0)) | Q(movement_type="INBOUND", delta_base_units__gt=0,
+            models.CheckConstraint(condition=Q(movement_type="PROCURE",procurement_line__isnull=False,store_member__isnull=False,delta_base_units__gt=0,inbound_line__isnull=True,outbound_line__isnull=True,stocktake_line__isnull=True,order_line__isnull=True,actor__isnull=True) | (Q(movement_type="STORE_SET",store_adjustment_id__isnull=False,store_member__isnull=False,inbound_line__isnull=True,outbound_line__isnull=True,stocktake_line__isnull=True,order_line__isnull=True,actor__isnull=True) & (Q(delta_base_units__gt=0)|Q(delta_base_units__lt=0)) | Q(movement_type="INBOUND", delta_base_units__gt=0,
                                                 inbound_line__isnull=False, outbound_line__isnull=True,
                                                 stocktake_line__isnull=True, order_line__isnull=True,
                                                 actor__isnull=False) |
@@ -362,6 +364,7 @@ class InventoryLedger(models.Model):
                                               Q(movement_type="RETURN", delta_base_units__gt=0, inbound_line__isnull=True, outbound_line__isnull=True,
                                                 stocktake_line__isnull=True, order_line__isnull=True, return_case_id__isnull=False, return_order_line__isnull=False, actor__isnull=False)),
                                    name="ledger_direction_and_source_valid"),
+            models.CheckConstraint(condition=Q(movement_type='PROCURE',procurement_line__isnull=False)|(~Q(movement_type='PROCURE')&Q(procurement_line__isnull=True)),name='ledger_procurement_source_shape'),
             models.CheckConstraint(condition=Q(movement_type="REFUND", refund_order_line__isnull=False,
                                                refund_case_id__isnull=False) |
                                    (~Q(movement_type="REFUND") & Q(refund_order_line__isnull=True,

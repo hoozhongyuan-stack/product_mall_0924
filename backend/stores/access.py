@@ -36,7 +36,7 @@ def staff_permissions(member, store_id):
         member__enabled=True, member__auth_version=member.auth_version).first()
     if row is None:
         raise StoreError('没有该前置仓的操作权限。', 'STORE_FORBIDDEN', 403)
-    return sorted(set(row.permissions) & {'products', 'orders', 'accounts'})
+    return sorted(set(row.permissions) & {'products', 'orders', 'accounts', 'procurement', 'receiving'})
 
 
 def sale_product_ids(store):

@@ -89,7 +89,7 @@ def admin_staff(request,store_id):
     body = parse_json_object(request)
     keys = set(body)
     identifier = 'memberNo' if 'memberNo' in body else 'memberId'
-    if keys != {identifier,'permissions','enabled'} or type(body['enabled']) is not bool or not isinstance(body['permissions'],list) or any(item not in ['products','orders','accounts'] for item in body['permissions']):
+    if keys != {identifier,'permissions','enabled'} or type(body['enabled']) is not bool or not isinstance(body['permissions'],list) or any(item not in ['products','orders','accounts','procurement','receiving'] for item in body['permissions']):
         raise StoreError('前置仓员工权限设置无效。')
     with transaction.atomic():
         Store.objects.select_for_update().get(pk=store.id)

@@ -96,7 +96,7 @@ async function upload(event: Event) {
       alt="当前分类图片"
     /><span v-else>未上传{{ secondary ? "横幅" : "入口图" }}</span>
     <div class="store-actions">
-      <label v-if="canUpload" class="secondary-button"
+      <label v-if="canUpload" class="secondary-button category-image-upload"
         >{{ busy ? "上传中…" : "上传图片"
         }}<input
           type="file"
@@ -123,6 +123,24 @@ async function upload(event: Event) {
   </section>
 </template>
 <style scoped>
+.category-image-upload {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+}
+.category-image-upload input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none !important;
+  opacity: 0;
+  cursor: pointer;
+}
+.category-image-upload:focus-within {
+  outline: 2px solid var(--mall-color-focus);
+}
 .category-imagery {
   margin: 16px 0;
 }

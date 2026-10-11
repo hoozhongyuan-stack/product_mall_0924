@@ -12,6 +12,7 @@ export interface PendingOperation {
 }
 
 interface OperationOptions {
+  idempotencyBodyField?: string
   account: () => Account
   target: () => string
   onSuccess: (result: unknown) => Promise<void> | void
@@ -95,7 +96,9 @@ export function usePersistentOperation(options: OperationOptions) {
     try {
       if (!pending.value) {
         // Freeze the JSON sent over the wire, not the caller's mutable form object.
-        const operation = { key: crypto.randomUUID(), path, method, body: JSON.parse(JSON.stringify(body)), action }
+        const key = crypto.randomUUID()
+        const frozenBody = JSON.parse(JSON.stringify(body))
+        const operation = { key, path, method, body: options.idempotencyBodyField ? { ...frozenBody, [options.idempotencyBodyField]: key } : frozenBody, action }
         stored(operation)
         pending.value = operation
       }

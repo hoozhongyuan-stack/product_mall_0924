@@ -451,7 +451,20 @@ def stocktake_approve_view(request, stocktake_id):
 
 
 def ledger_data(row, include_version=False):
-    if row.movement_type == "SALE":
+    if row.movement_type == 'PROCURE':
+        source_line=row.procurement_line
+        document=source_line.order
+        document_no='JH'+document.pk.hex.upper()
+        document_id=document.pk
+        case_id=None
+        base_unit=source_line.base_unit
+    elif row.movement_type == 'STORE_SET':
+        document=None
+        document_no='前置仓库存填写'
+        document_id=row.store_adjustment_id
+        case_id=None
+        base_unit=row.operation_unit
+    elif row.movement_type == "SALE":
         source_line = row.order_line
         document = source_line.order
         document_no = document.order_no
@@ -484,7 +497,7 @@ def ledger_data(row, include_version=False):
             "baseUnit": base_unit,
             "deltaBaseUnits": row.delta_base_units, "balanceBefore": row.balance_before,
             "balanceAfter": row.balance_after, "reason": row.reason, "note": row.note,
-            "actorName": row.actor.display_name if row.actor else "系统",
+            "actorName": row.actor.display_name if row.actor else (row.store_member.nickname or row.store_member.member_no) if row.store_member else "系统",
             "occurredAt": row.occurred_at.isoformat()}
     if include_version:
         data["unitVersionId"] = str(row.unit_version_id)
@@ -493,6 +506,7 @@ def ledger_data(row, include_version=False):
 
 def _ledger_rows():
     return InventoryLedger.objects.select_related("warehouse", "sku__product", "actor",
+                                                  "store_member", "procurement_line__order",
                                                   "inbound_line__document", "outbound_line__document",
                                                   "stocktake_line__document", "order_line__order",
                                                   "refund_order_line__order", "return_order_line__order")

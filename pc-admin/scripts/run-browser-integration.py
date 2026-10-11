@@ -16,6 +16,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 ADMIN = ROOT / 'pc-admin'
@@ -77,7 +78,9 @@ def keep_preview_alive(processes):
         time.sleep(1)
 
 
-def run(*, preview=False):
+def run(*, preview=False, procurement=False):
+    if preview and procurement:
+        raise SystemExit("Choose either visual preview or procurement integration.")
     preview_seed = ADMIN / 'scripts/seed-visual-preview.py'
     if preview and not preview_seed.is_file():
         raise SystemExit('Preview seed is missing: pc-admin/scripts/seed-visual-preview.py')
@@ -142,6 +145,13 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
 """
                 subprocess.run([sys.executable, 'manage.py', 'shell', '--no-imports'], input=seed,
                                text=True, cwd=ROOT / 'backend', env=env, check=True)
+                if procurement:
+                    env.update(MALL_E2E_PROCUREMENT='1', WECHAT_MINI_APP_ID='wx0000000000000001',
+                        MALL_E2E_MEMBER_ID=str(uuid.uuid4()), MALL_E2E_STORE_ID=str(uuid.uuid4()),
+                        MALL_E2E_WAREHOUSE_ID=str(uuid.uuid4()), MALL_E2E_MEMBER_TOKEN=secrets.token_urlsafe(32))
+                    subprocess.run([sys.executable, 'manage.py', 'shell', '--no-imports'],
+                        input=(ADMIN / 'scripts/seed-procurement-integration.py').read_text(),
+                        text=True, cwd=ROOT / 'backend', env=env, check=True)
                 if preview:
                     env['MALL_E2E_PREVIEW'] = '1'
                     subprocess.run([sys.executable, 'manage.py', 'shell', '--no-imports'],
@@ -194,6 +204,20 @@ assert configuration.last_check_at is None
 assert not Member.objects.exists() and not MemberSession.objects.exists() and not WechatCodeUse.objects.exists()
 print('Verified persisted drafts, encrypted synthetic credentials, zero orders and zero WeChat identities.')
 """
+                if procurement:
+                    verify = """from orders.models import Order
+from stores.procurement.models import ProcurementOrder, ProcurementSettings
+from inventory.models import InventoryBalance, InventoryLedger
+from customers.models import WechatCodeUse
+assert ProcurementOrder.objects.count() == 2
+assert not ProcurementOrder.objects.exclude(status='RECEIVED').exists()
+balance = InventoryBalance.objects.get()
+assert balance.on_hand_base_units == 28 and balance.reserved_base_units == 3
+assert InventoryLedger.objects.filter(movement_type='PROCURE').count() == 4
+assert 'synthetic-procurement-only' not in ProcurementSettings.objects.get(pk=1).encrypted_instructions
+assert not Order.objects.exists() and not WechatCodeUse.objects.exists()
+print('Verified full procurement receipts, four immutable ledgers, preserved reservations and zero retail orders.')
+"""
                 subprocess.run([sys.executable, 'manage.py', 'shell', '--no-imports'], input=verify,
                                text=True, cwd=ROOT / 'backend', env=env, check=True)
                 return 0
@@ -215,9 +239,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--preview', action='store_true',
                         help='Seed an isolated visual preview and keep it open until Ctrl-C/SIGTERM.')
+    parser.add_argument('--procurement', action='store_true', help='Test procurement in an owned synthetic local database.')
     arguments = parser.parse_args()
     signal.signal(signal.SIGTERM, interrupted)
     try:
-        raise SystemExit(run(preview=arguments.preview))
+        raise SystemExit(run(preview=arguments.preview, procurement=arguments.procurement))
     except KeyboardInterrupt:
         raise SystemExit(130)

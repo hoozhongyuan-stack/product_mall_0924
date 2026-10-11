@@ -33,6 +33,7 @@
  </view>
  <view class="list-heading">资金管理</view>
  <view class="finance-shortcuts"><button wx:for="{{overview.financeShortcuts}}" wx:key="key" class="finance-shortcut" data-section="account" data-account-panel="{{item.accountPanel}}" bindtap="section"><image src="{{item.icon}}" mode="aspectFit"/><view><text>{{item.label}}</text><text class="caption">{{!canAccounts ? '需授权' : item.description}}</text></view><text class="shortcut-arrow" aria-hidden="true">›</text></button></view>
+ <button wx:if="{{canProcurement}}" class="card procurement-entry" bindtap="openProcurement"><image src="/assets/ui/parcel.svg" mode="aspectFit"/><view><view class="title">前置仓进货</view><view class="muted">采购、付款凭证与收货</view></view><text>›</text></button>
  <view wx:if="{{overview && overview.businessShortcuts.length}}" class="shortcut-list"><button wx:for="{{overview.businessShortcuts}}" wx:key="key" class="shortcut" data-section="{{item.section}}" data-fulfillment="{{item.fulfillment}}" data-account-panel="{{item.accountPanel}}" bindtap="section"><image src="{{item.icon}}" mode="aspectFit"/><text>{{item.label}}</text><text class="shortcut-arrow" aria-hidden="true">›</text></button></view>
  <view wx:else class="state">当前账号没有商品与订单操作权限。请联系平台管理员授权需要的功能。</view>
  <view class="dashboard-note">平台统一维护商品、价格与装修。前置仓仅维护本店销售状态与库存，处理本店订单。</view>

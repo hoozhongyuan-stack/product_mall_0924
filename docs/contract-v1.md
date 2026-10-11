@@ -815,3 +815,17 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 - 分类创建与更新新增可空 `imageAssetId/bannerAssetId`；一级仅允许正方形入口图，二级仅允许宽大于高横幅；图片复用现有素材授权、有效文件验证、引用保护和回收。后台返回素材DTO，公开分类仅返回 `imageUrl/bannerImageUrl`等公开字段。未配置图片为空，不提供虚构素材。
 - `GET /api/v1/admin/storefront/filing` 返回 `{recordNo,revision}`，需 `navigation.read`；`PUT` 接受 `{expectedRevision,recordNo}`，需 `navigation.edit`与CSRF。备案号最长100字符，不允许控制字符，可清空，修订冲突409；后台读取和保存共用每账号60次/分钟数据库额度，超额429。`GET /api/v1/app/storefront`新增 `filing:{recordNo}`；个人中心底部显示，空值隐藏。
 - 新小程序路由 `pages/member/center` 承载权益与等级、积分账户和规则；复用会员概览、积分明细与消费历史接口，不新增积分账本或消费统计口径。
+
+### 5.35 前置仓进货（2026-10-11）
+
+采购单独立于顾客销售订单、前置仓收入及提现账本；线下采购付款不扣可提现余额，销售结算仍按已确认公式计算，不再重复扣采购款。第一版整单一次发货、全部验收后增量入库，异常补齐后重验或整单取消退款，不支持部分收货与部分退款，不扣平台总仓库存。采购运费由平台审单时确认，前置仓承担，独立于顾客订单配置运费。
+
+- 人员新增 `procurement`（进货申请、报价确认、付款凭证、取消）及 `receiving`（收货、异常）授权，不自动给现有人员开通。任一授权可读本仓进货列表／详情；服务端在事务中锁定并重验会员及人员授权。后台新增 `stores.procurement.read/manage/finance`，核款与退款关闭须 finance 和订单绑定的密码确认，其他管理动作须 manage；后台写接口沿用 Cookie、CSRF 及实时权限检查。
+- 仓端根路径 `/api/v1/app/store-center/stores/{storeId}/procurement`：GET `/products` 支持 q/page/pageSize，提供平台在售实物商品的规格、真实规格名、销售单位、基础单位、换算比例、当前单位版本、成本修订及进货价。未配置当前单位进货价的规格不能提交；本仓下架不阻止进货。GET/POST `/orders`、GET `/orders/{orderId}`；创建仅接受 `{requestKey,lines:[{skuId,quantity,expectedCostRevision,expectedUnitVersionId}],note}`，1–100 个不同规格、每项 1–999 整数，服务端重新计算金额并冻结成本、规格与单位换算。
+- 仓端 POST `/orders/{orderId}/{action}` 共同携带 `{expectedRevision,requestKey}`。`confirm-quote` 无额外字段；`payment-proof` 追加 `{assetId,note}`；`cancel` 追加 `{reason}`；`exception` 追加 `{note}`；`receive` 追加 `{lineIds}`，必须且只能为本单全部不重复行 ID，逐行实际验收确认。申请与动作 UUID 请求键持久化，结果未知时客户端保留原请求和键；相同人员同正文重放返回已完成结果，换正文或订单返回409。
+- 平台根路径 `/api/v1/admin/stores/procurement`：GET `/orders` 支持 q/status/storeId/page/pageSize；GET `/orders/{orderId}`；POST `/orders/{orderId}/{action}`。共同字段同上：`review` 追加 `{freightFen}`，只确认运费并冻结已配置采购收款说明；`reject` 追加 `{reason}`；`confirm-payment` 追加 `{paymentReference,note}`，代表人工确认实际足额到账；`reject-proof` 追加 `{reason}`；`ship` 追加 `{carrier,tracking}`；`resolve-exception`、`verify-units` 追加 `{reference,note}`；`close-cancel` 追加 `{reference,note,refundConfirmed:true}`，须核清款项并完成所需线下退款。核款／关闭确认 action 为 `stores.procurement.confirm-payment/close-cancel`，objectId 为订单 UUID，revision 为当前订单修订。
+- 状态依次 REVIEW → QUOTE → PAYMENT → PROOF → PAID → SHIPPED → RECEIVED；退回凭证回 PAYMENT；收货异常 EXCEPTION，经平台处理回 SHIPPED。REVIEW/QUOTE 可取消或拒绝直接关闭；从 PAYMENT 起申请取消进入 CANCEL_REVIEW，人工核款／退款后关闭，不能因未上传凭证认定没有付款。已收货为终态。
+- GET `/orders/{orderId}/operations/{requestKey}` 仅平台使用，返回本人持久事件对应 `{status:"COMPLETED",result:order}` 或 `{status:"NOT_FOUND"}`；其他人员事件不作为当前操作的成功证据。仓端未知操作直接原请求重放，由服务端幂等记录核验。
+- GET/PUT `/settings` 管理独立采购收款说明，GET 返回 `{paymentInstructions,revision}`；PUT 接受 `{paymentInstructions,expectedRevision}`，最多2000字符，需 manage、CSRF 与密码确认 `stores.procurement.configure`、objectId `procurement-settings`。加密落库，审单冻结到订单；列表不解密或返回收款说明及事件历史，详情受权限保护。
+- 仓端 POST `/proofs` multipart 单 `file`，PNG/JPEG 最大5MB，真实图片解码后返回 `{assetId,previewUrl}`。文件属于本仓上传会员，不能引用公共素材；查看 GET `/proofs/{assetId}/file` 需本仓身份与授权，后台需 read 且已绑定订单。私有文件不进入公开 Asset 目录，响应 private/no-store。小程序使用 Bearer 下载到临时文件，隐藏／退出清理，不能把带敏感凭证的URL发送第三方。
+- 入库由 inventory 域执行：锁仓、按固定顺序锁规格及库存，使用订单冻结换算向库存池基础单位增量写入；保留 `reserved_base_units`。每采购行唯一 PROCURE 流水，保存原单位及会员操作者。事务原子性、幂等事件与数据库不可变约束防止重复加库存或改写历史事实。销售单位变化需平台人工核对冻结单位，核对绑定所审当前版本，之后再次变更重新阻止入库；库存池或基础单位变化不能批准自动入库。

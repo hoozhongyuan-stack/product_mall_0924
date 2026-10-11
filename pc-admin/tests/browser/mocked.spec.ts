@@ -789,3 +789,28 @@ for (const pageType of ['HOME', 'MICRO']) {
     verify()
   })
 }
+
+test('category creation editing and secondary creation stay in dialogs',async({page},testInfo)=>{
+ let categories=[{id:'root-dialog',parentId:null,name:'礼盒分类',sortOrder:1,status:'ACTIVE',revision:1},{id:'leaf-dialog',parentId:'root-dialog',name:'商务礼盒',sortOrder:1,status:'ACTIVE',revision:1}]
+ const verify=await installMockApi(page,async(route,path)=>{
+  if(path==='/api/v1/admin/categories'){
+   if(route.request().method()==='POST'){const body=route.request().postDataJSON();const saved={id:'created-category',status:'ACTIVE',revision:1,...body};categories=[...categories,saved];await ok(route,saved)}else await ok(route,categories)
+   return true
+  }
+  if(path==='/api/v1/admin/categories/leaf-dialog'){
+   const body=route.request().postDataJSON();expect(body.expectedRevision).toBe(1);categories=categories.map(c=>c.id==='leaf-dialog'?{...c,...body,revision:2}:c);await ok(route,categories.find(c=>c.id==='leaf-dialog'));return true
+  }
+  return false
+ })
+ await page.goto('/catalog');await page.getByRole('tab',{name:'商品分类',exact:true}).click()
+ await page.getByRole('button',{name:'新建一级分类',exact:true}).click()
+ const primary=page.getByRole('dialog',{name:'新建一级分类',exact:true});await expect(primary).toBeVisible()
+ await primary.getByLabel('名称',{exact:true}).fill('新一级分类');await primary.locator('.el-dialog__headerbtn').click();await page.locator('.mall-confirm-dialog').getByRole('button',{name:'取消',exact:true}).click();await expect(primary).toBeVisible();await expect(primary.getByLabel('名称',{exact:true})).toHaveValue('新一级分类');await primary.getByRole('button',{name:'取消',exact:true}).click();await page.getByRole('button',{name:'确认继续',exact:true}).click();await expect(primary).not.toBeVisible()
+ await page.getByRole('button',{name:'添加二级',exact:true}).click()
+ const secondary=page.getByRole('dialog',{name:'添加二级分类',exact:true});await expect(secondary).toBeVisible();await expect(secondary.locator('select')).toHaveValue('root-dialog');await expect(secondary.getByText('二级分类横幅',{exact:true})).toBeVisible()
+ await page.screenshot({path:testInfo.outputPath(`category-secondary-${testInfo.project.name}.png`),animations:'disabled'})
+ await secondary.getByLabel('名称',{exact:true}).fill('节日礼盒');await secondary.getByRole('button',{name:'保存分类',exact:true}).click();await expect(secondary).not.toBeVisible();await expect(page.getByText('节日礼盒',{exact:true})).toBeVisible()
+ await page.getByRole('row').filter({hasText:'商务礼盒'}).getByRole('button',{name:'编辑',exact:true}).click()
+ const editing=page.getByRole('dialog',{name:'编辑分类 · 商务礼盒',exact:true});await expect(editing).toBeVisible();await editing.getByLabel('名称',{exact:true}).fill('商务精选');await page.screenshot({path:testInfo.outputPath(`category-edit-${testInfo.project.name}.png`),animations:'disabled'});await editing.getByRole('button',{name:'保存分类',exact:true}).click();await expect(editing).not.toBeVisible();await expect(page.getByText('商务精选',{exact:true})).toBeVisible()
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);verify()
+})
