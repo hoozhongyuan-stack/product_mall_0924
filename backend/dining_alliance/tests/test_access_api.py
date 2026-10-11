@@ -97,10 +97,15 @@ class DiningAccessTests(TestCase):
         result=client.post(base+'/tables',data=json.dumps({'number':'B1'}),content_type='application/json',HTTP_X_CSRFTOKEN=token)
         self.assertEqual(result.status_code,201,result.content)
         self.assertTrue(AuditLog.objects.filter(action_code='dining.table.save').exists())
-        with patch('dining_alliance.code_views.generate_code',return_value=b'\x89PNG\r\n\x1a\nmock'):
-            result=client.get(base+f'/tables/{table.id}/code')
-            self.assertEqual(result.status_code,200)
-            self.assertEqual(result['Content-Type'],'image/png')
+        from pathlib import Path
+        for extension,mime in [('png','image/png'),('jpg','image/jpeg')]:
+            raw=(Path(__file__).parent/f'fixtures/wechat-code.{extension}').read_bytes()
+            with patch('dining_alliance.code_views.generate_code',return_value=raw):
+                result=client.get(base+f'/tables/{table.id}/code')
+                self.assertEqual(result.status_code,200)
+                self.assertEqual(result['Content-Type'],mime)
+                self.assertEqual(result.content,raw)
+                self.assertIn(f'{table.id}.{extension}',result['Content-Disposition'])
         self.assertEqual(Client().get(base+f'/tables/{table.id}/code').status_code,401)
 
     def test_code_configuration_errors_and_bounds(self):
@@ -173,7 +178,7 @@ class DiningAccessTests(TestCase):
         from types import SimpleNamespace
         from pathlib import Path
         import io
-        result=io.BytesIO(b'\x89PNG\r\n\x1a\ntest')
+        result=io.BytesIO((Path(__file__).parent/'fixtures/wechat-code.png').read_bytes())
         class Reply:
             def __enter__(self):return result
             def __exit__(self,*args):return False

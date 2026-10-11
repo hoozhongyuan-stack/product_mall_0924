@@ -13,6 +13,17 @@ from .models import DiningTable
 from .views import guarded
 
 
+def code_image_type(raw):
+    """Recognize bounded PNG/JPEG bytes without decoding binary data as JSON."""
+    if len(raw)<=1024*1024:
+        if (len(raw)>=57 and raw.startswith(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR')
+                and raw.endswith(b'\x00\x00\x00\x00IEND\xaeB`\x82')):
+            return 'image/png','png'
+        if len(raw)>=12 and raw.startswith(b'\xff\xd8\xff') and raw.endswith(b'\xff\xd9'):
+            return 'image/jpeg','jpg'
+    raise DiningError('微信未返回有效餐桌码，请确认目标小程序版本和餐饮页面配置。','DINING_CODE_UNAVAILABLE',502)
+
+
 def generate_code(code):
     version = settings.DINING_CODE_ENV_VERSION
     check_path = settings.DINING_CODE_CHECK_PATH
@@ -36,8 +47,7 @@ def generate_code(code):
         opener=build_opener(ProxyHandler({}),HTTPSHandler(context=ssl.create_default_context()),NoRedirect())
         with opener.open(request,timeout=8) as result:
             raw=result.read(1024*1024+1)
-        if len(raw)>1024*1024 or not raw.startswith(b'\x89PNG\r\n\x1a\n'):
-            raise DiningError('微信未返回有效餐桌码，请确认目标小程序版本和餐饮页面配置。','DINING_CODE_UNAVAILABLE',502)
+        code_image_type(raw)
         return raw
     except (HTTPError,URLError,OSError,TimeoutError):
         raise DiningError('微信餐桌码服务暂不可用，请稍后重试。','DINING_CODE_UNAVAILABLE',502) from None
@@ -54,6 +64,7 @@ def table_code_view(request,restaurant_id,table_id):
     if table is None or not restaurant.enabled:
         raise DiningError('餐桌码不可用。','DINING_NOT_FOUND',404)
     raw=generate_code(table.code)
-    result=HttpResponse(raw,content_type='image/png')
-    result['Content-Disposition']=f'attachment; filename="dining-table-{table.id}.png"'
+    mime,extension=code_image_type(raw)
+    result=HttpResponse(raw,content_type=mime)
+    result['Content-Disposition']=f'attachment; filename="dining-table-{table.id}.{extension}"'
     return result

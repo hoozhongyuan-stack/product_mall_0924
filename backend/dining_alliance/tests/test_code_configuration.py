@@ -13,14 +13,27 @@ from dining_alliance.access import DiningError
 
 
 class CodeConfigurationTests(SimpleTestCase):
-    def payload(self, **configuration):
+    def payload(self, raw=None, **configuration):
+        raw=raw if raw is not None else (Path(__file__).parent/'fixtures/wechat-code.png').read_bytes()
         class Reply:
-            def __enter__(self):return io.BytesIO(b'\x89PNG\r\n\x1a\nfixture')
+            def __enter__(self):return io.BytesIO(raw)
             def __exit__(self,*args):return False
         with override_settings(**configuration),patch('wechat_integration.credentials.effective_credentials',return_value=SimpleNamespace(app_id='wx-test',secret='secret')),patch('wechat_integration.probe.acquire_access_token',return_value=SimpleNamespace(status='SUCCESS',token='fixture-token')),patch('dining_alliance.code_views.build_opener') as opener:
             opener.return_value.open.return_value=Reply()
             generate_code('a'*32)
             return json.loads(opener.return_value.open.call_args.args[0].data)
+
+    def test_actual_jpeg_response_is_accepted(self):
+        raw=(Path(__file__).parent/'fixtures/wechat-code.jpg').read_bytes()
+        self.assertTrue(raw.startswith(b'\xff\xd8\xff'))
+        self.assertTrue(raw.endswith(b'\xff\xd9'))
+        self.assertEqual(self.payload(raw=raw)['page'],'pages/dining/shop')
+
+    def test_malformed_or_truncated_images_are_rejected(self):
+        png=(Path(__file__).parent/'fixtures/wechat-code.png').read_bytes()
+        jpeg=(Path(__file__).parent/'fixtures/wechat-code.jpg').read_bytes()
+        for raw in [png[:-1],jpeg[:-1],b'\xff\xd8\xff',b'\x89PNG\r\n\x1a\n',b'{"errcode":40001}',b'<html>error</html>',jpeg+b'junk',png+b'junk',b'x'*(1024*1024+1)]:
+            with self.subTest(prefix=raw[:12]),self.assertRaises(DiningError):self.payload(raw=raw)
 
     def test_release_default_validates_published_page(self):
         payload=self.payload(DINING_CODE_ENV_VERSION='release',DINING_CODE_CHECK_PATH=True)

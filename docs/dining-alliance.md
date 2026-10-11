@@ -30,7 +30,7 @@
 
 - `GET/POST /restaurants` 与 `GET/PATCH /restaurants/{id}`：餐饮店创建、匹配仓、修订更新；创建必填 UUID `requestKey`，同键同内容返回原店，同键异内容409，修改提交 `revision`。
 - `GET/POST /restaurants/{id}/tables` 与 `PATCH /restaurants/{id}/tables/{tableId}`：餐桌建立、桌号与启用状态维护。
-- `GET /restaurants/{id}/tables/{tableId}/code`：真实微信小程序码 PNG，失败返回明确错误，不生成示意码。
+- `GET /restaurants/{id}/tables/{tableId}/code`：真实微信小程序码 PNG/JPEG，按实际格式返回 Content-Type 和 .png/.jpg 下载名，失败返回明确错误，不生成示意码。
 - `GET/POST /restaurants/{id}/staff`：会员员工绑定及商品、订单、财务能力维护；新增 `revision=0`，修改使用读取的最新修订，旧草稿409。
 - `GET/PATCH/PUT /product-ratios`：商品统一佣金比例与修订。
 - `GET/PUT /purchase-costs`：对应仓 SKU 的进货成本覆盖与单位版本。
@@ -100,4 +100,4 @@ DINING_CODE_CHECK_PATH=0
 
 这会打开体验版并允许餐饮页面尚未正式发布。仍需已上传包含 `pages/dining/shop` 的小程序代码，并在微信平台选择对应体验版本；取消路径检查不会创建缺失页面，也不代表扫码访问已经验收。`DINING_CODE_ENV_VERSION` 只接受 `release`、`trial`、`develop`，`DINING_CODE_CHECK_PATH` 只接受 `1`、`0`；非法部署值会阻止服务启动，运行时非法覆盖也会在访问微信凭据及码服务之前返回配置错误。生产 Compose 的 `x-backend-env` 已显式透传这两个环境变量，release/web/维护任务共用同一配置；UAT 私有 release.env 必须设置上述值。修改环境变量后须重新创建应用容器以加载配置，重新生成并扫描对应桌码核对实际版本。
 
-配置测试覆盖正式版默认、体验版关闭发布页面校验、开发版显式选择、非法配置先于网络拒绝及启动环境变量校验；测试模拟微信PNG响应，不代表真实微信二维码生成或扫码成功。
+配置测试覆盖正式版默认、体验版关闭发布页面校验、开发版显式选择、非法配置先于网络拒绝及启动环境变量校验；测试模拟微信 PNG/JPEG 响应，包含可解码的二进制图片 fixture，以及截断、异常结束、JSON 错误和超限数据拒绝；不代表真实微信二维码生成或扫码成功。
