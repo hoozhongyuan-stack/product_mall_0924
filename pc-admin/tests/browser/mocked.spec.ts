@@ -253,9 +253,10 @@ test('mock HTTP: grouped navigation and focused product editor retain dirty data
   await page.getByRole('button', { name: '编辑商品', exact: true }).click()
   const workspace = page.getByRole('region', { name: '商品编辑工作区' })
   await expect(workspace).toBeVisible()
-  await expect(page.getByRole('search')).toBeHidden()
+  await expect(page.getByRole('search')).toBeVisible()
+  await expect(page.getByRole('dialog', { name: '编辑商品', exact: true })).toBeVisible()
   await workspace.getByLabel('商品名称', { exact: true }).fill('保留未保存的商品名称')
-  await page.getByRole('button', { name: '返回商品列表', exact: true }).click()
+  await page.keyboard.press('Escape')
   await page.locator('.el-message-box:visible').getByRole('button', { name: '继续编辑', exact: true }).click()
   await expect(workspace.getByLabel('商品名称', { exact: true })).toHaveValue('保留未保存的商品名称')
   await screenshot(page, testInfo, 'pilot-catalog-editor')
@@ -349,6 +350,7 @@ test('mock HTTP: selected SPU CSV download protects prefixed formulas', async ({
   await page.getByRole('checkbox', { name: '选择商品 BROWSER_PRODUCT', exact: true }).check()
   const downloadEvent = page.waitForEvent('download')
   await page.getByRole('button', { name: '导出所选商品', exact: true }).click()
+  await page.getByRole('dialog', { name: '导出所选商品', exact: true }).getByRole('button', { name: '确认导出' }).click()
   const download = await downloadEvent
   const csv = await readFile((await download.path())!, 'utf8')
   expect(csv.startsWith('\uFEFF')).toBe(true)
@@ -813,4 +815,48 @@ test('category creation editing and secondary creation stay in dialogs',async({p
  await page.getByRole('row').filter({hasText:'商务礼盒'}).getByRole('button',{name:'编辑',exact:true}).click()
  const editing=page.getByRole('dialog',{name:'编辑分类 · 商务礼盒',exact:true});await expect(editing).toBeVisible();await editing.getByLabel('名称',{exact:true}).fill('商务精选');await page.screenshot({path:testInfo.outputPath(`category-edit-${testInfo.project.name}.png`),animations:'disabled'});await editing.getByRole('button',{name:'保存分类',exact:true}).click();await expect(editing).not.toBeVisible();await expect(page.getByText('商务精选',{exact:true})).toBeVisible()
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);verify()
+})
+
+test('catalog dialogs: fixed footer submits create, product and SKU forms', async ({ page }, testInfo) => {
+  const writes: string[] = []
+  const detail = { productId: 'product-a', productNo: 'BROWSER_PRODUCT', name: '经典干红葡萄酒 750ml', categoryId: 'leaf', fulfillmentKind: 'SHIP', redeemValidUntil: null, status: 'DRAFT', descriptionHtml: '', productRevision: 4, mainImage: null, galleryImages: [], video: null, specAxes: [], skus: [{ ...sku, specOptionIds: [] }] }
+  const verify = await installMockApi(page, async (route, path) => {
+    if (path === '/api/v1/admin/products/product-a') {
+      if (route.request().method() === 'PATCH') writes.push('product')
+      await ok(route, detail); return true
+    }
+    if (path === '/api/v1/admin/products' && route.request().method() === 'POST') { writes.push('create'); await ok(route, detail); return true }
+    if (path === '/api/v1/admin/skus/sku-a/price') { writes.push('sku'); await ok(route, sku); return true }
+    return false
+  })
+  await page.goto('/catalog')
+  await page.getByRole('button', { name: '新建商品', exact: true }).click()
+  let dialog = page.getByRole('dialog', { name: '新建商品', exact: true })
+  await dialog.getByPlaceholder('例如 PROD-001').fill('DIALOG-DEMO')
+  await dialog.getByPlaceholder('请输入商品名称').fill('弹窗新建商品')
+  await dialog.getByRole('combobox', { name: /^二级分类/ }).selectOption('leaf')
+  await dialog.getByRole('button', { name: '生成 SKU 组合', exact: true }).click()
+  await dialog.getByLabel('SKU 编码 默认规格', { exact: true }).fill('DIALOG-SKU')
+  await dialog.getByLabel('日常价 DIALOG-SKU', { exact: true }).fill('18')
+  await dialog.locator('.el-dialog__footer').getByRole('button', { name: '保存商品草稿' }).click()
+  await expect(dialog).toHaveCount(0)
+  await page.getByRole('button', { name: '编辑商品', exact: true }).click()
+  dialog = page.getByRole('dialog', { name: '编辑商品', exact: true })
+  await expect(dialog.getByLabel('商品名称', { exact: true })).toBeVisible()
+  const footer = dialog.locator('.el-dialog__footer')
+  const bounds = await footer.boundingBox()
+  expect(bounds && bounds.y + bounds.height <= page.viewportSize()!.height).toBe(true)
+  await expect(page.locator('.dialog-fade-enter-active')).toHaveCount(0)
+  await page.screenshot({ path: testInfo.outputPath('catalog-product-dialog.png'), fullPage: false, animations: 'disabled' })
+  await footer.getByRole('button', { name: '保存商品资料' }).click()
+  await expect.poll(() => writes).toContain('product')
+  await footer.getByRole('button', { name: '返回商品列表' }).click()
+  await page.getByRole('button', { name: 'SKU 批量管理' }).click()
+  await page.getByRole('button', { name: '日常价', exact: true }).click()
+  dialog = page.getByRole('dialog', { name: '编辑 SKU', exact: true })
+  await dialog.getByLabel('日常价（元）', { exact: true }).fill('9.99')
+  await dialog.locator('.el-dialog__footer').getByRole('button', { name: '保存 SKU' }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(writes).toEqual(['create', 'product', 'sku'])
+  verify()
 })

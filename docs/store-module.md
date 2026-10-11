@@ -238,3 +238,19 @@ PC 支持规则配置、账户收入与提现明细、审核、线下付款登�
 验证日志：`/tmp/procurement-real-integration.log`、`/tmp/procurement-regression.log`、`/tmp/procurement-proof-quota.log`、`/tmp/procurement-backend-coverage.log`、`/tmp/procurement-pc-npm-final.log`、`/tmp/procurement-pc-coverage-final.log`、`/tmp/procurement-pc-browser-final.log`。实现预览 `http://127.0.0.1:8872/procurement-implementation/mini.html` 为实际WXML／WXSS／JS配合合成API，未连接UAT。
 
 第一版整单一次发货、全单验收；异常由平台补齐后重验或整单退款关闭。部分收货／部分退款、真实微信图片权限与真机操作仍需后续验收。本轮仅本地开发，没有提交、推送、部署或上传微信版本。
+
+## 后台商品操作弹窗（2026-10-11）
+
+商品列表保留筛选、分页和只读等级价展示。新建／编辑商品、SKU 上下架／日常价／等级价／单位、商品上下架、批量商品分类／商品上下架／SKU 上下架，以及所选商品导出均通过弹窗完成。进货价和商品平台分成继续使用已有独立页面与弹窗。弹窗正文滚动，主要保存／执行／返回按钮在固定底部；点击遮罩不关闭，关闭未保存编辑需确认，保存、上传及规格核对／写入期间禁止退出。批量执行后在弹窗内显示逐项成功、失败和未执行原因，刷新原分页及筛选；新建成功也刷新原分页。
+
+切片评审：
+
+1. 仅 PC catalog 交互调整；API、权限、修订号和业务数据结构保持现有契约，无迁移或新增依赖。
+2. 服务端价格、状态、分类和规格约束保持既有实现；不修改库存余额、分润计算或零售订单。
+3. 保留未保存确认、重复提交锁、服务端影响范围核对及批量分类幂等键。规格 busy 向父级上报，防止写入中关闭或并发保存基础资料；失败保留编辑输入，批量结果在列表刷新后显示。
+4. 列表继续按商品／SKU 现有分页查询；没有增加逐项读取或扩大导出范围，CSV 仅导出本页所选商品。
+5. 全部 PC npm test：103 项 Node、467 项组件测试，类型检查与生产构建通过。新增弹窗组件行／分支／函数／语句覆盖率均 100%；10 项桌面／窄屏专项浏览器检查通过。商品组件专项 17 项覆盖批量重试、结果保留、原筛选分页、等级价失败输入保留以及规格保存关闭锁。浏览器使用真实 Vue + Chromium、合成 HTTP 数据，验证桌面 1440 和窄屏 390 的弹窗、Escape 未保存确认、底部按钮真实表单提交及导出，不等于 UAT 数据验收。
+6. `CatalogOperationDialog.vue` 复用现有 Element Plus 与全局弹窗布局；商品业务仍由 catalog 域组件负责，规格编辑继续独立保存，不新增通用业务框架。
+7. 保持现有品牌色、横向二级导航及列表信息；等级价从页面内输入改为只读展示加弹窗设置。机械界面检查返回空结果，实际截图另外核对。
+
+本轮仅本地开发与测试，没有提交、推送或部署 UAT。验证日志：`/tmp/catalog-dialog-npm-final.log`、`/tmp/catalog-dialog-coverage.log`、`/tmp/catalog-dialog-targeted.log`、`/tmp/catalog-dialog-browser-final.log`。

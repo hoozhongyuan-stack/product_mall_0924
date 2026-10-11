@@ -12,7 +12,7 @@ import { axesMatchDetail, combinationKey, generateCombinations, hasDraftSkuInput
 interface PreviewItem { skuId?: string; skuCode: string; gradePriceCount?: number; unitVersionCount?: number }
 interface Preview { previewToken: string; retained: PreviewItem[]; added: PreviewItem[]; removed: PreviewItem[] }
 const props = defineProps<{ product: ProductDetail; grades: MemberGrade[]; canEdit: boolean; basicDirty: boolean }>()
-const emit = defineEmits<{ saved: []; dirtyChange: [dirty: boolean] }>()
+const emit = defineEmits<{ saved: []; dirtyChange: [dirty: boolean]; busyChange: [busy: boolean] }>()
 const axes = ref<EditableAxis[]>(initialAxes(props.product))
 const unitConversion = ref<UnitConversion | null>(props.product.unitConversion ?? null)
 function updateConversion(value: { axes: EditableAxis[]; conversion: UnitConversion | null }) {
@@ -25,6 +25,7 @@ const preview = ref<Preview | null>(null)
 const confirmedRemoval = ref(false)
 const error = ref('')
 const busy = ref(false)
+watch(busy, value => emit('busyChange', value), { immediate: true })
 const showFieldErrors = ref(false)
 const editorElement = ref<HTMLElement | null>(null)
 const dirty = computed(() => JSON.stringify(unitConversion.value) !== JSON.stringify(props.product.unitConversion ?? null)
@@ -113,7 +114,7 @@ async function requestPreview() {
   finally { busy.value = false }
 }
 async function save() {
-  if (!preview.value || busy.value || (preview.value.removed.length && !confirmedRemoval.value)) return
+  if (!props.canEdit || !preview.value || busy.value || (preview.value.removed.length && !confirmedRemoval.value)) return
   if (props.basicDirty) { void reportError('商品基础资料尚未保存，请先保存基础资料再核对规格。'); preview.value = null; return }
   let payload
   try { payload = toSpecPayload(axes.value, skus.value, props.grades, props.product.productRevision, unitConversion.value) }

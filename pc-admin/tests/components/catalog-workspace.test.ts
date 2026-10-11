@@ -89,6 +89,8 @@ describe('focused product workspace', () => {
     })
     const wrapper = await setup()
     await button(wrapper, '上架商品').trigger('click'); await flushPromises()
+    expect(wrapper.get('[role=dialog]').text()).toContain('确认上架商品')
+    expect(wrapper.get('form[role=search]').isVisible()).toBe(true)
     expect((button(wrapper, '确认执行').element as HTMLButtonElement).disabled).toBe(true)
     await wrapper.get('.catalog-batch-preview input[type="checkbox"]').setValue(true)
     await button(wrapper, '核对影响范围').trigger('click'); await flushPromises()
@@ -117,6 +119,7 @@ describe('focused product workspace', () => {
     await button(wrapper, '返回商品列表').trigger('click')
     expect(confirmAction).toHaveBeenCalled()
     expect(wrapper.get('[aria-label="商品编辑工作区"]').isVisible()).toBe(true)
+    expect(wrapper.get('[role=dialog]').exists()).toBe(true)
     await wrapper.get('form.catalog-editor').trigger('submit'); await flushPromises()
     const sent = vi.mocked(api).mock.calls.find(([path, init]) => path === '/products/p1' && init?.method === 'PATCH')!
     expect(JSON.parse(sent[1]!.body as string)).toMatchObject({ expectedRevision: 4, descriptionHtml: '<h2>新图文说明</h2><p>商品特点</p>' })
@@ -143,6 +146,7 @@ describe('focused product workspace', () => {
     await button(wrapper, '编辑商品').trigger('click')
     await flushPromises()
     expect(wrapper.get('[aria-label="商品编辑工作区"]').isVisible()).toBe(true)
+    expect(wrapper.get('[role=dialog]').exists()).toBe(true)
   })
   it('opens existing edit in a dedicated workspace while preserving list state', async () => {
     const wrapper = await setup()
@@ -150,7 +154,8 @@ describe('focused product workspace', () => {
     await button(wrapper, '编辑商品').trigger('click')
     await flushPromises()
     expect(wrapper.get('[aria-label="商品编辑工作区"]').isVisible()).toBe(true)
-    expect(wrapper.get('form[role=search]').isVisible()).toBe(false)
+    expect(wrapper.get('[role=dialog]').exists()).toBe(true)
+    expect(wrapper.get('form[role=search]').isVisible()).toBe(true)
     await button(wrapper, '返回商品列表').trigger('click')
     expect(wrapper.get('form[role=search]').isVisible()).toBe(true)
     expect((wrapper.get('input[placeholder="名称或编号"]').element as HTMLInputElement).value).toBe('测试')
@@ -163,7 +168,7 @@ describe('focused product workspace', () => {
     vi.mocked(confirmAction).mockResolvedValue(false)
     await button(wrapper, '返回商品列表').trigger('click')
     expect((wrapper.get('input[maxlength="120"]').element as HTMLInputElement).value).toBe('保留修改')
-    expect(wrapper.get('form[role=search]').isVisible()).toBe(false)
+    expect(wrapper.get('form[role=search]').isVisible()).toBe(true)
   })
   it('keeps the editor when a save starts while an earlier leave confirmation is open', async () => {
     const previous = vi.mocked(api).getMockImplementation()!
@@ -179,7 +184,8 @@ describe('focused product workspace', () => {
     await wrapper.get('form.catalog-editor').trigger('submit'); await flushPromises()
     allowLeave(true); await flushPromises()
     expect(wrapper.get('[aria-label="商品编辑工作区"]').isVisible()).toBe(true)
-    expect(wrapper.get('form[role=search]').isVisible()).toBe(false)
+    expect(wrapper.get('[role=dialog]').exists()).toBe(true)
+    expect(wrapper.get('form[role=search]').isVisible()).toBe(true)
     finishSave({ ...product, name: '正在保存的商品', productRevision: 5 }); await flushPromises()
     expect(wrapper.text()).toContain('编辑商品')
   })
@@ -225,4 +231,109 @@ it('unconverted standalone unit editor sends one unit with ratio one', async () 
   await wrapper.get('form.catalog-editor').trigger('submit'); await flushPromises()
   const call = vi.mocked(api).mock.calls.find(([path]) => path === '/skus/sku1/unit')!
   expect(JSON.parse(call[1]!.body as string).unit).toEqual({ baseUnit: '支', saleUnit: '支', ratio: 1 })
+})
+
+it('keeps batch errors and results inside the dialog and refreshes the same filtered page', async () => {
+  const previous = vi.mocked(api).getMockImplementation()!
+  let fail = true
+  vi.mocked(api).mockImplementation((path, init) => {
+    if (path.startsWith('/product-rows?')) {
+      const page = Number(new URLSearchParams(path.split('?')[1]).get('page'))
+      return Promise.resolve({ rows: [{ ...product, skuCount: 1, onSaleSkuCount: 0, matchedSkuIds: [], minListPriceFen: 888, maxListPriceFen: 888 }], page, pageSize: 20, total: 41 }) as never
+    }
+    if (path === '/products/batch-category/preview') return Promise.resolve({ previewToken: 'token', productCount: 1, skuCount: 1, otherSkuCount: 0, items: [{ productId: 'p1', productNo: 'P-1', selectedSkuCount: 1, totalSkuCount: 1, productRevision: 4, canChange: true }] }) as never
+    if (path === '/products/batch-category') return fail ? Promise.reject(new Error('网络暂时不可用，请重试')) : Promise.resolve({ results: [{ id: 'p1', success: true }], successCount: 1, failedCount: 0 }) as never
+    return previous(path, init)
+  })
+  const wrapper = await setup()
+  await wrapper.get('input[placeholder="名称或编号"]').setValue('酒')
+  await button(wrapper, '查询').trigger('click'); await flushPromises()
+  await button(wrapper, '下一页').trigger('click'); await flushPromises()
+  await wrapper.get('input[aria-label="选择商品 P-1"]').setValue(true)
+  await button(wrapper, '批量调整分类').trigger('click')
+  await wrapper.get('.catalog-batch-category select').setValue('leaf')
+  await button(wrapper, '核对影响范围').trigger('click'); await flushPromises()
+  await button(wrapper, '确认执行').trigger('click'); await flushPromises()
+  expect(wrapper.get('[role=dialog]').text()).toContain('网络暂时不可用，请重试')
+  expect(wrapper.get('.catalog-list').text()).not.toContain('网络暂时不可用，请重试')
+  expect((wrapper.get('.catalog-batch-category select').element as HTMLSelectElement).value).toBe('leaf')
+  fail = false
+  await button(wrapper, '确认执行').trigger('click'); await flushPromises()
+  expect(wrapper.get('[role=dialog]').text()).toContain('成功 1 项')
+  expect(wrapper.get('.catalog-list').text()).not.toContain('批量操作结果')
+  expect(wrapper.get('.catalog-pagination').text()).toContain('第 2 页')
+  expect(vi.mocked(api).mock.calls.some(([path]) => path.includes('page=2') && path.includes('keyword='))).toBe(true)
+  await button(wrapper, '完成').trigger('click'); await flushPromises()
+  expect(wrapper.find('[role=dialog]').exists()).toBe(false)
+})
+
+it('moves grade price entry into a SKU dialog and preserves input after a failed save', async () => {
+  const previous = vi.mocked(api).getMockImplementation()!
+  vi.mocked(api).mockImplementation((path, init) => {
+    if (path === '/member-grades') return Promise.resolve([{ id: 'gold', name: '金卡', enabled: true }]) as never
+    if (path === '/skus/sku1/grade-prices') return Promise.reject(new Error('保存失败，请重试'))
+    return previous(path, init)
+  })
+  const wrapper = await setup()
+  await button(wrapper, 'SKU 批量管理').trigger('click'); await flushPromises()
+  expect(wrapper.get('.catalog-list').findAll('input[inputmode="decimal"]')).toHaveLength(0)
+  await button(wrapper, '设置等级价').trigger('click'); await flushPromises()
+  const dialog = wrapper.get('[role=dialog]')
+  const input = dialog.findAll('label').find(label => label.text() === '金卡价格（元）')!.get('input')
+  await input.setValue('7.50')
+  await wrapper.get('#catalog-sku-edit').trigger('submit'); await flushPromises()
+  expect(dialog.text()).toContain('保存失败，请重试')
+  expect((input.element as HTMLInputElement).value).toBe('7.50')
+  const sent = vi.mocked(api).mock.calls.find(([path]) => path === '/skus/sku1/grade-prices')!
+  expect(JSON.parse(String(sent[1]?.body))).toEqual({ gradePrices: [{ gradeId: 'gold', priceFen: 750 }], expectedRevision: 3 })
+})
+
+it('blocks editor close and basic save while specifications are being written', async () => {
+  const previous = vi.mocked(api).getMockImplementation()!
+  let complete!: (value: unknown) => void
+  vi.mocked(api).mockImplementation((path, init) => {
+    if (path === '/products/p1/specs/preview') return Promise.resolve({ previewToken: 'spec-token', retained: [{ skuId: 'sku1', skuCode: 'SKU-1' }], added: [], removed: [] }) as never
+    if (path === '/products/p1/specs') return new Promise(resolve => { complete = resolve }) as never
+    return previous(path, init)
+  })
+  const wrapper = await setup()
+  await button(wrapper, '编辑商品').trigger('click'); await flushPromises()
+  await wrapper.get('input[aria-label="日常价 SKU-1"]').setValue('9.99')
+  await button(wrapper, '核对规格变更影响').trigger('click'); await flushPromises()
+  let allowLeave!: (value: boolean) => void
+  vi.mocked(confirmAction).mockImplementationOnce(() => new Promise(resolve => { allowLeave = resolve }))
+  await button(wrapper, '返回商品列表').trigger('click')
+  await button(wrapper, '确认保存规格与 SKU').trigger('click'); await flushPromises()
+  allowLeave(true); await flushPromises()
+  expect(wrapper.get('[role=dialog]').exists()).toBe(true)
+  expect((button(wrapper, '返回商品列表').element as HTMLButtonElement).disabled).toBe(true)
+  expect((button(wrapper, '保存商品资料').element as HTMLButtonElement).disabled).toBe(true)
+  expect(wrapper.find('.el-dialog__headerbtn').exists()).toBe(false)
+  await wrapper.get('#catalog-product-edit').trigger('submit'); await flushPromises()
+  expect(vi.mocked(api).mock.calls.some(([path, init]) => path === '/products/p1' && init?.method === 'PATCH')).toBe(false)
+  complete({}); await flushPromises()
+  expect(wrapper.find('[role=dialog]').exists()).toBe(false)
+  await button(wrapper, '编辑商品').trigger('click'); await flushPromises()
+  expect((button(wrapper, '返回商品列表').element as HTMLButtonElement).disabled).toBe(false)
+})
+
+it('disables specification saving while the basic product save is in flight', async () => {
+  const previous = vi.mocked(api).getMockImplementation()!
+  let complete!: (value: unknown) => void
+  vi.mocked(api).mockImplementation((path, init) => {
+    if (path === '/products/p1/specs/preview') return Promise.resolve({ previewToken: 'spec-token', retained: [{ skuId: 'sku1', skuCode: 'SKU-1' }], added: [], removed: [] }) as never
+    if (path === '/products/p1' && init?.method === 'PATCH') return new Promise(resolve => { complete = resolve }) as never
+    return previous(path, init)
+  })
+  const wrapper = await setup()
+  await button(wrapper, '编辑商品').trigger('click'); await flushPromises()
+  await wrapper.get('input[aria-label="日常价 SKU-1"]').setValue('9.99')
+  await button(wrapper, '核对规格变更影响').trigger('click'); await flushPromises()
+  await wrapper.get('#catalog-product-edit').trigger('submit'); await flushPromises()
+  const specEditor = wrapper.getComponent({ name: 'ProductSpecEditor' })
+  expect(specEditor.props('canEdit')).toBe(false)
+  await button(wrapper, '确认保存规格与 SKU').trigger('click'); await flushPromises()
+  expect(vi.mocked(api).mock.calls.some(([path]) => path === '/products/p1/specs')).toBe(false)
+  complete({ ...product, productRevision: 5 }); await flushPromises()
+  expect(specEditor.props('canEdit')).toBe(true)
 })
