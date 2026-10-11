@@ -1,3 +1,4 @@
+const dining = require('../../lib/dining-alliance')
 const api = require('../../lib/api')
 const { memberPage } = require('../../lib/member-page')
 const { orderFilters } = require('../../lib/order-filters')
@@ -15,8 +16,8 @@ Page({ ...base, ...profileControls,
     try { const result = await api.get('/api/v1/app/store-center/stores'); if (identity === wx.getStorageSync('mall.memberToken')) this.setData({ hasStoreCenter: !!result.items.length }) } catch (_) { this.setData({ hasDiningCenter: false, hasStoreCenter: false }) }
     api.get('/api/v1/app/dining-alliance/restaurants').then(result => { if (identity === wx.getStorageSync('mall.memberToken')) this.setData({ hasDiningCenter: Array.isArray(result.items) && result.items.length > 0 }) }).catch(() => { if (identity === wx.getStorageSync('mall.memberToken')) this.setData({ hasDiningCenter: false }) })
   },
-  openDiningCenter() { wx.navigateTo({ url: '/pages/dining/center' }) },
-  openStoreCenter() { wx.navigateTo({ url: '/pages/store-center/index' }) },
+  openDiningCenter() { dining.navigate('/pages/dining/center') },
+  openStoreCenter() { dining.navigate('/pages/store-center/index') },
   clearPrivate() { base.clearPrivate.call(this); this.setData({ hasDiningCenter: false, hasStoreCenter: false, editingProfile: false, nicknameDraft: '', profileError: '', profileBusy: false }) },
   avatarError() { if (this.data.member) this.setData({ member: { ...this.data.member, avatarDisplayUrl: '' } }) },
   async logout() {
@@ -33,18 +34,18 @@ Page({ ...base, ...profileControls,
   openPrivate(next, options = {}) {
     const target = memberReturnTarget({ next, ...options })
     if (!target) return
-    if (session.loggedIn() && this.data.state !== 'auth') wx.navigateTo({ url: target })
+    if (session.loggedIn() && this.data.state !== 'auth') dining.navigate(target)
     else {
       const filters = next === 'orders' ? orderFilters(options) : {}
       const query = Object.entries(filters).filter(([, value]) => value)
         .map(([key, value]) => `&${key}=${value}`).join('')
-      wx.navigateTo({ url: `/pages/login/login?returnTo=member&next=${next}${query}` })
+      dining.navigate(`/pages/login/login?returnTo=member&next=${next}${query}`)
     }
   },
   openMemberCenter() { this.openPrivate('center') },
   openPoints() { this.openPrivate('points') },
   openConsumption() { this.openPrivate('consumption') },
-  openExchange() { wx.navigateTo({ url: '/pages/exchange/index' }) },
+  openExchange() { dining.navigate('/pages/exchange/index') },
   openCoupons() { this.openPrivate('coupons') },
   openCampaigns() { this.openPrivate('campaigns') },
   openAddresses() { this.openPrivate('addresses') },

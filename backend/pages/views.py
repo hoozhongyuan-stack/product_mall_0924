@@ -10,6 +10,7 @@ from accounts.security import audit, confirm_action, error, require, require_liv
 from catalog.page_targets import assets_exist
 from catalog.asset_access import authorize_asset_binding
 from catalog.validation import CatalogError
+from dining_alliance.browsing import private_scanned_response
 
 from .models import (MicroPage, PageConfigVersion, PageDraftAsset, PagePublication,
                      PagePublishRequest, PageVersionAsset)
@@ -247,10 +248,17 @@ def _publish_view(request, selected_page, actor):
         return _failure(request, exc)
 
 
+@private_scanned_response
 def public_home_view(request):
     bad = method(request, "GET")
     if bad:
         return bad
+    from dining_alliance.browsing import resolve_browsing_context
+    from dining_alliance.access import DiningError
+    try:
+        dining = resolve_browsing_context(request)
+    except DiningError as exc:
+        return _failure(request, exc)
     publication = PagePublication.objects.select_related("current_version").filter(
         page__page_type="HOME", current_version__isnull=False).first()
     if not publication:
@@ -258,7 +266,7 @@ def public_home_view(request):
     full_config = publication.current_version.config_json
     try:
         visible_config = public_config(request, full_config)
-        products = component_data(visible_config, request.GET.get('storeId'))
+        products = component_data(visible_config, request.GET.get('storeId'), dining_context=dining)
     except PageConfigError as exc:
         return _failure(request, exc)
     return response(request, {"versionId": str(publication.current_version_id),
@@ -350,10 +358,17 @@ def micro_publish_view(request, page_id):
     return _publish_view(request, page, actor) if page else error(request, 404, "NOT_FOUND", "微页面不存在。")
 
 
+@private_scanned_response
 def public_micro_view(request, page_id):
     bad = method(request, "GET")
     if bad:
         return bad
+    from dining_alliance.browsing import resolve_browsing_context
+    from dining_alliance.access import DiningError
+    try:
+        dining = resolve_browsing_context(request)
+    except DiningError as exc:
+        return _failure(request, exc)
     publication = PagePublication.objects.select_related("page", "current_version").filter(
         page_id=page_id, page__page_type="MICRO", current_version__isnull=False).first()
     if not publication:
@@ -361,7 +376,7 @@ def public_micro_view(request, page_id):
     full_config = publication.current_version.config_json
     try:
         visible_config = public_config(request, full_config)
-        products = component_data(visible_config, request.GET.get('storeId'))
+        products = component_data(visible_config, request.GET.get('storeId'), dining_context=dining)
     except PageConfigError as exc:
         return _failure(request, exc)
     return response(request, {"pageId": str(publication.page_id),

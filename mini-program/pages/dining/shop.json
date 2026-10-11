@@ -1,4 +1,6 @@
 {
-  "navigationBarTitleText": "餐饮店铺",
-  "enablePullDownRefresh": false
+  "navigationBarTitleText": "首页",
+  "enablePullDownRefresh": true,
+  "navigationStyle": "custom",
+  "usingComponents": {"storefront-shell": "/components/storefront-shell/index"}
 }

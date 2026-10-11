@@ -1,3 +1,4 @@
+const dining = require('../../lib/dining-alliance')
 const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const cart = require('../../lib/cart')
@@ -16,7 +17,7 @@ Page({
     const selected = cart.selected()
     if (!selected.length) { this.setData({ state: 'ready', total: '¥0' }); return }
     try {
-      const quote = await api.post('/api/v1/app/checkout/quotes', { items: cart.quoteItems(selected), ...stores.query(), ...(stores.selected() ? { deliveryMode: stores.modes(stores.selected())[0]?.value } : {}) })
+      const quote = await api.post('/api/v1/app/checkout/quotes', { items: cart.quoteItems(selected), ...stores.query(), ...(!dining.scoped() && stores.selected() ? { deliveryMode: stores.modes(stores.selected())[0]?.value } : {}) })
       if (token !== this.refreshToken) return
       const lines = new Map(quote.lines.map((line) => [line.skuId, line]))
       this.setData({ state: 'ready', quote, total: money(quote.goodsTotalFen),
@@ -35,7 +36,7 @@ Page({
     const row = this.data.rows.find((item) => item.skuId === event.currentTarget.dataset.id)
     const id = row && row.live && row.live.productId
     if (!id || !/^[0-9a-fA-F-]{36}$/.test(id)) return
-    wx.navigateTo({ url: `/pages/product/detail?productId=${encodeURIComponent(id)}&selectSku=1&replaceSkuId=${encodeURIComponent(row.skuId)}` })
+    dining.navigate(`/pages/product/detail?productId=${encodeURIComponent(id)}&selectSku=1&replaceSkuId=${encodeURIComponent(row.skuId)}`)
   },
   toggle(event) { cart.update(event.currentTarget.dataset.id, { selected: Boolean(event.detail.value.length) }); return this.refresh() },
   toggleAll() {
@@ -63,9 +64,12 @@ Page({
     if (!this.data.quote || !this.data.quote.ready || this.data.quote.confirmRequired) {
       wx.showToast({ title: '请先处理价格或库存变化', icon: 'none' }); return
     }
+    if (dining.scoped()) {
+      cart.write(cart.selected()); dining.navigate('/pages/checkout/checkout'); return
+    }
     wx.setStorageSync('mall.checkoutSelection.v1', cart.selected())
-    wx.navigateTo({ url: '/pages/checkout/checkout' })
+    dining.navigate('/pages/checkout/checkout')
   },
-  shop() { wx.navigateTo({ url: '/pages/index/index' }) },
-  openOrders() { wx.navigateTo({ url: '/pages/orders/list' }) },
+  shop() { dining.navigate('/pages/index/index') },
+  openOrders() { dining.navigate('/pages/orders/list') },
 })

@@ -22,6 +22,7 @@ from .validation import CatalogError, list_field, number_field, object_field, re
 from inventory.sku_guards import referenced_sku_ids
 from inventory.pool_access import PoolBindingError, update_empty_pool_base_unit
 from payments.availability import enabled_payment_methods
+from dining_alliance.browsing import private_scanned_response
 
 
 def failure(request, exc):
@@ -681,14 +682,18 @@ def public_categories_view(request):
     return response(request, [category_data(item, public=True) for item in items])
 
 
+@private_scanned_response
 def public_products_view(request):
     bad = method(request, "GET")
     if bad:
         return bad
+    from dining_alliance.browsing import resolve_browsing_context
+    from dining_alliance.access import DiningError
     try:
         page, size = page_args(request)
-        store = None
-        if 'storeId' in request.GET:
+        dining = resolve_browsing_context(request)
+        store = dining[0] if dining else None
+        if not dining and 'storeId' in request.GET:
             from stores.access import get_store
             try:
                 store = get_store(uuid_field(request.GET['storeId'], '前置仓 ID'), for_sale=True)
@@ -708,6 +713,8 @@ def public_products_view(request):
         if store:
             from stores.access import sale_product_ids
             products = products.filter(id__in=sale_product_ids(store), fulfillment_kind='SHIP')
+        if dining:
+            products = products.filter(id__in=dining[1])
         category_id = request.GET.get("categoryId")
         if category_id:
             identifier = uuid_field(category_id, "分类 ID")
@@ -744,18 +751,29 @@ def public_products_view(request):
                      "AVAILABLE" if item.has_available_stock else "STOCK_NOT_READY"}
                 for item in page_items]
         return offset_response(request, {"rows": rows, "page": page, "pageSize": size, "total": total})
-    except CatalogError as exc:
+    except (CatalogError, DiningError) as exc:
         return failure(request, exc)
 
 
+@private_scanned_response
 def public_product_detail_view(request, product_id):
     bad = method(request, "GET")
     if bad:
         return bad
     from customers.auth import resolve_member
+    from dining_alliance.browsing import resolve_browsing_context
+    from dining_alliance.access import DiningError
+    try:
+        dining = resolve_browsing_context(request)
+    except DiningError as exc:
+        return failure(request, exc)
     member = resolve_member(request)
-    store = None
-    if 'storeId' in request.GET:
+    store = dining[0] if dining else None
+    if dining:
+        from stores.access import sale_product_ids
+        if product_id not in dining[1] or product_id not in sale_product_ids(store):
+            return error(request,404,'DINING_PRODUCT_UNAVAILABLE','餐饮店或前置仓暂不销售此商品。')
+    if not dining and 'storeId' in request.GET:
         from stores.access import get_store, sale_product_ids
         try:
             store = get_store(uuid_field(request.GET['storeId'], '前置仓 ID'), for_sale=True)

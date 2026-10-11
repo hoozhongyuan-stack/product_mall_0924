@@ -1,4 +1,5 @@
 const { safeLink } = require('./home')
+const dining = require('./dining-alliance')
 
 function pageStack() {
   return typeof getCurrentPages === 'function' ? getCurrentPages() : []
@@ -10,8 +11,8 @@ function blocked(message) {
 }
 
 function navigateInternal(url) {
-  if (pageStack().length >= 10) wx.redirectTo({ url })
-  else wx.navigateTo({ url })
+  if (pageStack().length >= 10) dining.navigate(url, 'redirectTo')
+  else dining.navigate(url)
 }
 
 function openLink(candidate, currentPageId = '') {

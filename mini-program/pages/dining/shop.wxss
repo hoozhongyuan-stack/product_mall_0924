@@ -1,1 +1,2 @@
-@import "./dining.wxss";
+@import "../home/home.wxss";
+.restaurant-address{margin-top:14rpx;font-size:23rpx;line-height:1.6;overflow-wrap:anywhere;opacity:.9}

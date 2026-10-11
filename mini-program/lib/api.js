@@ -8,6 +8,8 @@ function baseUrl() {
 
 function request(method, path, body, query = {}, headers = {}) {
   const base = baseUrl()
+  const dining = require('./dining-alliance')
+  const diningScope = method === 'GET' && query.diningSessionId ? query.diningSessionId : null
   const params = Object.entries(query)
     .filter(([, value]) => value !== undefined && value !== null && value !== '')
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
@@ -20,6 +22,11 @@ function request(method, path, body, query = {}, headers = {}) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       ...(body ? { data: body } : {}),
       success(result) {
+        if (diningScope && dining.current()?.sessionId !== diningScope) {
+          const failure = new Error('餐桌访问已结束，请重新扫描餐桌码。')
+          failure.code = 'DINING_SESSION_EXPIRED'
+          reject(failure); return
+        }
         const payload = result.data
         if (result.statusCode >= 200 && result.statusCode < 300 && payload && payload.success === true) {
           resolve(payload.data)

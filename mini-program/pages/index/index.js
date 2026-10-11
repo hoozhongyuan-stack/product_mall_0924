@@ -1,3 +1,4 @@
+const dining = require('../../lib/dining-alliance')
 const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const catalog = require('../../lib/catalog')
@@ -122,7 +123,7 @@ Page({
   openProduct(event) {
     const id = event.currentTarget.dataset.id
     if (!this.data.products.some((item) => item.id === id)) return
-    wx.navigateTo({ url: `/pages/product/detail?productId=${encodeURIComponent(id)}` })
+    dining.navigate(`/pages/product/detail?productId=${encodeURIComponent(id)}`)
   },
-  openCart() { wx.navigateTo({ url: '/pages/cart/cart' }) },
+  openCart() { dining.navigate('/pages/cart/cart') },
 })

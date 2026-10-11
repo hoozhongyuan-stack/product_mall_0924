@@ -1,3 +1,4 @@
+const dining = require('../../lib/dining-alliance')
 const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const catalog = require('../../lib/catalog')
@@ -45,6 +46,7 @@ Page({
       this.setData({ state: 'unavailable', error: '商品链接无效。' })
       return
     }
+    if (dining.scoped() && wx.hideShareMenu) wx.hideShareMenu()
     this.closeSkuDrawer()
     this.setData({ state: 'loading', error: '' })
     try {
@@ -121,7 +123,7 @@ Page({
       this.finishSelection()
       this.updateCartCount()
       wx.showToast({ title: this.data.replacingCartItem ? '已更新规格' : '已加入购物车', icon: 'success' })
-      if (this.data.replacingCartItem) wx.navigateBack({ delta: 1, fail: () => wx.redirectTo({ url: '/pages/cart/cart' }) })
+      if (this.data.replacingCartItem) wx.navigateBack({ delta: 1, fail: () => dining.navigate('/pages/cart/cart', 'redirectTo') })
     } catch (error) { this.setData({ drawerError: error.message }) }
   },
   replaceCartSelection(selection) {
@@ -141,6 +143,7 @@ Page({
   confirmBuyNow() {
     if (!this.data.drawerOpen || this.data.replacingCartItem) return
     try {
+      if (dining.scoped()) { cart.write([this.selection()]); this.finishSelection(); dining.navigate('/pages/checkout/checkout'); return }
       wx.setStorageSync('mall.checkoutSelection.v1', [this.selection()])
       this.finishSelection()
       wx.navigateTo({ url: '/pages/checkout/checkout', fail: () => {
@@ -149,10 +152,11 @@ Page({
     } catch (error) { this.setData({ drawerError: error.message }) }
   },
   onShareAppMessage() {
+    if (dining.scoped()) return {title:'商城首页',path:'/pages/home/home'}
     return { title: this.data.product ? this.data.product.name : '商品详情',
       path: `/pages/product/detail?productId=${encodeURIComponent(this.productId)}` }
   },
-  openCart() { wx.navigateTo({ url: '/pages/cart/cart' }) },
+  openCart() { dining.navigate('/pages/cart/cart') },
 
   onMediaChange(event) { this.setData({ mediaIndex: event.detail.current }) },
   onImageError(event) {
@@ -162,6 +166,6 @@ Page({
   onVideoError() { this.setData({ videoFailed: true }) },
   backToCatalog() {
     if (getCurrentPages().length > 1) wx.navigateBack({ delta: 1 })
-    else wx.reLaunch({ url: '/pages/index/index' })
+    else dining.navigate('/pages/index/index', 'reLaunch')
   },
 })

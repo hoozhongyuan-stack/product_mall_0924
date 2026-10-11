@@ -1,9 +1,11 @@
 const LEGACY_KEY = 'mall.cart.v1'
 const stores = require('./stores')
+const dining = require('./dining-alliance')
 function key(storeId) { const current = storeId === undefined ? stores.selected() : null; const id = storeId === undefined ? current && current.id : storeId; return id ? `${LEGACY_KEY}.store.${id}` : LEGACY_KEY }
 const MAX_ITEMS = 50
 
 function read(storeId) {
+  if (storeId === undefined && dining.scoped()) return dining.items()
   const value = wx.getStorageSync ? wx.getStorageSync(key(storeId)) : []
   return Array.isArray(value) ? value.filter((row) => row && typeof row.skuId === 'string' &&
     Number.isInteger(row.quantity) && row.quantity > 0).slice(0, MAX_ITEMS) : []
@@ -11,6 +13,11 @@ function read(storeId) {
 
 function write(rows, storeId) {
   const next = rows.slice(0, MAX_ITEMS)
+  if (storeId === undefined && dining.scoped()) {
+    if (!dining.current()) throw new Error('餐桌访问已结束，请重新扫码。')
+    dining.replaceItems(next)
+    return next
+  }
   wx.setStorageSync(key(storeId), next)
   return next
 }

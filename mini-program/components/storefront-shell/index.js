@@ -1,9 +1,11 @@
 const api = require('../../lib/api')
+const dining = require('../../lib/dining-alliance')
 const { NAVIGATION, presentStorefront } = require('../../lib/storefront')
 
 function currentKey() {
   const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
   const route = pages.length ? `/${pages[pages.length - 1].route}` : ''
+  if (route === '/pages/dining/shop') return 'home'
   return NAVIGATION.find((item) => item.path === route)?.key || ''
 }
 
@@ -49,7 +51,7 @@ Component({
       const key = event.currentTarget.dataset.key
       const item = NAVIGATION.find((entry) => entry.key === key)
       if (!item || key === this.data.activeKey) return
-      wx.reLaunch({ url: item.path })
+      dining.navigate(item.path, 'reLaunch')
     },
     openService() {
       const service = this.data.service

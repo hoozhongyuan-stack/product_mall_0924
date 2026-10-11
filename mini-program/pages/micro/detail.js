@@ -1,3 +1,4 @@
+const dining = require('../../lib/dining-alliance')
 const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const home = require('../../lib/home')
@@ -61,7 +62,7 @@ Page({
       this.setData({ ...content, share: sharing.contentShare(data.share, name, api.baseUrl()), state: content.components.length ? 'ready' : 'empty',
         name, versionId: data.versionId,
         failedAssets: {} })
-      sharing.show()
+      if (!dining.scoped()) sharing.show()
       await pageCoupons.mount(this, this.pageId, data.versionId)
       if (typeof wx.setNavigationBarTitle === 'function') wx.setNavigationBarTitle({ title: name })
     } catch (error) {
@@ -92,7 +93,7 @@ Page({
     if (typeof getCurrentPages === 'function' && getCurrentPages().length > 1) {
       wx.navigateBack({ delta: 1 })
     } else {
-      wx.reLaunch({ url: '/pages/home/home' })
+      dining.navigate('/pages/home/home', 'reLaunch')
     }
   },
 

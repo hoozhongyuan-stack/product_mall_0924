@@ -1,6 +1,7 @@
 const api = require('../../lib/api')
 const dining = require('../../lib/dining-alliance')
 const orders = require('../../lib/orders')
+const cart = require('../../lib/cart')
 const { money } = require('../../lib/catalog')
 const KEY = 'mall.diningPendingOrder.v1'
 function removeOwned(pending) {
@@ -37,7 +38,7 @@ Page({
   const g = this.generation = (this.generation || 0) + 1, identity = this.identity
   this.setData({state:'loading',canSubmit:false,error:''})
   try {
-   const quote = await api.post('/api/v1/app/checkout/quotes',{diningSessionId:visit.sessionId,items:dining.items()})
+   const quote = await api.post('/api/v1/app/checkout/quotes',{diningSessionId:visit.sessionId,items:cart.quoteItems(cart.selected())})
    if (!this.valid(g,identity) || dining.current()?.sessionId !== visit.sessionId) return
    const choices = (quote.availablePaymentMethods || []).filter(v => ['WECHAT','OFFLINE'].includes(v))
    const method = choices.includes(this.data.paymentMethod) ? this.data.paymentMethod : choices[0] || ''

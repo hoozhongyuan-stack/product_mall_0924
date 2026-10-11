@@ -6,7 +6,7 @@ function select(value) { if (!value || typeof value.id !== 'string' || !value.id
 function clear() { wx.removeStorageSync(KEY) }
 function managed() { return wx.getStorageSync(MANAGED) || null }
 function manage(id) { wx.setStorageSync(MANAGED, id) }
-function query() { const store = selected(); return store ? { storeId: store.id } : {} }
+function query() { const context = require('./dining-alliance').query(); if (context) return context; const store = selected(); return store ? { storeId: store.id } : {} }
 function coordinates(value) { return !!value && typeof value.latitude === 'number' && typeof value.longitude === 'number' && Number.isFinite(value.latitude) && Number.isFinite(value.longitude) && Math.abs(value.latitude) <= 90 && Math.abs(value.longitude) <= 180 }
 function distance(a, b) {
  if (!coordinates(a) || !coordinates(b)) return null

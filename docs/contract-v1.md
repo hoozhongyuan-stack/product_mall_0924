@@ -836,3 +836,8 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 完整字段与边界见[餐饮联盟实施说明](dining-alliance.md)。新增独立餐饮角色、餐桌码、扫码会话、商品统一佣金比例和对应仓成本覆盖；不增加餐饮库存或履约能力。报价接受互斥 `diningSessionId`，服务端决定餐饮地址、桌号和原履约仓，缺货不换仓。下单冻结佣金规则与数量成本，公开订单禁止返回访问凭证。完成且超过原订单售后期才可申请提现；有退款或售后冻结，实际打款仍待业务确认；用户已确认佣金由履约前置仓利润份额承担。新餐饮订单冻结承担方，仓财务与餐饮共用履约仓成本，平台利润原口径不变，仓净结算减去餐饮佣金；超出仓利润双方冻结。餐饮可提现必须核对仓净收入已结算及同额扣除证据，旧已结算钱包不追扣。后台 `dining.read/manage/finance.read/finance.manage` 与会员商品、订单、财务授权独立；写入沿用 CSRF、修订与防重复校验。
 
 餐饮资金承担增量：新餐饮成交快照新增不可变 `funding_source=FULFILLMENT_STORE_PROFIT`。仓财务快照新增 `cost_source`，餐饮成本复用同一成交成本与修订。前置仓账户收入增加 `beforeDiningFen/diningCommissionFen`；`storeFen` 是已扣餐饮佣金的最终净结算，前端不能再次扣佣。普通订单扣除为0；HELD金额字段为null；余额只来源于净结算钱包事实。餐饮账户增加 `fundingSource/fundingLabel`，AVAILABLE须满足原完成与售后条件，并核对对应仓收入已SETTLED、佣金扣除及仓净金额一致。既有GET不执行结算或生成资金事实。
+
+
+### 餐饮扫码首页复用读取补充（2026-10-11）
+
+`GET /api/v1/app/home`、`GET /api/v1/app/pages/{id}`、`GET /api/v1/app/products`、`GET /api/v1/app/products/{id}` 支持 `diningSessionId`。提供该参数即为餐饮扫码范围，必须当前 Bearer 会员拥有有效会话；禁止与 `storeId` 混用或重复参数。DTO 沿用普通读取格式，商品与组件商品仅含餐饮店和会话固定仓可售交集，数量限制在交集后应用。发布装修配置不改写，固定仓缺货不切换。成功和失败均禁止缓存并按 Authorization 区分。无参数保持普通读取；无效餐饮参数不能回退普通读取。

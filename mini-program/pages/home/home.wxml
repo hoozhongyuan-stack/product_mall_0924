@@ -1,25 +1,2 @@
 <import src="../../components/published-content.wxml" />
-<view class="home-page" style="background-color: {{theme.pageBackgroundColor}};">
-  <view class="home-header store-home-header" style="background-color: {{theme.headerBackgroundColor}}; color: {{theme.brandTextColor}}; padding-top: {{headerPadding}}px;">
-    <view class="store-brand-row" style="padding-right: {{capsuleRight}}px;">
-      <view class="store-logo"><image src="{{storeLogoUrl || '/assets/ui/parcel.svg'}}" mode="aspectFit" data-url="{{storeLogoUrl}}" binderror="onStoreLogoError" aria-label="前置仓Logo"/></view><view class="store-brand-body"><view class="store-name-line"><text class="brand">{{store ? store.name : '请选择前置仓'}}</text><button class="store-switch" bindtap="chooseStore">⇄ 切换</button></view><view class="store-hours">{{store ? (store.acceptingOrders ? '营业接单 · ' : '暂停接单 · ') + store.openingHours : '选择前置仓，查看商品与库存'}}</view></view>
-    </view><view wx:if="{{storeError}}" class="store-location-help" bindtap="chooseStore">{{storeError}}</view>
-  </view>
-
-  <view wx:if="{{state === 'loading'}}" class="home-state" role="status">正在加载首页…</view>
-  <view wx:elif="{{state === 'unpublished'}}" class="home-state">
-    <view class="state-title">首页内容准备中</view>
-    <view class="state-copy">商品分类仍可浏览，欢迎先去看看。</view>
-    <button class="state-action" bindtap="browseCatalog">浏览商品分类</button>
-  </view>
-  <view wx:elif="{{state === 'error'}}" class="home-state" role="alert">
-    <view class="state-title">首页加载失败</view>
-    <view class="state-copy">{{error}}</view>
-    <button class="state-action" bindtap="loadHome">重新加载</button>
-    <button class="text-action" bindtap="browseCatalog">浏览商品分类</button>
-  </view>
-  <block wx:else>
-    <template is="published-content" data="{{components: components, keyword: keyword, failedAssets: failedAssets, couponState: couponState, couponData: couponData, couponError: couponError, couponClaim: couponClaim}}" />
-  </block>
-</view>
-<storefront-shell show-navigation="{{true}}" show-service="{{true}}" />
+<include src="../../components/home-surface.wxml" />
