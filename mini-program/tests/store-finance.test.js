@@ -89,3 +89,14 @@ test('guarded financial actions cannot expose inaccessible rows or modify frozen
 test('server permission revocation clears balance and private form after failed submission',async()=>{
  const p=ready(),old=api.post;api.post=async()=>{const e=new Error('无账户权限');e.statusCode=403;throw e};p.prepareWithdrawal();await p.confirmWithdrawal();assert.equal(p.data.account,null);assert.equal(p.data.canAccounts,false);assert.equal(p.data.withdrawalForm.bankAccount,'');api.post=old
 })
+test('dining commission displays server gross and net settlement without double deduction',()=>{
+ const row={id:'d',paidFen:10000,costFen:6000,platformFen:800,freightFen:1000,beforeDiningFen:8200,diningCommissionFen:800,storeFen:7400,status:'SETTLED'}
+ const shown=finance.present({income:[row]}).income[0]
+ assert.equal(shown.beforeDiningAmount,'¥82.00');assert.equal(shown.diningCommissionAmount,'¥8.00');assert.equal(shown.storeAmount,'¥74.00');assert.equal(row.storeFen,7400)
+ const ordinary=finance.present({income:[{...row,beforeDiningFen:8200,diningCommissionFen:0,storeFen:8200}]}).income[0]
+ assert.equal(ordinary.diningCommissionAmount,'¥0.00');assert.equal(ordinary.storeAmount,'¥82.00')
+ const held=finance.present({income:[{...row,beforeDiningFen:null,diningCommissionFen:null,storeFen:null,status:'HELD'}]}).income[0]
+ assert.equal(held.beforeDiningAmount,'暂不可用');assert.equal(held.diningCommissionAmount,'暂不可用');assert.equal(held.storeAmount,'暂不可用')
+ const legacy=finance.present({income:[{paidFen:10000,costFen:6000,platformFen:800,freightFen:1000,storeFen:8200}]}).income[0]
+ assert.equal(legacy.beforeDiningAmount,'¥82.00');assert.equal(legacy.diningCommissionAmount,'¥0.00');assert.equal(legacy.storeAmount,'¥82.00')
+})

@@ -15,6 +15,23 @@ def distance_meters(latitude, longitude, other_latitude, other_longitude):
 def store_context(body, member, address_id, *, lock=False, allow_address_pending=False):
     from stores.access import get_store
     from stores.models import Store
+    if 'diningSessionId' in body:
+        if member is None:
+            raise ValueError('请登录后扫描餐桌码。')
+        if set(body) & {'storeId', 'deliveryMode', 'addressId'}:
+            raise ValueError('餐桌订单由扫码自动带入地址和前置仓，请勿混用个人地址或交付方式。')
+        session_id = body['diningSessionId']
+        if not isinstance(session_id, str):
+            raise ValueError('扫码访问编号格式不正确，请重新扫码。')
+        try:
+            UUID(session_id)
+        except ValueError as exc:
+            raise ValueError('扫码访问编号格式不正确，请重新扫码。') from exc
+        from dining_alliance.access import checkout_context
+        store, dining = checkout_context(session_id, member, lock=lock)
+        if store.delivery_fee_fen is None:
+            raise ValueError('服务前置仓配送费尚未配置。')
+        return store, 'DELIVERY', {**_store_snapshot(store), 'dining': dining}
     store_id, mode = body.get('storeId'), body.get('deliveryMode', '')
     if store_id is None:
         if mode:
@@ -32,12 +49,7 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
     store = get_store(identifier, for_sale=True)
     if mode not in ('PICKUP', 'DELIVERY', 'EXPRESS') or mode not in store.supported_modes:
         raise ValueError('请选择该前置仓支持的交付方式。')
-    snapshot = {'id': str(store.id), 'name': store.name, 'address': store.address,
-                'contactPhone': store.contact_phone, 'revision': store.revision,
-                'latitude': str(store.latitude) if store.latitude is not None else None,
-                'longitude': str(store.longitude) if store.longitude is not None else None,
-                'deliveryRadiusMeters': store.delivery_radius_meters,
-                'deliveryFeeFen': store.delivery_fee_fen}
+    snapshot = _store_snapshot(store)
     if mode == 'DELIVERY':
         if store.delivery_fee_fen is None or not store.delivery_radius_meters:
             raise ValueError('前置仓配送费用或范围尚未配置。')
@@ -64,3 +76,12 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
 
 def store_shipping_fee(store, mode, express_fee):
     return 0 if mode == 'PICKUP' else store.delivery_fee_fen if mode == 'DELIVERY' else express_fee
+
+
+def _store_snapshot(store):
+    return {'id': str(store.id), 'name': store.name, 'address': store.address,
+                'contactPhone': store.contact_phone, 'revision': store.revision,
+                'latitude': str(store.latitude) if store.latitude is not None else None,
+                'longitude': str(store.longitude) if store.longitude is not None else None,
+                'deliveryRadiusMeters': store.delivery_radius_meters,
+                'deliveryFeeFen': store.delivery_fee_fen}

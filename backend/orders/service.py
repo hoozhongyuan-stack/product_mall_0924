@@ -94,8 +94,9 @@ def order_data(order, *, include_voucher_code=False):
         "orderId": str(order.id), "orderNo": order.order_no, "status": order.status,
         'storeId': str(order.store_id) if order.store_id else None,
         'storeName': order.store_snapshot.get('name') if order.store_id else None,
-        'deliveryMode': order.delivery_mode or None, 'store': order.store_snapshot or None,
+        'deliveryMode': order.delivery_mode or None, 'store': _public_store(order.store_snapshot),
         'storeDelivery': fulfillment.get('storeDelivery'),
+        'dining': _public_dining(order.store_snapshot.get('dining')),
         "orderKind": order.order_kind, "exchangePoints": order.points_to_use if order.order_kind == "POINTS" else 0,
         "revision": order.revision, "paymentInstructions": order.payment_instructions or None,
         "paymentReviewStatus": ("PAID" if order.status == "PAID" else "CLOSED" if order.status == "CLOSED"
@@ -134,6 +135,13 @@ def order_data(order, *, include_voucher_code=False):
 def _address_snapshot(quote, member, needs_shipping):
     if not needs_shipping:
         return {}
+    dining = quote.store_snapshot.get('dining')
+    if dining:
+        return {'recipientName': dining['name'], 'phone': dining.get('contactPhone', ''),
+                'province': '', 'city': '', 'district': '',
+                'detail': dining['address'], 'restaurantId': dining['restaurantId'],
+                'restaurantName': dining['name'], 'tableNumber': dining['tableNumber'],
+                'latitude': dining['latitude'], 'longitude': dining['longitude']}
     if not quote.address_id:
         raise OrderError("请选择收货地址。", "ADDRESS_REQUIRED", 409)
     address = CustomerAddress.objects.filter(id=quote.address_id, member_id=member.id, active=True).first()
@@ -229,10 +237,11 @@ def submit_order(member, body, key):
         from checkout.store_context import store_context, store_shipping_fee
         try:
             store, delivery_mode, store_snapshot = store_context(
+                {'diningSessionId': quote.store_snapshot['dining']['sessionId']} if quote.store_snapshot.get('dining') else
                 {'storeId': str(quote.store_id), 'deliveryMode': quote.delivery_mode} if quote.store_id else {},
                 member, quote.address_id, lock=True)
         except ValueError as exc:
-            raise OrderError(str(exc), 'STORE_UNAVAILABLE', 409) from exc
+            raise OrderError(str(exc), getattr(exc, 'code', 'STORE_UNAVAILABLE'), getattr(exc, 'status', 409)) from exc
         if store_snapshot != quote.store_snapshot:
             raise OrderError('前置仓或配送规则已变化，请重新报价。', 'STORE_POLICY_CHANGED', 409)
         try:
@@ -261,6 +270,13 @@ def submit_order(member, body, key):
                 store=store, on_sale=True, product_id__in=[sku.product_id for sku, *_ in current]).values_list('product_id', flat=True))
             if any(sku.product_id not in selling or row['fulfillmentKind'] != 'SHIP' for sku, _, row, _, _ in current):
                 raise OrderError('该前置仓已停止销售部分商品，请重新报价。', 'STORE_NOT_SELLING', 409)
+        if store_snapshot.get('dining'):
+            from dining_alliance.access import assert_products
+            try:
+                assert_products(store_snapshot['dining']['sessionId'], member,
+                                [sku.product_id for sku, *_ in current], lock=True)
+            except ValueError as exc:
+                raise OrderError(str(exc), 'DINING_PRODUCT_UNAVAILABLE', 409) from exc
         # Recheck available stock only after the balances are locked in a
         # fixed order; a quote is never a reservation.
         from inventory.reservations import lock_default_balances
@@ -332,6 +348,12 @@ def submit_order(member, body, key):
                 payable_fen=allocation["payableFen"]))
         from stores.finance import snapshot_lines
         snapshot_lines(order, lines)
+        if store_snapshot.get('dining'):
+            from dining_alliance.service import snapshot_order
+            try:
+                snapshot_order(order, store_snapshot['dining']['sessionId'], member, lines)
+            except ValueError as exc:
+                raise OrderError(str(exc), getattr(exc, 'code', 'DINING_INVALID'), getattr(exc, 'status', 409)) from exc
         try:
             reserve_order_lines(lines, locked_balances)
         except ReservationError as exc:
@@ -430,3 +452,16 @@ def close_wechat_order(order_id):
         order = Order.objects.select_for_update().get(pk=order_id)
         if order.payment_method == "WECHAT" and order.status == Order.Status.PENDING_PAYMENT:
             _close_locked(order, "PAYMENT_CLOSED")
+
+
+def _public_dining(snapshot):
+    """Order readers receive immutable destination, never a reusable scan credential."""
+    if not snapshot:
+        return None
+    return {key: snapshot[key] for key in ('restaurantId', 'name', 'address', 'tableNumber')}
+
+
+def _public_store(snapshot):
+    if not snapshot:
+        return None
+    return {**snapshot, 'dining': _public_dining(snapshot['dining'])} if snapshot.get('dining') else snapshot

@@ -8,7 +8,7 @@ from .store_withdrawals import withdrawal_data
 
 def income_data(row):
     held=row.status=='HELD'
-    return {'id':str(row.pk),'orderId':str(row.order_id),'orderNo':row.order.order_no,'paidFen':row.paid_fen,'costFen':None if held else row.cost_fen,'platformFen':None if held else row.platform_fen,'freightFen':row.freight_fen,'storeFen':None if held else row.store_fen,'status':row.status,'reason':row.reason,'availableAt':row.available_at.isoformat() if row.available_at else None,'settledAt':row.settled_at.isoformat() if row.settled_at else None}
+    return {'id':str(row.pk),'orderId':str(row.order_id),'orderNo':row.order.order_no,'paidFen':row.paid_fen,'costFen':None if held else row.cost_fen,'platformFen':None if held else row.platform_fen,'freightFen':row.freight_fen,'storeFen':None if held else row.store_fen,'diningCommissionFen':None if held else row.dining_commission_fen,'beforeDiningFen':None if held else row.store_fen+row.dining_commission_fen,'status':row.status,'reason':row.reason,'availableAt':row.available_at.isoformat() if row.available_at else None,'settledAt':row.settled_at.isoformat() if row.settled_at else None}
 
 
 def account_summary(store,wallet,pending,ready):

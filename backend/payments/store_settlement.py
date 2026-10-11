@@ -33,7 +33,7 @@ def settle_order(order_id,now=None):
         amounts=order_split(order)
     except (OrderAfterSaleSnapshot.DoesNotExist,StoreError) as exc:
         reason=str(exc) if isinstance(exc,StoreError) else '历史订单缺少售后期快照。'
-        available_at=None;amounts={'paid_fen':order.payable_fen,'cost_fen':0,'platform_fen':0,'freight_fen':order.shipping_fee_fen,'store_fen':0}
+        available_at=None;amounts={'paid_fen':order.payable_fen,'cost_fen':0,'platform_fen':0,'freight_fen':order.shipping_fee_fen,'store_fen':0,'dining_commission_fen':0}
     if not income:income=StoreIncome(order=order,store_id=order.store_id)
     if reason:
         income.status='HELD';income.reason=reason

@@ -45,6 +45,7 @@ export interface Reconciliation {
   actorId: string; actorName?: string; createdAt?: string; authorizedAt?: string | null; receiptId?: string | null; outcome?: string
 }
 export interface Order {
+  dining?:{restaurantId:string;name:string;address:string;tableNumber:string}|null
   storeId?:string|null;storeName?:string;deliveryMode?:string
   orderKind?:'CASH'|'POINTS';exchangePoints?:number
   orderBenefits?:OrderBenefits | null
@@ -53,7 +54,7 @@ export interface Order {
   paymentMethod: string; paymentReviewStatus: string; paymentInstructions: { instructions: string; merchantAccountId: string; revision: number; timeoutMinutes: number } | null
   goodsTotalFen: number; shippingFeeFen: number; couponDiscountFen: number; pointsDiscountFen: number; payableFen: number
   createdAt: string; expiresAt: string; paidAt: string | null; closedAt: string | null; closeReason: string | null
-  address: { recipientName: string; phone: string; province: string; city: string; district: string; detail: string } | null
+  address: { recipientName: string; phone: string; province: string; city: string; district: string; detail: string;tableNumber?:string } | null
   items: OrderLine[]; paymentReports?: PaymentReport[]; receipts?: Receipt[]; confirmations?: Reconciliation[]; receiptCount?: number; confirmationCount?: number
 }
 export interface OrderList { items: Order[]; total: number; page: number; pageSize: number }

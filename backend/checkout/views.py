@@ -6,6 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .service import QuoteValidationError, create_quote
 from shipping.service import ShippingUnavailable
 from .models import CheckoutQuote
+from dining_alliance.access import DiningError
 from django.utils import timezone
 from datetime import timedelta
 
@@ -27,5 +28,7 @@ def quotes_view(request):
         return response(request, create_quote(body, member, source), status=201)
     except ShippingUnavailable as exc:
         return error(request, 503, "SHIPPING_UNAVAILABLE", str(exc))
+    except DiningError as exc:
+        return error(request, exc.status, exc.code, str(exc))
     except (ValueError, QuoteValidationError) as exc:
         return error(request, 400, "VALIDATION_FAILED", str(exc))

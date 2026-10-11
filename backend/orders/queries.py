@@ -66,6 +66,7 @@ def list_orders(params, member=None):
     items = [{'orderId': str(o.id), 'orderNo': o.order_no, 'status': o.status, 'paymentMethod': o.payment_method,
               'storeId': str(o.store_id) if o.store_id else None,
               'storeName': o.store_snapshot.get('name') if o.store_id else None, 'deliveryMode': o.delivery_mode or None,
+              'dining': {key: o.store_snapshot['dining'][key] for key in ('restaurantId', 'name', 'address', 'tableNumber')} if o.store_snapshot.get('dining') else None,
               'orderKind':o.order_kind,'exchangePoints':o.points_to_use if o.order_kind=='POINTS' else 0,
               'revision': o.revision, 'payableFen': o.payable_fen, 'createdAt': o.created_at.isoformat(),
               'expiresAt': o.expires_at.isoformat(), 'paymentReviewStatus': review_status(o, o.reported),

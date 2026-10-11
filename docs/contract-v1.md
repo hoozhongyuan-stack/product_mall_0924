@@ -829,3 +829,10 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 - GET/PUT `/settings` 管理独立采购收款说明，GET 返回 `{paymentInstructions,revision}`；PUT 接受 `{paymentInstructions,expectedRevision}`，最多2000字符，需 manage、CSRF 与密码确认 `stores.procurement.configure`、objectId `procurement-settings`。加密落库，审单冻结到订单；列表不解密或返回收款说明及事件历史，详情受权限保护。
 - 仓端 POST `/proofs` multipart 单 `file`，PNG/JPEG 最大5MB，真实图片解码后返回 `{assetId,previewUrl}`。文件属于本仓上传会员，不能引用公共素材；查看 GET `/proofs/{assetId}/file` 需本仓身份与授权，后台需 read 且已绑定订单。私有文件不进入公开 Asset 目录，响应 private/no-store。小程序使用 Bearer 下载到临时文件，隐藏／退出清理，不能把带敏感凭证的URL发送第三方。
 - 入库由 inventory 域执行：锁仓、按固定顺序锁规格及库存，使用订单冻结换算向库存池基础单位增量写入；保留 `reserved_base_units`。每采购行唯一 PROCURE 流水，保存原单位及会员操作者。事务原子性、幂等事件与数据库不可变约束防止重复加库存或改写历史事实。销售单位变化需平台人工核对冻结单位，核对绑定所审当前版本，之后再次变更重新阻止入库；库存池或基础单位变化不能批准自动入库。
+
+
+### 5.36 餐饮联盟（本地开发）
+
+完整字段与边界见[餐饮联盟实施说明](dining-alliance.md)。新增独立餐饮角色、餐桌码、扫码会话、商品统一佣金比例和对应仓成本覆盖；不增加餐饮库存或履约能力。报价接受互斥 `diningSessionId`，服务端决定餐饮地址、桌号和原履约仓，缺货不换仓。下单冻结佣金规则与数量成本，公开订单禁止返回访问凭证。完成且超过原订单售后期才可申请提现；有退款或售后冻结，实际打款仍待业务确认；用户已确认佣金由履约前置仓利润份额承担。新餐饮订单冻结承担方，仓财务与餐饮共用履约仓成本，平台利润原口径不变，仓净结算减去餐饮佣金；超出仓利润双方冻结。餐饮可提现必须核对仓净收入已结算及同额扣除证据，旧已结算钱包不追扣。后台 `dining.read/manage/finance.read/finance.manage` 与会员商品、订单、财务授权独立；写入沿用 CSRF、修订与防重复校验。
+
+餐饮资金承担增量：新餐饮成交快照新增不可变 `funding_source=FULFILLMENT_STORE_PROFIT`。仓财务快照新增 `cost_source`，餐饮成本复用同一成交成本与修订。前置仓账户收入增加 `beforeDiningFen/diningCommissionFen`；`storeFen` 是已扣餐饮佣金的最终净结算，前端不能再次扣佣。普通订单扣除为0；HELD金额字段为null；余额只来源于净结算钱包事实。餐饮账户增加 `fundingSource/fundingLabel`，AVAILABLE须满足原完成与售后条件，并核对对应仓收入已SETTLED、佣金扣除及仓净金额一致。既有GET不执行结算或生成资金事实。

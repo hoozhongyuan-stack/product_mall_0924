@@ -10,6 +10,7 @@ class StoreOrderLineFinance(models.Model):
     purchase_cost_fen = models.PositiveBigIntegerField(null=True)
     platform_share_bps = models.PositiveSmallIntegerField(null=True)
     policy_revision = models.PositiveIntegerField(null=True)
+    cost_source = models.CharField(max_length=20, default="GLOBAL_DEFAULT")
     class Meta:
         constraints=[models.CheckConstraint(condition=(Q(configured=False,purchase_cost_fen__isnull=True,platform_share_bps__isnull=True,policy_revision__isnull=True)|Q(configured=True,purchase_cost_fen__isnull=False,platform_share_bps__isnull=False,platform_share_bps__lte=10000,policy_revision__isnull=False,policy_revision__gte=1)),name='store_order_finance_snapshot_valid')]
 
@@ -31,12 +32,13 @@ class StoreIncome(models.Model):
     platform_fen = models.PositiveBigIntegerField(default=0)
     freight_fen = models.PositiveBigIntegerField(default=0)
     store_fen = models.PositiveBigIntegerField(default=0)
+    dining_commission_fen = models.PositiveBigIntegerField(default=0)
     status = models.CharField(max_length=10,default='PENDING')
     reason = models.CharField(max_length=300,blank=True)
     available_at = models.DateTimeField(null=True)
     settled_at = models.DateTimeField(null=True)
     class Meta:
-        constraints=[models.CheckConstraint(condition=Q(status__in=['PENDING','SETTLED','HELD']),name='store_income_status_valid')]
+        constraints=[models.CheckConstraint(condition=Q(status__in=['PENDING','SETTLED','HELD']),name='store_income_status_valid'), models.CheckConstraint(condition=Q(status='HELD') | Q(paid_fen=models.F('platform_fen')+models.F('freight_fen')+models.F('store_fen')+models.F('dining_commission_fen')),name='store_income_split_conserved'), models.CheckConstraint(condition=Q(dining_commission_fen=0) | Q(status='HELD') | Q(store_fen__gte=models.F('cost_fen')),name='store_dining_preserves_cost')]
 
 
 class StoreWithdrawal(models.Model):

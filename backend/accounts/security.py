@@ -14,6 +14,7 @@ from common.http import response, error, parse_json_object
 from .models import ActionConfirmation, AdminAccount, AuditLog, GroupPermission
 
 PERMISSION_CODES = frozenset({
+    "dining.read", "dining.manage", "dining.finance.read", "dining.finance.manage",
     'stores.procurement.read', 'stores.procurement.manage', 'stores.procurement.finance',
     "stores.read", "stores.manage", "stores.accounts.read", "stores.accounts.manage",
     "catalog.read", "catalog.write", "sku.status.write", "sku.unit.write", "sku.price.write",

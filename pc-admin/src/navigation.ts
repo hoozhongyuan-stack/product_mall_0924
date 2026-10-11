@@ -7,6 +7,7 @@ export const adminSections = [
   { name: '库存', paths: ['/inventory', '/inventory/warehouses', '/inventory/inbounds', '/inventory/outbounds', '/inventory/stocktakes', '/inventory/ledgers'] },
   { name: '订单', paths: ['/orders', '/redemptions', '/aftersales', '/fulfillment/settings', '/store/payments'] },
   { name: '前置仓', paths: ['/stores', '/stores/accounts', '/stores/profit-rules', '/stores/procurement', '/stores/procurement/settings', '/stores/map-settings'] },
+  { name: '餐饮联盟', paths: ['/dining-alliance', '/dining-alliance/product-ratios', '/dining-alliance/purchase-costs', '/dining-alliance/orders', '/dining-alliance/finance'] },
   { name: '会员', paths: ['/members', '/members/rules'] },
   { name: '营销', paths: ['/coupons', '/exchange-offers'] },
   { name: '店铺', paths: ['/store/info', '/pages/home', '/pages/micro', '/store/navigation', '/assets', '/store/customer-service'] },

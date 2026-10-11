@@ -1,3 +1,4 @@
+<view wx:if="{{order.dining}}" class="section"><view class="section-title">餐饮联盟配送</view><view>{{order.dining.name}} · {{order.dining.tableNumber}} 桌</view><view>{{order.dining.address}}</view></view>
 <view class="store-page {{canComplete && order.deliveryMode === 'PICKUP' ? 'with-pickup-footer' : ''}}">
  <view wx:if="{{state === 'loading'}}" class="state">正在核对订单…</view>
  <view wx:if="{{error}}" class="error" role="alert">{{error}}<button wx:if="{{uncertain}}" bindtap="send" disabled="{{busy}}">{{busy ? '正在确认结果…' : '重试确认同一操作'}}</button><button wx:elif="{{!order}}" class="secondary" bindtap="load">重新加载</button></view>

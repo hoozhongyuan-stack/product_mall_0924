@@ -16,6 +16,7 @@
     </view>
     <view class="section quick-entries"><button bindtap="openCoupons"><image src="/assets/ui/voucher.svg" /><text>优惠券</text></button><button bindtap="openMemberCenter"><image src="/assets/ui/points.svg" /><text>会员中心</text></button><button bindtap="openExchange"><image src="/assets/ui/exchange.svg" /><text>积分商城</text></button><button bindtap="openAddresses"><image src="/assets/ui/address.svg" /><text>收货地址</text></button></view>
     <button class="section service-entry" data-fulfillment="AFTER_SALE" bindtap="openOrders"><text>售后服务</text><text class="muted">查看申请进度<text wx:if="{{member && member.orderCountsLabels.afterSale !== 0}}"> · {{member.orderCountsLabels.afterSale}}</text></text><view class="chevron" aria-hidden="true"></view></button>
+  <button wx:if="{{hasDiningCenter}}" class="section service-entry" bindtap="openDiningCenter">联盟中心 ›</button>
   <button wx:if="{{hasStoreCenter}}" class="section service-entry" bindtap="openStoreCenter">前置仓中心 ›</button>
   <button wx:if="{{member}}" class="secondary logout-entry" bindtap="logout" disabled="{{profileBusy}}">退出登录</button>
   <button class="secondary campaign-entry" bindtap="openCampaigns">领取店铺优惠券</button>

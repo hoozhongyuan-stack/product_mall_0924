@@ -35,7 +35,7 @@ def _uuid(value):
 
 
 def _input_lines(body):
-    if set(body) - {"items", "addressId", "couponId", "pointsToUse", "storeId", "deliveryMode"}:
+    if set(body) - {"items", "addressId", "couponId", "pointsToUse", "storeId", "deliveryMode", "diningSessionId"}:
         raise QuoteValidationError("报价字段不正确。")
     items = body.get("items")
     if not isinstance(items, list) or not 1 <= len(items) <= MAX_LINES:
@@ -88,18 +88,25 @@ def _address_id(body, member):
 def create_quote(body, member, source_digest=""):
     requested = _input_lines(body)
     coupon_id, points_to_use = _benefit_selection(body, member)
+    if 'diningSessionId' in body and set(body) & {'storeId', 'deliveryMode', 'addressId'}:
+        raise QuoteValidationError('餐桌订单不能混用个人地址或交付方式。')
     address_id = _address_id(body, member)
     ids = [item[0] for item in requested]
     from .store_context import store_context, store_shipping_fee
     try:
         store, delivery_mode, store_snapshot = store_context(body, member, address_id, allow_address_pending=True)
     except ValueError as exc:
+        if getattr(exc, 'code', '').startswith('DINING_'):
+            raise
         raise QuoteValidationError(str(exc)) from exc
     skus = quote_catalog_rows(ids, member)
     if store:
         from stores.access import available_base_units, sale_product_ids
         warehouse, balances = store.warehouse, available_base_units(store, ids)
         sale_ids = {str(identifier) for identifier in sale_product_ids(store)}
+        if store_snapshot.get('dining'):
+            from dining_alliance.access import sale_product_ids as dining_products
+            sale_ids &= {str(identifier) for identifier in dining_products(store_snapshot['dining'])}
     else:
         warehouse, balances = default_available_base_units(ids)
     anchors = resolve_anchor_ids(ids)
@@ -210,7 +217,7 @@ def create_quote(body, member, source_digest=""):
     available_methods = enabled_payment_methods()
     return {"quoteId": str(quote.id), "expiresAt": expires.isoformat(), "lines": lines,
             'storeId': str(store.id) if store else None, 'storeName': store.name if store else None,
-            'deliveryMode': delivery_mode or None,
+            'deliveryMode': delivery_mode or None, 'dining': store_snapshot.get('dining'),
             "goodsTotalFen": goods_total, "payableFen": payable,
             "shippingFeeFen": shipping_fee, "shippingFeePending": False,
             "shippingPolicyRevision": policy.revision,
@@ -223,7 +230,7 @@ def create_quote(body, member, source_digest=""):
             "ready": ready, "confirmRequired": changed,
             'deliveryEligibilityPending': bool(store_snapshot.get('deliveryEligibilityPending')),
             'deliveryMessage': store_snapshot.get('deliveryMessage', ''),
-            "addressRequired": needs_shipping and (address_id is None or bool(store_snapshot.get('deliveryEligibilityPending'))),
+            "addressRequired": not bool(store_snapshot.get("dining")) and needs_shipping and (address_id is None or bool(store_snapshot.get('deliveryEligibilityPending'))),
             "availablePaymentMethods": available_methods,
             "orderSubmissionAvailable": bool(available_methods) and not bool(store_snapshot.get('deliveryEligibilityPending')),
             "message": "报价仅供核对，不预留库存；可用支付方式以服务端结果为准。"}

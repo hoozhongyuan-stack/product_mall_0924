@@ -25,6 +25,14 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 0
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "local-only-change-before-deploy")
 WECHAT_MINI_APP_ID = os.environ.get("WECHAT_MINI_APP_ID", "")
 WECHAT_MINI_APP_SECRET = os.environ.get("WECHAT_MINI_APP_SECRET", "")
+# Code destinations are deployment-owned: UAT explicitly opts into trial/0.
+DINING_CODE_ENV_VERSION = os.environ.get("DINING_CODE_ENV_VERSION", "release")
+if DINING_CODE_ENV_VERSION not in {"release", "trial", "develop"}:
+    raise RuntimeError("DINING_CODE_ENV_VERSION must be release, trial, or develop")
+_dining_code_check_path = os.environ.get("DINING_CODE_CHECK_PATH", "1")
+if _dining_code_check_path not in {"0", "1"}:
+    raise RuntimeError("DINING_CODE_CHECK_PATH must be 0 or 1")
+DINING_CODE_CHECK_PATH = _dining_code_check_path == "1"
 WECHAT_CODE_UPLOAD_EGRESS_IP = os.environ.get("WECHAT_CODE_UPLOAD_EGRESS_IP", "")
 MALL_MINIPROGRAM_API_BASE_URL = os.environ.get("MALL_MINIPROGRAM_API_BASE_URL", "")
 MALL_WECHAT_CREDENTIAL_KEY_FILE = os.environ.get("MALL_WECHAT_CREDENTIAL_KEY_FILE", "")
@@ -65,6 +73,7 @@ INSTALLED_APPS = [
     "pages",
     "inventory",
     "stores",
+    "dining_alliance",
     "customers",
     "wechat_integration",
     "wechat_open_platform",

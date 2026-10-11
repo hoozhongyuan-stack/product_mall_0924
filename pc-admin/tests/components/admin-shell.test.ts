@@ -80,10 +80,10 @@ describe('pilot shell and login', () => {
     await flushPromises()
     expect(wrapper.find('[data-page]').exists()).toBe(true)
   })
-  it('groups all authorized entries into ten sections and selects the detail parent', async () => {
+  it('groups all authorized entries into eleven sections and selects the detail parent', async () => {
     const permissions = applicationRouter.options.routes.flatMap(route => [String(route.meta?.permission || ''), ...(route.meta?.permissionsAny as string[] || [])])
     const { wrapper } = await setup(permissions, '/orders/one')
-    expect(wrapper.get('nav[aria-label="后台主导航"]').findAll('a').map(a => a.text())).toEqual(['工作台', '商品', '库存', '订单', '前置仓', '会员', '营销', '店铺', '小程序', '系统管理'])
+    expect(wrapper.get('nav[aria-label="后台主导航"]').findAll('a').map(a => a.text())).toEqual(['工作台', '商品', '库存', '订单', '前置仓', '餐饮联盟', '会员', '营销', '店铺', '小程序', '系统管理'])
     expect(wrapper.get('nav[aria-label="订单功能"]').text()).toContain('付款配置')
     expect(wrapper.get('nav[aria-label="页面位置"]').text()).toContain('订单详情')
     expect(wrapper.get('nav[aria-label="后台主导航"] a[aria-current="true"]').text()).toBe('订单')

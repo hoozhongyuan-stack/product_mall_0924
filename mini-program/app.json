@@ -28,7 +28,10 @@
     "pages/store-center/order",
     "pages/store-center/aftersale",
     "pages/procurement/index",
-    "pages/procurement/detail"
+    "pages/procurement/detail",
+    "pages/dining/shop",
+    "pages/dining/checkout",
+    "pages/dining/center"
   ],
   "window": {
     "navigationBarTitleText": "首页",

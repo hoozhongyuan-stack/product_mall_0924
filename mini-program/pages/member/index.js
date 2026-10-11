@@ -7,15 +7,17 @@ const session = require('../../lib/session')
 const { memberReturnTarget } = require('../../lib/member-route')
 const base = memberPage({ path: '/api/v1/app/member/overview', present: presentOverview })
 Page({ ...base, ...profileControls,
-  data: { ...base.data, hasStoreCenter: false, editingProfile: false, nicknameDraft: '', profileError: '', profileBusy: false },
+  data: { ...base.data, hasDiningCenter: false, hasStoreCenter: false, editingProfile: false, nicknameDraft: '', profileError: '', profileBusy: false },
   async onShow() {
-    const identity = wx.getStorageSync('mall.memberToken'); this.setData({ hasStoreCenter: false })
+    const identity = wx.getStorageSync('mall.memberToken'); this.setData({ hasDiningCenter: false, hasStoreCenter: false })
     await base.onShow.call(this)
     if (!identity || identity !== wx.getStorageSync('mall.memberToken')) return
-    try { const result = await api.get('/api/v1/app/store-center/stores'); if (identity === wx.getStorageSync('mall.memberToken')) this.setData({ hasStoreCenter: !!result.items.length }) } catch (_) { this.setData({ hasStoreCenter: false }) }
+    try { const result = await api.get('/api/v1/app/store-center/stores'); if (identity === wx.getStorageSync('mall.memberToken')) this.setData({ hasStoreCenter: !!result.items.length }) } catch (_) { this.setData({ hasDiningCenter: false, hasStoreCenter: false }) }
+    api.get('/api/v1/app/dining-alliance/restaurants').then(result => { if (identity === wx.getStorageSync('mall.memberToken')) this.setData({ hasDiningCenter: Array.isArray(result.items) && result.items.length > 0 }) }).catch(() => { if (identity === wx.getStorageSync('mall.memberToken')) this.setData({ hasDiningCenter: false }) })
   },
+  openDiningCenter() { wx.navigateTo({ url: '/pages/dining/center' }) },
   openStoreCenter() { wx.navigateTo({ url: '/pages/store-center/index' }) },
-  clearPrivate() { base.clearPrivate.call(this); this.setData({ hasStoreCenter: false, editingProfile: false, nicknameDraft: '', profileError: '', profileBusy: false }) },
+  clearPrivate() { base.clearPrivate.call(this); this.setData({ hasDiningCenter: false, hasStoreCenter: false, editingProfile: false, nicknameDraft: '', profileError: '', profileBusy: false }) },
   avatarError() { if (this.data.member) this.setData({ member: { ...this.data.member, avatarDisplayUrl: '' } }) },
   async logout() {
     if (this.data.profileBusy) return

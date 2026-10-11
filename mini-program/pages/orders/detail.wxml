@@ -1,3 +1,4 @@
+<view wx:if="{{order.dining}}" class="section"><view class="section-title">餐饮联盟配送</view><view>{{order.dining.name}} · {{order.dining.tableNumber}} 桌</view><view>{{order.dining.address}}</view></view>
 <view class="orders-page">
   <view wx:if="{{state === 'loading'}}" class="state" role="status">正在核对订单状态…</view>
   <view wx:elif="{{state !== 'ready'}}" class="state" role="alert"><view>{{error}}</view><button wx:if="{{state === 'auth'}}" bindtap="login">登录后查看</button><button wx:else bindtap="refresh">重新加载</button><button class="secondary" bindtap="openOrders">我的订单</button></view>

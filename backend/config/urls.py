@@ -42,6 +42,7 @@ from wechat_open_platform import views as open_platform_views
 from config.health import health_view
 
 urlpatterns = [
+    path("", include("dining_alliance.urls")),
     path("", include("stores.urls")),
     path("", include("fulfillment.store_urls")),
     path("healthz", health_view),
