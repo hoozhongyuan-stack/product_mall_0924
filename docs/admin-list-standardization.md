@@ -115,3 +115,16 @@
 - [390px订单详情](admin-list-standardization-assets/order-detail-mobile.png)
 - [真实账户历史分页](admin-list-standardization-assets/account-history-desktop.png)
 - [真实微页面编辑弹窗](admin-list-standardization-assets/micro-editor-dialog.png)
+
+
+## UAT 发布记录（2026-10-11）
+
+- 已提交并推送 GitHub `codex/dining-alliance` 分支；应用版本与实际 UAT 镜像修订均为 `0d10d86056b391aa982b54befc7f55667e618bf3`。后续发布记录提交仅更新本文件，不替换运行中的应用版本。
+- 发布前只读安全与正确性复核未发现新的 P1/P2 阻断。项目使用 pnpm 锁文件，`npm audit` 因没有 npm 锁文件不能执行；改用对应锁文件的 `pnpm audit --prod`，并以 `pip-audit --no-deps --disable-pip -r backend/requirements.lock` 审计后端锁定依赖，两者均未发现已知漏洞。
+- 在固定提交的独立干净检出构建后台、Web/worker、运维和小程序上传适配器四个 `linux/amd64` 镜像，传输后逐一核对架构和修订标签。沿用既有 UAT 升级流程，没有修改线上凭据或安全配置。
+- 升级前数据库与完整媒体配对备份 `e5-2026-10-11-qy5mwPUX`，一致点 `2026-10-11T15:49:41Z`，备份对应旧应用版本 `21e5af662f25b3ab60fb9baab6f97e85624ad9d7`。密钥预检、备份和受信任源码同步闸门均成功；本次没有待执行数据库迁移。
+- 六个应用服务均运行且版本标签一致。配置健康检查的 Web、后台和上传适配器为 `healthy`；导出 worker、调度和上传 worker 为运行状态，没有为它们虚报独立健康检查结果。
+- 线上 Django 系统检查通过，无迁移模型漂移，无待执行迁移。公网 `/healthz` 返回 `ready: true`；`/catalog` 与入口静态资源读取成功。公网 `/assets/index-mpFtjWJu.js` 的 SHA-256 为 `c43fff444415b1167692901020c299412d3e99fa55e13c0ada12f44e65c91802`，与运行后台容器文件一致。未登录读取后台订单接口返回 `401`。
+- 升级前后均有 4 笔订单、2 条履约事件、3 条收款记录；本次部署核验没有增加这些业务记录。未在 UAT 提交收款、发货、核销或批量业务变更。
+- 小程序源码摘要继续为 `17d2c61305d3b7c0306380c04c444bb70fd44319e34392740d7fc6bd4169968d`，本次后台发布没有重新上传小程序体验版。
+- 验收入口：<https://uat.aition.xin/catalog>。部署和公网只读检查已经完成；登录后的32张主列表逐页操作、角色权限与真实业务验收由用户进行，不能将部署就绪视为业务验收通过。建议依次检查查询/重置、当前页勾选与清空、20/50/100分页、详情/编辑弹窗及未保存关闭提示、状态/危险操作颜色，再检查具有真实批量业务接口的商品和订单等页面；财务、授权等只读所选对比按矩阵验收。
