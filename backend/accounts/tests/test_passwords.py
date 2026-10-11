@@ -37,7 +37,7 @@ class PasswordTests(TestCase):
             object_id="", revision=0, expires_at=timezone.now() + timedelta(minutes=5))
 
     def payload(self, **extra):
-        return {"currentPassword": OLD_PASSWORD, "newPassword": NEW_PASSWORD, **extra}
+        return {"newPassword": NEW_PASSWORD, **extra}
 
     def test_staff_can_change_own_password_without_account_permissions_and_all_sessions_expire(self):
         first, second = self.signed_in(self.staff), self.signed_in(self.staff)
@@ -83,15 +83,13 @@ class PasswordTests(TestCase):
         result = self.send(self.client, f"/accounts/{self.owner.pk}/password", self.payload(expectedRevision=1))
         self.assertEqual(result.status_code, 403)
 
-    def test_current_password_required_and_attempts_are_limited(self):
-        for index in range(5):
-            path = "/auth/password" if index % 2 else f"/accounts/{self.staff.pk}/password"
-            result = self.send(self.client, path, self.payload(currentPassword="incorrect", expectedRevision=1))
-            self.assertEqual(result.status_code, 403)
-        self.assertEqual(self.send(self.client, "/auth/password", self.payload()).status_code, 429)
-        self.assertEqual(self.send(self.client, f"/accounts/{self.staff.pk}/password", self.payload(expectedRevision=1)).status_code, 429)
+    def test_obsolete_current_password_is_ignored_without_login_lockout(self):
+        result = self.send(self.client, f"/accounts/{self.staff.pk}/password",
+            self.payload(currentPassword="incorrect", expectedRevision=1))
+        self.assertEqual(result.status_code, 200)
         self.owner.refresh_from_db()
-        self.assertTrue(self.owner.check_password(OLD_PASSWORD))
+        self.assertEqual(self.owner.failed_count, 0)
+        self.assertIsNone(self.owner.locked_until)
 
     def test_weak_password_and_equal_password_are_rejected_without_changes(self):
         for new_password in [None, "123", OLD_PASSWORD]:
@@ -142,7 +140,7 @@ class PasswordTests(TestCase):
         self.owner.refresh_from_db()
         self.assertTrue(self.owner.check_password(OLD_PASSWORD))
 
-    def test_expired_confirmation_lock_recovers_and_unknown_target_is_not_found(self):
+    def test_password_reset_does_not_modify_operator_login_lock_and_unknown_target_is_not_found(self):
         self.owner.failed_count = 5
         self.owner.locked_until = timezone.now() - timedelta(seconds=1)
         self.owner.save(update_fields=["failed_count", "locked_until"])
@@ -151,8 +149,8 @@ class PasswordTests(TestCase):
         result = self.send(self.client, f"/accounts/{self.staff.pk}/password", self.payload(expectedRevision=1))
         self.assertEqual(result.status_code, 200)
         self.owner.refresh_from_db()
-        self.assertEqual(self.owner.failed_count, 0)
-        self.assertIsNone(self.owner.locked_until)
+        self.assertEqual(self.owner.failed_count, 5)
+        self.assertIsNotNone(self.owner.locked_until)
 
     def test_successful_resets_have_per_actor_rate_limit(self):
         AuditLog.objects.bulk_create([AuditLog(actor=self.owner, action_code="account.password.reset",
@@ -166,7 +164,7 @@ class PasswordTests(TestCase):
         result = self.client.post("/api/v1/admin/auth/password", data="[]", content_type="application/json",
             HTTP_X_CSRFTOKEN=self.client.cookies["csrftoken"].value)
         self.assertEqual(result.status_code, 400)
-        self.assertEqual(self.send(self.client, "/auth/password", self.payload(currentPassword="x" * 1025)).status_code, 400)
+        self.assertEqual(self.send(self.client, "/auth/password", self.payload(newPassword="")).status_code, 400)
         self.assertEqual(self.send(self.client, "/auth/password", self.payload(newPassword="x" * 1025)).status_code, 400)
 
     def test_six_character_password_accepted_for_self_and_reset(self):

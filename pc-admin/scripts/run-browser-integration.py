@@ -78,10 +78,11 @@ def keep_preview_alive(processes):
         time.sleep(1)
 
 
-def run(*, preview=False, procurement=False):
+def run(*, preview=False, procurement=False, order_actions=False):
+    preview = preview or order_actions
     if preview and procurement:
         raise SystemExit("Choose either visual preview or procurement integration.")
-    preview_seed = ADMIN / 'scripts/seed-visual-preview.py'
+    preview_seed = ADMIN / ('scripts/seed-order-actions-preview.py' if order_actions else 'scripts/seed-visual-preview.py')
     if preview and not preview_seed.is_file():
         raise SystemExit('Preview seed is missing: pc-admin/scripts/seed-visual-preview.py')
     host = os.environ.get('POSTGRES_HOST', '127.0.0.1')
@@ -154,6 +155,8 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
                         text=True, cwd=ROOT / 'backend', env=env, check=True)
                 if preview:
                     env['MALL_E2E_PREVIEW'] = '1'
+                    if order_actions:
+                        env.update(MALL_E2E_ORDER_ACTIONS='1', MALL_E2E_ORDER_FIXTURE_FILE=str(Path(temporary) / 'order-fixtures.json'))
                     subprocess.run([sys.executable, 'manage.py', 'shell', '--no-imports'],
                                    input=preview_seed.read_text(), text=True,
                                    cwd=ROOT / 'backend', env=env, check=True)
@@ -174,6 +177,7 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
                             'database': {'host': host, 'port': port, 'user': user, 'name': database},
                             'account': {'loginName': owner, 'password': owner_password},
                             'mediaRoot': env['MALL_MEDIA_ROOT'],
+                            **({'orderFixturesFile': env['MALL_E2E_ORDER_FIXTURE_FILE']} if order_actions else {}),
                         }
                         descriptor = os.open(access_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                         with os.fdopen(descriptor, 'w') as credentials:
@@ -239,10 +243,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--preview', action='store_true',
                         help='Seed an isolated visual preview and keep it open until Ctrl-C/SIGTERM.')
+    parser.add_argument('--order-actions-preview', action='store_true', help='Preview synthetic offline, delivery, pickup and redeem orders.')
     parser.add_argument('--procurement', action='store_true', help='Test procurement in an owned synthetic local database.')
     arguments = parser.parse_args()
     signal.signal(signal.SIGTERM, interrupted)
     try:
-        raise SystemExit(run(preview=arguments.preview, procurement=arguments.procurement))
+        raise SystemExit(run(preview=arguments.preview, procurement=arguments.procurement, order_actions=arguments.order_actions_preview))
     except KeyboardInterrupt:
         raise SystemExit(130)

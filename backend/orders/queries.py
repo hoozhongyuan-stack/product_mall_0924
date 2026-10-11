@@ -7,7 +7,7 @@ from .attribution import attribution_data, filter_attribution
 from .models import Order
 from .service import order_data
 from fulfillment.read import page_fulfillment_summaries
-from fulfillment.models import ShipmentCorrection
+from fulfillment.models import ShipmentCorrection, StoreDeliveryEvent
 from fulfillment.task_reads import TASK_FIELDS, filter_order_tasks
 
 
@@ -29,6 +29,22 @@ def list_orders(params, member=None):
     rows = Order.objects.annotate(reported=Exists(OfflinePaymentReport.objects.filter(order_id=OuterRef('pk'))))
     if member:
         rows = rows.filter(member=member)
+    if 'orderIds' in params:
+        from uuid import UUID
+        raw_ids = params.get('orderIds')
+        if (not isinstance(raw_ids, str) or not raw_ids or len(raw_ids) > 3700
+                or (hasattr(params, 'getlist') and len(params.getlist('orderIds')) != 1)):
+            raise PaymentError('订单编号筛选参数不正确。')
+        identifiers = raw_ids.split(',')
+        if not 1 <= len(identifiers) <= 100:
+            raise PaymentError('订单编号筛选只支持 1 至 100 个不同编号。')
+        try:
+            identifiers = [UUID(value.strip()) for value in identifiers]
+        except (ValueError, AttributeError) as exc:
+            raise PaymentError('订单编号筛选参数不正确。') from exc
+        if len(set(identifiers)) != len(identifiers):
+            raise PaymentError('订单编号筛选不能包含重复编号。')
+        rows = rows.filter(id__in=identifiers)
     store_id = params.get('storeId')
     if store_id:
         from uuid import UUID
@@ -98,4 +114,12 @@ def admin_order_data(order):
     data['confirmations'] = [reconciliation_data(r) for r in order.offline_reconciliations.select_related('actor').order_by('-created_at')[:50]]
     data['receiptCount'] = order.paymentreceipt_set.count()
     data['confirmationCount'] = order.offline_reconciliations.count()
+    local_events = StoreDeliveryEvent.objects.filter(order=order).select_related('actor', 'admin_actor').order_by('-occurred_at', '-id')
+    data['localDeliveryEvents'] = [
+        {'eventId': str(event.id), 'requestKey': str(event.request_key), 'action': event.action, 'note': event.note,
+         'actorName': (event.admin_actor.display_name if event.admin_actor_id else (event.actor.nickname or '前置仓工作人员')),
+         'actorKind': 'ADMIN' if event.admin_actor_id else 'STORE_STAFF',
+         'occurredAt': event.occurred_at.isoformat()}
+        for event in local_events[:20]]
+    data['localDeliveryEventCount'] = local_events.count()
     return data

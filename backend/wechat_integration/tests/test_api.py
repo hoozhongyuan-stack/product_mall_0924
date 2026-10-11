@@ -96,14 +96,11 @@ class CredentialApiTests(CredentialApiBase):
             result = self.client.put(BASE, body, content_type='application/json')
             self.assertEqual(result.status_code, 400, result.content)
 
-    def test_confirmation_revision_and_session_binding(self):
+    def test_passwordless_save_and_revision_guard(self):
         body = {'expectedRevision': 0, 'appId': APP, 'secretAction': 'REPLACE', 'appSecret': SECRET}
-        self.assertEqual(self.client.put(BASE, body, content_type='application/json').status_code, 403)
+        self.assertEqual(self.client.put(BASE, body, content_type='application/json').status_code, 200)
         wrong = self.confirmation(action='test')
-        self.assertEqual(self.save(token=wrong).status_code, 403)
-        valid = self.confirmation()
-        self.assertEqual(self.save(token=valid).status_code, 200)
-        self.assertEqual(self.save(revision=1, token=valid).status_code, 403)
+        self.assertEqual(self.save(revision=1, token=wrong).status_code, 200)
         stale = self.save(revision=0)
         self.assertEqual(stale.status_code, 409)
         self.assertEqual(stale.json()['error']['code'], 'REVISION_CONFLICT')

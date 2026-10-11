@@ -82,16 +82,13 @@ class D41ApiTests(TestCase):
         self.assertEqual(CouponOperation.objects.count(),1)
         self.assertEqual(AuditLog.objects.filter(action_code='coupon.create').count(),1)
 
-    def test_publish_requires_csrf_confirmation_correct_target_and_revision(self):
+    def test_publish_without_password_requires_csrf_and_keeps_replay(self):
         campaign=create_campaign(self.body()); path=BASE+'/'+str(campaign.id)+'/publish'; body={'expectedRevision':1}
         self.assertEqual(self.client.post(path,json.dumps(body),content_type='application/json').status_code,403)
-        self.assertEqual(self.write(self.client,'post',path,body,uuid4()).status_code,403)
-        wrong=self.confirm(campaign,object_id=uuid4())
-        self.assertEqual(self.write(self.client,'post',path,body,uuid4(),wrong).status_code,403)
-        token=self.confirm(campaign); key=uuid4()
-        result=self.write(self.client,'post',path,body,key,token)
+        key=uuid4()
+        result=self.write(self.client,'post',path,body,key)
         self.assertEqual(result.status_code,200,result.content)
-        replay=self.write(self.client,'post',path,body,key,token)
+        replay=self.write(self.client,'post',path,body,key)
         self.assertEqual(replay.json()['data'],result.json()['data'])
         self.assertEqual(result.json()['data']['status'],'PUBLISHED')
 
@@ -173,7 +170,7 @@ class D41ApiTests(TestCase):
         self.assertEqual(self.write(self.client,'post',path,body,uuid4(),token).status_code,409)
         self.assertEqual(CouponIssuance.objects.count(),0)
 
-    def test_pause_requires_confirmation_and_leaves_issued_coupon_usable(self):
+    def test_pause_without_password_leaves_issued_coupon_usable(self):
         campaign=self.campaign(); result=self.claim(campaign).json()['data']
         body={'expectedRevision':2,'issuanceEnabled':False}; path=BASE+'/'+str(campaign.id)+'/distribution'
         token=self.confirm(campaign)

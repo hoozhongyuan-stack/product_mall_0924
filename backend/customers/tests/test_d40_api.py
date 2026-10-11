@@ -110,14 +110,14 @@ class D40ApiTests(TestCase):
             self.assertEqual(denied.get(admin_url).status_code, 403)
             self.assertEqual(Client().get(f'/api/v1/app/member-avatars/{avatar_id}/file').status_code, 404)
 
-    def test_actual_login_csrf_and_password_required_before_write(self):
+    def test_actual_login_csrf_and_passwordless_write(self):
         body = self.body()
         no_csrf = self.client.put(RULES, json.dumps(body), content_type='application/json',
                                   HTTP_IDEMPOTENCY_KEY=str(uuid4()))
         self.assertEqual(no_csrf.status_code, 403)
         no_password = self.write(self.client, 'put', RULES, body, uuid4())
-        self.assertEqual(no_password.status_code, 403)
-        self.assertEqual(MemberRuleChange.objects.count(), 0)
+        self.assertEqual(no_password.status_code, 200)
+        self.assertEqual(MemberRuleChange.objects.count(), 1)
 
     def test_rule_revision_and_audit_committed_once_with_password(self):
         body = self.body(); key = uuid4(); confirmation = self.confirm(body['expectedRevision'])
@@ -145,15 +145,11 @@ class D40ApiTests(TestCase):
         self.assertEqual(result.json()['error']['code'], 'IDEMPOTENCY_CONFLICT')
         self.assertEqual(MemberRuleChange.objects.count(), 1)
 
-    def test_stale_revision_and_confirmation_target_binding_fail(self):
+    def test_stale_revision_kept_and_legacy_confirmation_ignored(self):
         body = self.body(); wrong = self.confirm(body['expectedRevision'], 'wrong-member-rules')
         result = self.write(self.client, 'put', RULES, body, uuid4(), wrong)
-        self.assertEqual(result.status_code, 403)
-        wrong_revision = self.confirm(body['expectedRevision'] + 1)
-        self.assertEqual(self.write(self.client, 'put', RULES, body, uuid4(), wrong_revision).status_code, 403)
-        confirmation = self.confirm(body['expectedRevision'])
-        self.assertEqual(self.write(self.client, 'put', RULES, body, uuid4(), confirmation).status_code, 200)
-        stale = self.write(self.client, 'put', RULES, body, uuid4(), confirmation)
+        self.assertEqual(result.status_code, 200)
+        stale = self.write(self.client, 'put', RULES, body, uuid4())
         self.assertEqual(stale.status_code, 409)
         self.assertEqual(stale.json()['error']['code'], 'REVISION_CONFLICT')
 
@@ -255,13 +251,13 @@ class D40ApiTests(TestCase):
         valid = self.write(self.client, 'put', RULES, body, uuid4(), confirmation)
         self.assertEqual(valid.status_code, 200)
 
-    def test_wrong_password_never_authorizes_rule_write(self):
+    def test_legacy_confirmation_does_not_check_password_or_write_rules(self):
         body = self.body()
         denied = self.write(self.client, 'post', '/api/v1/admin/auth/confirm',
             {'action': 'member.rules.update', 'password': 'incorrect synthetic password',
              'objectId': 'member-rules', 'revision': body['expectedRevision']})
-        self.assertEqual(denied.status_code, 403)
-        self.assertNotIn('confirmationToken', denied.content.decode())
+        self.assertEqual(denied.status_code, 200)
+        self.assertIn('confirmationToken', denied.content.decode())
         self.assertEqual(MemberRuleChange.objects.count(), 0)
 
     def test_private_admin_and_app_error_responses_disable_caching(self):

@@ -20,15 +20,14 @@ class FinanceApiTests(WithdrawalTests):
         self.assertEqual(response.status_code,200,response.content)
         return response.json()['data']['confirmationToken']
 
-    def test_withdrawal_admin_confirmation_scope_and_payout_evidence(self):
+    def test_withdrawal_admin_permissions_and_payout_evidence_without_password(self):
         from stores.withdrawals import request_withdrawal
         body=self.body();row,_=request_withdrawal(self.store,self.member,body)
         path=f'/api/v1/admin/stores/{self.store.pk}/withdrawals/{row.pk}'
         reveal={'expectedRevision':1}
         self.assertEqual(Client().post(path+'/payee',data=json.dumps(reveal),content_type='application/json').status_code,401)
-        self.assertEqual(self.post(path+'/payee',reveal).status_code,403)
         token=self.confirm('stores.withdrawal.payee',row.pk,1)
-        response=self.post(path+'/payee',reveal,HTTP_X_ACTION_CONFIRMATION=token)
+        response=self.post(path+'/payee',reveal)
         self.assertEqual(response.status_code,200,response.content)
         self.assertIn('no-store',response['Cache-Control'])
         self.assertEqual(response.json()['data']['bankAccount'],body['bankAccount'])
@@ -54,7 +53,7 @@ class FinanceApiTests(WithdrawalTests):
         self.assertEqual(response.json()['data']['status'],'PAID')
         self.assertEqual(self.post(path+'/pay',pay).status_code,409)
 
-    def test_rule_cost_price_bounds_confirmation_and_reload(self):
+    def test_rule_cost_price_bounds_and_reload_without_password(self):
         from catalog.models import Category,Product,Sku,SkuUnitVersion
         product=Product.objects.create(name='财务商品',product_no='FIN-P',category=Category.objects.create(name='财务类目'),fulfillment_kind='SHIP')
         sku=Sku.objects.create(product=product,sku_code='FIN-SKU',spec_key='瓶',list_price_fen=10000)
@@ -66,8 +65,7 @@ class FinanceApiTests(WithdrawalTests):
         body={'expectedRevision':0,'purchaseCostFen':6000,'platformShareBps':2000}
         self.assertEqual(Client().get('/api/v1/admin/stores/profit-rules').status_code,401)
         self.assertEqual(self.client.put(path,data=json.dumps(body),content_type='application/json').status_code,403)
-        self.assertEqual(put(body).status_code,403)
-        response=put(body,self.confirm('stores.profit.configure',sku.pk,0))
+        response=put(body)
         self.assertEqual(response.status_code,200,response.content)
         data=response.json()['data'];self.assertEqual(data['purchaseCostFen'],6000);self.assertEqual(data['revision'],1)
         response=self.client.get('/api/v1/admin/stores/profit-rules?search=FIN-SKU')

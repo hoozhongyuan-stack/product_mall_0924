@@ -253,9 +253,7 @@ test("map settings provide masked configuration and confirmation without retaini
   ).toBeVisible();
   await page.locator("#amap-webServiceKey").fill("synthetic-web-key");
   await page.getByRole("button", { name: "保存配置", exact: true }).click();
-  await page
-    .getByLabel("当前账号密码", { exact: true })
-    .fill("synthetic-password");
+  await expect(page.getByLabel("当前账号密码", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "确认保存", exact: true }).click();
   await expect(page.getByText("配置已保存。", { exact: false })).toBeVisible();
   await expect(page.locator("#amap-webServiceKey")).toHaveValue("");
@@ -263,7 +261,7 @@ test("map settings provide masked configuration and confirmation without retaini
   await expect(page.getByText("配置来源：后台托管 · 修订 2")).toBeVisible();
   await page.locator("#store-aftersale-days").fill("10");
   await page.getByRole("button", { name: "保存售后期", exact: true }).click();
-  await page.locator("#store-settlement-password").fill("synthetic-password");
+  await expect(page.locator("#store-settlement-password")).toHaveCount(0);
   await page
     .getByRole("button", { name: "确认保存售后期", exact: true })
     .click();
@@ -420,7 +418,7 @@ test("store finance config and offline payout remain separate and persist after 
   });
   await page.goto("/stores/accounts/s1");
   await page.getByRole("button", { name: "审核通过", exact: true }).click();
-  await page.locator("#withdrawal-password-w1").fill("synthetic-password");
+  await expect(page.locator("#withdrawal-password-w1")).toHaveCount(0);
   await page.getByRole("button", { name: "确认审核通过", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "登记线下发放", exact: true }),
@@ -430,7 +428,7 @@ test("store finance config and offline payout remain separate and persist after 
   ).toBeVisible();
   await page.getByRole("button", { name: "登记线下发放", exact: true }).click();
   await page.locator("#withdrawal-reference-w1").fill("银行流水-001");
-  await page.locator("#withdrawal-password-w1").fill("synthetic-password");
+  await expect(page.locator("#withdrawal-password-w1")).toHaveCount(0);
   await page
     .getByRole("button", { name: "确认登记线下发放", exact: true })
     .click();
@@ -559,7 +557,7 @@ test("dedicated profit page separates SKU costs and product ratios with confirme
   });
   for (const id of ids) await cost.locator(`[data-cost="${id}"]`).fill("60");
   await cost.getByRole("button", { name: "保存设置", exact: true }).click();
-  await cost.locator("#profit-password").fill("synthetic-password");
+  await expect(cost.locator("#profit-password")).toHaveCount(0);
   await cost.getByRole("button", { name: "确认保存", exact: true }).click();
   await expect(cost).not.toBeVisible();
   await expect(
@@ -575,7 +573,7 @@ test("dedicated profit page separates SKU costs and product ratios with confirme
   });
   await share.locator("#product-share").fill("20");
   await share.getByRole("button", { name: "保存设置", exact: true }).click();
-  await share.locator("#profit-password").fill("synthetic-password");
+  await expect(share.locator("#profit-password")).toHaveCount(0);
   await share.getByRole("button", { name: "确认保存", exact: true }).click();
   await expect(share).not.toBeVisible();
   await page.reload();

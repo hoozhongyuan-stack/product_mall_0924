@@ -5,6 +5,8 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: 'happy-dom',
+    // Bound worker count so DOM tests remain reliable alongside local services.
+    maxWorkers: 4,
     include: ['tests/components/**/*.test.ts'],
     restoreMocks: true,
     unstubGlobals: true,

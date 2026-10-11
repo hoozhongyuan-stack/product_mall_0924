@@ -24,9 +24,9 @@ describe('store map credentials', () => {
   vi.mocked(confirmedWrite).mockResolvedValue({ ...config, revision: 3 })
   await w.get('#amap-webServiceKey').setValue('synthetic-web-key')
   await w.get('form[aria-label="高德参数配置"]').trigger('submit')
-  await w.get('#amap-password').setValue('synthetic-password')
+  expect(w.find('#amap-password').exists()).toBe(false);
   await w.get('form[aria-label="确认保存地图配置"]').trigger('submit'); await flushPromises()
-  expect(confirmedWrite).toHaveBeenCalledWith('stores.map.configure', 'synthetic-password', '/stores/map-settings', 'PUT', { expectedRevision: 2, webServiceKey: 'synthetic-web-key', jsApiKey: '', jsSecurityCode: '' }, 'amap', 2)
+  expect(confirmedWrite).toHaveBeenCalledWith('stores.map.configure', '', '/stores/map-settings', 'PUT', { expectedRevision: 2, webServiceKey: 'synthetic-web-key', jsApiKey: '', jsSecurityCode: '' }, 'amap', 2)
   expect(w.text()).toContain('配置已保存'); expect(w.findAll('input[type="password"]').every(input => (input.element as HTMLInputElement).value === '')).toBe(true)
  })
  it('requires paired JS credentials and encryption before enabling save', async () => {
@@ -49,7 +49,7 @@ describe('store map credentials', () => {
   vi.mocked(confirmedWrite).mockRejectedValue(new Error('synthetic-web-key'))
   await w.get('#amap-webServiceKey').setValue('synthetic-web-key')
   await w.get('form[aria-label="高德参数配置"]').trigger('submit')
-  await w.get('#amap-password').setValue('synthetic-password')
+  expect(w.find('#amap-password').exists()).toBe(false);
   await w.get('form[aria-label="确认保存地图配置"]').trigger('submit'); await flushPromises()
   expect(w.text()).not.toContain('synthetic-web-key'); expect(w.text()).toContain('重新读取')
   expect(w.get('#amap-webServiceKey').element).toHaveProperty('value', '')

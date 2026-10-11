@@ -72,10 +72,10 @@ describe('third-party mini-program release workflow', () => {
     expect(wrapper.get('[data-test="ci-direct-upload-form"] button[type="submit"]').attributes('disabled')).toBeUndefined()
     await wrapper.get('[data-test="ci-direct-version"]').setValue('1.0.1')
     await wrapper.get('[data-test="ci-direct-description"]').setValue('开发版验证')
-    await wrapper.get('[data-test="ci-direct-password"]').setValue('synthetic-password')
+    expect(wrapper.find('[data-test="ci-direct-password"]').exists()).toBe(false);
     await wrapper.get('[data-test="ci-direct-upload-form"]').trigger('submit')
     await flushPromises()
-    expect(confirmedWrite).toHaveBeenCalledWith('code.release.upload', 'synthetic-password',
+    expect(confirmedWrite).toHaveBeenCalledWith('code.release.upload', '',
       '/code-release/uploads', 'POST', { versionId, version: '1.0.1',
         description: '开发版验证', channel: 'CI_DIRECT' }, `${appId}:${versionId}`, 2,
       expect.objectContaining({ 'Idempotency-Key': expect.any(String) }))
@@ -131,7 +131,7 @@ describe('third-party mini-program release workflow', () => {
     })
     await wrapper.get('[data-test="ci-direct-version"]').setValue('1.0.2')
     await wrapper.get('[data-test="ci-direct-description"]').setValue('后台直传')
-    await wrapper.get('[data-test="ci-direct-password"]').setValue('synthetic-password')
+    expect(wrapper.find('[data-test="ci-direct-password"]').exists()).toBe(false);
     await wrapper.get('[data-test="ci-direct-upload-form"]').trigger('submit')
     await flushPromises()
     expect(wrapper.text()).toContain(upload.taskId)
@@ -166,10 +166,10 @@ describe('third-party mini-program release workflow', () => {
     await flushPromises()
     await wrapper.get('[data-test="upload-version"]').setValue('1.0.0')
     await wrapper.get('[data-test="upload-description"]').setValue('测试版本')
-    await wrapper.get('[data-test="upload-password"]').setValue('synthetic-password')
+    expect(wrapper.find('[data-test="upload-password"]').exists()).toBe(false);
     await wrapper.get('[data-test="direct-upload-form"]').trigger('submit')
     await flushPromises()
-    expect(confirmedWrite).toHaveBeenCalledWith('code.release.upload', 'synthetic-password',
+    expect(confirmedWrite).toHaveBeenCalledWith('code.release.upload', '',
       '/code-release/uploads', 'POST', { versionId, version: '1.0.0',
         description: '测试版本', channel: 'DIRECT_COMMIT' }, `${appId}:${versionId}:DIRECT_COMMIT`,
       3, expect.objectContaining({ 'Idempotency-Key': expect.any(String) }))
@@ -179,19 +179,19 @@ describe('third-party mini-program release workflow', () => {
     await flushPromises()
     await wrapper.get('[data-test="review-category"]').setValue('0')
     await wrapper.get('[data-test="review-description"]').setValue('功能更新')
-    await wrapper.get('[data-test="review-password"]').setValue('review-password')
+    expect(wrapper.find('[data-test="review-password"]').exists()).toBe(false);
     await wrapper.get('[data-test="review-form"]').trigger('submit')
     await flushPromises()
-    expect(confirmedWrite).toHaveBeenCalledWith('code.release.review', 'review-password',
+    expect(confirmedWrite).toHaveBeenCalledWith('code.release.review', '',
       '/code-release/reviews', 'POST', { uploadTaskId: upload.taskId,
         itemList: [category], versionDesc: '功能更新' }, upload.taskId, 0,
       expect.objectContaining({ 'Idempotency-Key': expect.any(String) }))
 
     expect(wrapper.text()).toContain('审核单 12345')
-    await wrapper.get('[data-test="release-password"]').setValue('publish-password')
+    expect(wrapper.find('[data-test="release-password"]').exists()).toBe(false);
     await wrapper.get('[data-test="publish-reviewed"]').trigger('click')
     await flushPromises()
-    expect(confirmedWrite).toHaveBeenCalledWith('code.release.publish', 'publish-password',
+    expect(confirmedWrite).toHaveBeenCalledWith('code.release.publish', '',
       `/code-release/reviews/${review.taskId}/release`, 'POST', {}, review.taskId, 12345)
   })
 })

@@ -7,11 +7,10 @@ from django.conf import settings
 from django.contrib.auth import logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.utils import timezone
 
 from common.http import response, error, parse_json_object
-from .models import ActionConfirmation, AdminAccount, AuditLog, GroupPermission
+from .models import AdminAccount, AuditLog, GroupPermission
 
 PERMISSION_CODES = frozenset({
     "dining.read", "dining.manage", "dining.finance.read", "dining.finance.manage",
@@ -35,6 +34,71 @@ PERMISSION_CODES = frozenset({
     "code.version.read", "code.release.manage", "business.report.read", "business.report.export", "audit.export",
     "wechat.integration.read", "wechat.integration.manage",
 })
+
+
+ACTION_PERMISSIONS = {
+    "account.create": "account.manage",
+    "account.disable": "account.manage",
+    "group.create": "permission.manage",
+    "group.update": "permission.manage",
+    "page.publish": "page.publish",
+    "startup.publish": "startup.publish",
+    "page.rollback": "page.publish",
+    "startup.rollback": "startup.publish",
+    "navigation.publish": "navigation.publish",
+    "navigation.rollback": "navigation.publish",
+    "customer_service.publish": "customer_service.publish",
+    "customer_service.rollback": "customer_service.publish",
+    "payment.offline.confirm": "payment.offline.confirm",
+    "aftersale.review": "aftersale.review",
+    "aftersale.return.accept": "aftersale.return.accept",
+    "refund.offline.confirm": "refund.offline.confirm",
+    "refund.wechat.dispatch": "refund.prepare",
+    "refund.benefits.settle": "refund.prepare",
+    "member.rules.update": "member.rules.manage",
+    "coupon.publish": "coupon.publish",
+    "coupon.issue": "coupon.issue",
+    "exchange.publish": "exchange.publish",
+    "notification.task.recover_reservation": "notification.recover",
+    "stores.map.configure": "stores.manage",
+    "stores.settlement.configure": "stores.manage",
+    "stores.cost.batch.configure": "stores.manage",
+    "stores.share.batch.configure": "stores.manage",
+    "stores.profit.configure": "stores.manage",
+    "stores.profit.batch.configure": "stores.manage",
+    "stores.withdrawal.review": "stores.accounts.manage",
+    "stores.procurement.configure": "stores.procurement.manage",
+    "stores.procurement.confirm-payment": "stores.procurement.finance",
+    "stores.procurement.close-cancel": "stores.procurement.finance",
+    "stores.withdrawal.pay": "stores.accounts.manage",
+    "stores.withdrawal.payee": "stores.accounts.manage",
+    "wechat.integration.update": "wechat.integration.manage",
+    "wechat.integration.test": "wechat.integration.manage",
+    "code.release.upload_key": "code.release.manage",
+    "code.release.developer_upload_key": "code.release.manage",
+    "code.release.upload": "code.release.manage",
+    "code.release.resolve_upload": "code.release.manage",
+    "code.release.review": "code.release.manage",
+    "code.release.resolve_review": "code.release.manage",
+    "code.release.publish": "code.release.manage"
+}
+
+ACTION_READ_PERMISSIONS = {
+    "page.rollback": "page.read",
+    "startup.rollback": "startup.read",
+    "navigation.rollback": "navigation.read",
+    "customer_service.rollback": "customer_service.read",
+    "notification.task.recover_reservation": "notification.read",
+    "wechat.integration.update": "wechat.integration.read",
+    "wechat.integration.test": "wechat.integration.read",
+    "code.release.upload_key": "code.version.read",
+    "code.release.developer_upload_key": "code.version.read",
+    "code.release.upload": "code.version.read",
+    "code.release.resolve_upload": "code.version.read",
+    "code.release.review": "code.version.read",
+    "code.release.resolve_review": "code.version.read",
+    "code.release.publish": "code.version.read"
+}
 
 
 def parse_json(request):
@@ -111,20 +175,24 @@ def require_live(request, code=None):
 
 
 def confirm_action(request, account, action, object_id, revision):
-    token = request.headers.get("X-Action-Confirmation", "")
-    if not token or len(token) > 128:
-        return error(request, 403, "CONFIRMATION_REQUIRED", "请先完成二次确认。")
-    digest = hashlib.sha256(token.encode()).hexdigest()
-    with transaction.atomic():
-        pending = ActionConfirmation.objects.select_for_update().filter(token_hash=digest).first()
-        if not pending or pending.consumed_at:
-            return error(request, 403, "CONFIRMATION_REQUIRED", "二次确认已失效。")
-        pending.consumed_at = timezone.now()
-        pending.save(update_fields=["consumed_at"])
-        if (pending.actor_id != account.id or pending.session_key != request.session.session_key or
-                pending.action != action or pending.object_id != str(object_id) or
-                pending.revision != revision or pending.expires_at < timezone.now()):
-            return error(request, 403, "CONFIRMATION_REQUIRED", "二次确认已失效。")
+    """Authorize a business action without requesting the operator password.
+
+    Existing domain entry points retain this hook so permission and session
+    revocation are checked live after lock waits. Object/revision and idempotency
+    checks remain owned by the business operation; legacy headers are ignored.
+    """
+    code = ACTION_PERMISSIONS.get(action)
+    if code is None:
+        return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
+    live, bad = require_live(request, code)
+    if bad:
+        return bad
+    if live.pk != account.pk or live.auth_version != account.auth_version:
+        return error(request, 401, "SESSION_EXPIRED", "请重新登录。")
+    read_code = ACTION_READ_PERMISSIONS.get(action)
+    if read_code and read_code not in permissions(live):
+        audit(request, "permission.denied", "permission", read_code, actor=live, result="DENIED")
+        return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
     return None
 
 

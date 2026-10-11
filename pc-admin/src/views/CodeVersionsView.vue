@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { api, type Account, type Confirmation } from '../api'
+import { api, type Account } from '../api'
 import ReleaseWorkflowPanel from './ReleaseWorkflowPanel.vue'
 import './code-versions.css'
 
@@ -55,7 +55,6 @@ const readinessLoading = ref(true)
 const readinessError = ref('')
 const keyFile = ref<File | null>(null)
 const keyInput = ref<HTMLInputElement | null>(null)
-const keyPassword = ref('')
 const keyConfirming = ref(false)
 const keyBusy = ref(false)
 const keyNeedsRead = ref(false)
@@ -96,7 +95,6 @@ async function loadReadiness() {
 function chooseKey(event: Event) {
   const input = event.target as HTMLInputElement
   keyConfirming.value = false
-  keyPassword.value = ''
   keyFile.value = input.files?.[0] || null
   keyNotice.value = ''
   keyError.value = ''
@@ -115,29 +113,25 @@ function clearKeyInput() {
 function beginKeyUpload() {
   if (!canManageKey.value || !readiness.value?.appId || !keyFile.value || keyNeedsRead.value || keyBusy.value) return
   keyConfirming.value = true
-  keyPassword.value = ''
   keyError.value = ''
 }
 
 async function uploadKey() {
   const current = readiness.value
   const file = keyFile.value
-  if (!canManageKey.value || !current?.appId || !file || !keyConfirming.value || !keyPassword.value || keyBusy.value || keyNeedsRead.value) return
+  if (!canManageKey.value || !current?.appId || !file || !keyConfirming.value  || keyBusy.value || keyNeedsRead.value) return
   const generation = ++keyGeneration
   keyBusy.value = true
   keyError.value = ''
   keyNotice.value = ''
   try {
-    const confirmation = await api<Confirmation>('/auth/confirm', {
-      method: 'POST', body: JSON.stringify({ action: 'code.release.upload_key', objectId: current.appId,
-        revision: current.uploadKey.revision, password: keyPassword.value }),
-    })
-    if (generation !== keyGeneration || !canManageKey.value || !confirmation.confirmationToken) return
+
+    if (generation !== keyGeneration || !canManageKey.value) return
     const key = await file.text()
     if (generation !== keyGeneration || !canManageKey.value || readiness.value?.appId !== current.appId ||
         readiness.value?.uploadKey.revision !== current.uploadKey.revision || keyFile.value !== file) return
     const result = await api<UploadKeyStatus>('/code-release/upload-key', {
-      method: 'PUT', headers: { 'X-Action-Confirmation': confirmation.confirmationToken },
+      method: 'PUT', headers: { },
       body: JSON.stringify({ appId: current.appId, key, expectedRevision: current.uploadKey.revision }),
     })
     if (generation !== keyGeneration) return
@@ -153,7 +147,6 @@ async function uploadKey() {
     }
   } finally {
     keyBusy.value = false
-    keyPassword.value = ''
     clearKeyInput()
   }
 }
@@ -270,7 +263,7 @@ function closeDetail() {
 }
 
 onMounted(() => { void Promise.all([loadVersions(''), loadJobs(), loadReadiness()]) })
-onUnmounted(() => { ++readinessGeneration; ++keyGeneration; keyPassword.value = ''; clearKeyInput() })
+onUnmounted(() => { ++readinessGeneration; ++keyGeneration;  clearKeyInput() })
 </script>
 
 <template>
@@ -299,9 +292,8 @@ onUnmounted(() => { ++readinessGeneration; ++keyGeneration; keyPassword.value = 
       <p v-if="keyNotice" class="code-release-key-notice" role="status">{{ keyNotice }}</p>
       <button data-test="begin-key-upload" class="secondary-button" type="button" :disabled="!keyFile || !readiness?.appId || keyBusy || keyNeedsRead || readinessLoading" @click="beginKeyUpload">上传代码密钥</button>
       <form v-if="keyConfirming" data-test="key-upload-form" class="code-release-key-confirm" @submit.prevent="uploadKey">
-        <label for="code-upload-key-password">输入当前密码确认替换密钥</label>
-        <input id="code-upload-key-password" v-model="keyPassword" data-test="key-password" type="password" autocomplete="current-password" :disabled="keyBusy">
-        <div><button class="secondary-button" type="button" :disabled="keyBusy" @click="keyConfirming = false; keyPassword = ''">取消</button><button class="primary-button" type="submit" :disabled="!keyPassword || keyBusy">确认保存</button></div>
+        <p>请确认要替换代码上传密钥。</p>
+        <div><button class="secondary-button" type="button" :disabled="keyBusy" @click="keyConfirming = false">取消</button><button class="primary-button" type="submit" :disabled="keyBusy">确认保存</button></div>
       </form>
     </section>
 

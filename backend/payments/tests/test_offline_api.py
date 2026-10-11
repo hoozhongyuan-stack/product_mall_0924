@@ -60,12 +60,11 @@ class OfflineApiTests(TransactionTestCase):
         self.assertFalse(PaymentReceipt.objects.exists())
         self.assertEqual(OfflinePaymentReport.objects.count(), 1)
 
-    def test_c1_requires_password_and_intent_keeps_evidence_immutable(self):
+    def test_c1_without_password_intent_keeps_evidence_immutable(self):
         o = self._order(); r = self.prepare(o)
         self.assertEqual(r.status_code, 201, r.content); intent = r.json()['data']
         self.assertFalse(PaymentReceipt.objects.exists())
-        self.assertEqual(self.confirm(intent).status_code, 403)
-        r = self.confirm(intent, self.authorize(intent))
+        r = self.confirm(intent)
         self.assertEqual(r.status_code, 200, r.content)
         self.assertEqual(r.json()['data']['outcome'], 'PAID')
         self.assertEqual(self.confirm(intent).json()['data']['outcome'], 'PAID')

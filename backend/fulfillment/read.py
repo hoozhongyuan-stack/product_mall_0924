@@ -118,7 +118,7 @@ def fulfillment_data(order, *, include_code=False):
 
 
 def page_fulfillment_summaries(orders):
-    """Four bounded queries for a page instead of one detail query per order."""
+    """Fixed queries for the entire page; capabilities use each line's own facts."""
     order_ids = [order.id for order in orders]
     if not order_ids:
         return {}
@@ -175,7 +175,19 @@ def page_fulfillment_summaries(orders):
                      "IN_PROGRESS" if any(value in ("IN_TRANSIT", "PARTIAL", "COMPLETED") for value in states) else
                      "WAITING_SHIPMENT" if "WAITING_SHIPMENT" in states else
                      next((value for value in states if value in ("WAITING_PREPARATION", "WAITING_PICKUP", "WAITING_DELIVERY")), "WAITING_REDEMPTION"))
+        redeemable = False
+        if order.status == 'PAID':
+            for line in rows:
+                voucher = vouchers.get(line['id'])
+                if line['fulfillment_kind'] != 'REDEEM' or not voucher or not voucher['valid_until'] or voucher['valid_until'] < today:
+                    continue
+                available = (line['quantity'] - voucher['redeemed_quantity'] - voucher['voided_quantity']
+                             - holds.get(line['id'], {}).get('reservedUnredeemedQuantity', 0))
+                if available > 0:
+                    redeemable = True
+                    break
         result[order.id] = {"fulfillmentStatus": state,
+                            "redeemEligible": redeemable, "hasShipment": shipment is not None,
                             "shipEligible": order.status == "PAID" and has_ship and not shipment and not ship_held and getattr(order, "delivery_mode", "") not in ("PICKUP", "DELIVERY"),
                             "afterSaleSummary": sale}
     return result

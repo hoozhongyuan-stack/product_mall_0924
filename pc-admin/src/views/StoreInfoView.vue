@@ -8,7 +8,7 @@ import { ElMessage } from 'element-plus'
 import PublicationHistory from '../shared/PublicationHistory.vue'
 import { keepRollbackIntent, type RollbackResult } from '../shared/publication-history'
 import { applyCurrentPublication, currentPublication, publicationIntent, matchesPublishResult, parsePublishIntent, persistPublishIntent, type PublishIntent } from '../shared/publication-sync'
-import { api, ApiError, type Account, type Confirmation } from '../api'
+import { api, ApiError, type Account } from '../api'
 import AssetPicker from '../shared/AssetPicker.vue'
 import type { Asset } from '../shared/media'
 import { applyStartupUpload, type StartupDraft, type StartupPreview, type StartupPublication, type StartupSelection } from './startup/editor'
@@ -36,7 +36,6 @@ const preview = ref<StartupPreview | null>(null)
 const previewSnapshot = ref('')
 const previewImageFailed = ref(false)
 const publishOpen = ref(false)
-const publishPassword = ref('')
 const publishIntent = ref<PublishIntent | null>(null)
 const publicationRefresh = ref<{ base: string; objectId: string } | null>(null)
 const publicationRecoveryBlocked = ref(false)
@@ -231,16 +230,15 @@ function openPublish() {
   if (!draft.value || busy.value || publicationRefresh.value || publicationRecoveryBlocked.value) return
   if (publishIntent.value) {
     if (publishIntent.value.objectId !== 'startup') { error.value = '另一个页面的发布结果尚未确认，请返回原页面恢复原发布请求。'; return }
-    error.value = ''; publishPassword.value = ''; publishOpen.value = true; return
+    error.value = '';  publishOpen.value = true; return
   }
   if (dirty.value) { error.value = '请先保存草稿，再发布当前修订。'; return }
   if (!previewReady.value) { error.value = '请先生成当前草稿的服务端预览。'; return }
   if (alreadyPublished.value) { error.value = '当前修订已发布。'; return }
   error.value = ''
-  publishPassword.value = ''
   publishOpen.value = true
 }
-function closePublish() { publishOpen.value = false; publishPassword.value = '' }
+function closePublish() { publishOpen.value = false; }
 function publishStorageKey(base: string) { return `mall-publication-publish:${JSON.stringify([props.account.accountId, base])}` }
 function restorePublishIntent() {
   if (!draft.value) return
@@ -276,7 +274,7 @@ async function syncPublication() {
   } finally { busy.value = '' }
 }
 async function publish() {
-  if (!draft.value || !publishPassword.value || busy.value || publicationRefresh.value || publicationRecoveryBlocked.value) return
+  if (!draft.value  || busy.value || publicationRefresh.value || publicationRecoveryBlocked.value) return
   if (!publishIntent.value && (dirty.value || !previewReady.value || alreadyPublished.value)) return
   if (publishIntent.value && publishIntent.value.objectId !== 'startup') { error.value = '另一个页面的发布结果尚未确认，请返回原页面恢复原发布请求。'; return }
   const recovering = !!publishIntent.value
@@ -288,12 +286,10 @@ async function publish() {
   let submitted = false
   let accepted = false
   try {
-    const { confirmationToken } = await api<Confirmation>('/auth/confirm', {
-      method: 'POST', body: JSON.stringify({ action: 'startup.publish', password: publishPassword.value, objectId: intent.objectId, revision: intent.body.expectedRevision }),
-    })
+
     submitted = true
     const result = await api<StartupPublication>(`${intent.base}/publish`, {
-      method: 'POST', headers: { 'X-Action-Confirmation': confirmationToken, 'Idempotency-Key': intent.key },
+      method: 'POST', headers: {  'Idempotency-Key': intent.key },
       body: JSON.stringify(intent.body),
     })
     if (!matchesPublishResult(result, intent.body)) throw new Error('服务端发布结果尚未确认，请按原请求恢复。')
@@ -301,7 +297,6 @@ async function publish() {
     publishIntent.value = null
     publicationRefresh.value = { base: intent.base, objectId: intent.objectId }
     publishOpen.value = false
-    publishPassword.value = ''
     notice.value = '发布请求已完成，正在读取当前线上状态。'
     // An idempotent receipt describes the original request, not the current publication pointer.
     const current = await currentPublication(api, intent.base)
@@ -317,8 +312,7 @@ async function publish() {
       if (!recovering && (!submitted || !keepRollbackIntent(reason instanceof ApiError ? reason.status : undefined, false))) { publishIntent.value = null; forgetPublishIntent(intent.base) }
       error.value = `${message(reason)}${publishIntent.value ? ' 发布结果未确认，请按原请求恢复；原请求编号和双修订号保持不变。' : ''}`
     }
-    publishPassword.value = ''
-  } finally { busy.value = '' }
+    } finally { busy.value = '' }
 }
 function rolledBack(result: RollbackResult) {
   if (!draft.value) return
@@ -410,11 +404,11 @@ function rolledBack(result: RollbackResult) {
       </template>
     </section>
     <FilingSettingsPanel :account="account" />
-    <el-dialog v-model="publishOpen" title="确认发布启动页" width="min(480px, 92vw)" @closed="publishPassword = ''">
+    <el-dialog v-model="publishOpen" title="确认发布启动页" width="min(480px, 92vw)" >
       <p>将草稿修订 {{ draft?.revision }} 发布到小程序。下一次冷启动将读取这个版本。</p>
-      <label class="startup-password">当前账号密码<el-input v-model="publishPassword" type="password" autocomplete="current-password" show-password placeholder="输入密码确认发布" @keyup.enter="publish" /></label>
+
       <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <template #footer><button type="button" class="secondary-button" :disabled="busy === 'publish'" @click="closePublish">取消</button><button type="button" class="primary-button" :disabled="!publishPassword || busy === 'publish'" @click="publish">{{ busy === 'publish' ? '发布中…' : '确认发布' }}</button></template>
+      <template #footer><button type="button" class="secondary-button" :disabled="busy === 'publish'" @click="closePublish">取消</button><button type="button" class="primary-button" :disabled="busy === 'publish'" @click="publish">{{ busy === 'publish' ? '发布中…' : '确认发布' }}</button></template>
     </el-dialog>
   </section>
 </template>

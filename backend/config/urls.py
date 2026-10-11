@@ -21,6 +21,8 @@ from payments import views as payment_views
 from payments import wechat_views
 from orders import admin_views as admin_order_views
 from fulfillment import views as fulfillment_views
+from fulfillment import admin_local_views as admin_local_views
+from orders.admin_payment_query import query_view as admin_wechat_query
 
 from aftersales import views as aftersale_views
 from aftersales import return_views
@@ -148,6 +150,11 @@ urlpatterns = [
     path("api/v1/admin/refunds/offline-reconciliations/<uuid:reconciliation_id>/confirm", refund_views.confirm_view),
     path("api/v1/admin/fulfillment/carriers", fulfillment_views.carriers_view),
     path("api/v1/admin/fulfillment/policy", fulfillment_views.policy_view),
+    path("api/v1/admin/orders/<uuid:order_id>/wechat/query", admin_wechat_query),
+    path("api/v1/admin/orders/<uuid:order_id>/local-fulfillment", admin_local_views.local_fulfillment_view),
+    path("api/v1/admin/orders/<uuid:order_id>/pickup-preview", admin_local_views.pickup_preview_view),
+    path("api/v1/admin/orders/<uuid:order_id>/redemptions/<uuid:voucher_id>/use", admin_local_views.redemption_use_view),
+    path("api/v1/admin/orders/<uuid:order_id>/tracking", admin_local_views.tracking_view),
     path("api/v1/admin/orders/<uuid:order_id>/shipment", fulfillment_views.shipment_view),
     path("api/v1/admin/orders/<uuid:order_id>/shipment/correct", fulfillment_views.shipment_correct_view),
     path("api/v1/admin/shipments/batch", fulfillment_views.batch_ship_view),

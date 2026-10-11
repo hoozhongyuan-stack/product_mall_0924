@@ -44,7 +44,6 @@ const detailError = ref('')
 const selected = ref<TaskDetail | null>(null)
 const selectedId = ref('')
 const recoveryOpen = ref(false)
-const recoveryPassword = ref('')
 const recovering = ref(false)
 const recoveryError = ref('')
 const recoveryNotice = ref('')
@@ -124,19 +123,18 @@ function openDetail(taskId: string) {
 
 function openRecovery() {
   if (!selected.value || !canRecover(selected.value, canManageRecovery.value) || uncertainTaskId.value === selected.value.taskId) return
-  recoveryPassword.value = ''
   recoveryError.value = ''
   recoveryOpen.value = true
 }
 
 async function recoverReservation() {
   const task = selected.value
-  if (!task || !canRecover(task, canManageRecovery.value) || !recoveryPassword.value || recovering.value) return
+  if (!task || !canRecover(task, canManageRecovery.value)  || recovering.value) return
   recovering.value = true
   recoveryError.value = ''
   try {
     await confirmedWrite<TaskSummary>(
-      'notification.task.recover_reservation', recoveryPassword.value,
+      'notification.task.recover_reservation', '',
       `/subscription-message-tasks/${task.taskId}/recover-reservation`, 'POST',
       { expectedUpdatedAt: task.updatedAt, expectedAttemptCount: task.attemptCount },
       task.taskId, task.attemptCount,
@@ -158,7 +156,6 @@ async function recoverReservation() {
       await Promise.allSettled([loadDetail(task.taskId), loadList()])
     }
   } finally {
-    recoveryPassword.value = ''
     recovering.value = false
   }
 }
@@ -214,9 +211,9 @@ onMounted(() => { void loadList('') })
     <el-dialog v-model="recoveryOpen" title="确认恢复过期预留" width="min(480px, 94vw)" append-to-body :close-on-click-modal="!recovering" :close-on-press-escape="!recovering">
       <p>仅将这条本次预留尚未开始发送的任务恢复为“待处理”。操作本身不会发送消息；后续工作进程仍会重新校验模板和授权。</p>
       <p class="message-task-id">{{ selected?.taskId }}</p>
-      <label class="message-task-password">当前登录密码<el-input v-model="recoveryPassword" type="password" autocomplete="current-password" show-password placeholder="输入密码完成二次确认" :disabled="recovering" @keyup.enter="recoverReservation" /></label>
+
       <p v-if="recoveryError" class="message-task-error" role="alert">{{ recoveryError }}</p>
-      <template #footer><button class="secondary-button" type="button" :disabled="recovering" @click="recoveryOpen = false">取消</button><button class="primary-button" type="button" :disabled="recovering || !recoveryPassword" @click="recoverReservation">{{ recovering ? '正在核验…' : '确认恢复' }}</button></template>
+      <template #footer><button class="secondary-button" type="button" :disabled="recovering" @click="recoveryOpen = false">取消</button><button class="primary-button" type="button" :disabled="recovering " @click="recoverReservation">{{ recovering ? '正在核验…' : '确认恢复' }}</button></template>
     </el-dialog>
   </section>
 </template>

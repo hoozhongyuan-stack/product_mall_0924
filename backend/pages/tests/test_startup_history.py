@@ -101,16 +101,16 @@ class StartupHistoryTests(TestCase):
             with self.assertRaises(DatabaseError), transaction.atomic():
                 action()
 
-    def test_rollback_rejects_wrong_target_confirmation_and_changed_draft(self):
+    def test_rollback_ignores_legacy_confirmation_but_rejects_changed_draft(self):
         _, second, a, b, _, _ = self.two_versions()
         confirmed = self.send(self.client, "post", "/api/v1/admin/auth/confirm", {
             "action": "startup.rollback", "password": PASSWORD,
             "objectId": "startup:" + b["versionId"], "revision": 2})
         result = self.rollback(second, a, token=confirmed.json()["data"]["confirmationToken"])
-        self.assertEqual(result.status_code, 403)
+        self.assertEqual(result.status_code, 200)
         saved = self.save(self.asset("GIF"), self.asset("IMAGE"), second["revision"])
         self.assertEqual(saved.status_code, 200, saved.content)
-        stale = self.rollback(second, a)
+        stale = self.rollback(second, a, key="startup-stale-draft-key")
         self.assertEqual(stale.status_code, 409)
         self.assertEqual(stale.json()["error"]["code"], "REVISION_CONFLICT")
-        self.assertEqual(self.client.get(DRAFT).json()["data"]["publishedVersionId"], b["versionId"])
+        self.assertEqual(self.client.get(DRAFT).json()["data"]["publishedVersionId"], a["versionId"])

@@ -56,21 +56,21 @@ class InputAndPermissionTests(CredentialApiBase):
         with override_settings(WECHAT_MINI_APP_SECRET='rotated-env'):
             self.assertIsNone(self.client.get(base).json()['data']['lastCheck'])
 
-    def test_confirmation_expiry_wrong_object_cross_session_and_readonly(self):
+    def test_obsolete_confirmation_headers_ignored_but_readonly_remains(self):
         from accounts.models import ActionConfirmation, AdminAccount
         from .test_api import PASSWORD
         base = '/api/v1/admin/integrations/wechat-mini-program'
         token = self.confirmation(objectId='wrong')
-        self.assertEqual(self.save(token=token).status_code, 403)
+        self.assertEqual(self.save(token=token).status_code, 200)
         token = self.confirmation()
         ActionConfirmation.objects.update(expires_at=timezone.now()-timedelta(seconds=1))
-        self.assertEqual(self.save(token=token).status_code, 403)
+        self.assertEqual(self.save(revision=1, token=token).status_code, 200)
         token = self.confirmation()
         other = Client()
         other.post('/api/v1/admin/auth/login', {'loginName': self.owner.login_name, 'password': PASSWORD},
                    content_type='application/json')
-        self.assertEqual(other.put(base, {'expectedRevision': 0, 'appId': APP, 'secretAction': 'REPLACE',
-            'appSecret': SECRET}, content_type='application/json', HTTP_X_ACTION_CONFIRMATION=token).status_code, 403)
+        self.assertEqual(other.put(base, {'expectedRevision': 2, 'appId': APP, 'secretAction': 'REPLACE',
+            'appSecret': SECRET}, content_type='application/json', HTTP_X_ACTION_CONFIRMATION=token).status_code, 200)
         staff = AdminAccount.objects.create_user('reader', PASSWORD)
         group = PermissionGroup.objects.create(code='wechat-reader', name='微信只读')
         GroupPermission.objects.create(group=group, code='wechat.integration.read')

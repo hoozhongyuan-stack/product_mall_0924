@@ -56,16 +56,15 @@ class MapConfigurationTests(TestCase):
         self.assertEqual(result.status_code,200,result.content)
         self.assertEqual(effective_configuration()['jsApiKey'],'map-js-test-secret')
 
-    def test_auth_csrf_confirmation_revision_and_validation(self):
+    def test_auth_csrf_revision_and_validation_without_confirmation(self):
         self.assertEqual(Client().get('/api/v1/admin/stores/map-settings').status_code,401)
         self.assertEqual(self.client.put('/api/v1/admin/stores/map-settings',data='{}',content_type='application/json').status_code,403)
-        self.assertEqual(self.put(self.payload()).status_code,403)
+        self.assertEqual(self.put(self.payload()).status_code,200)
         token=self.confirm()
-        self.assertEqual(self.put(self.payload(),token).status_code,200)
-        self.assertEqual(self.put(self.payload(1),token).status_code,403)
+        self.assertEqual(self.put(self.payload(1),token).status_code,200)
         self.assertEqual(self.put(self.payload(),self.confirm()).status_code,409)
-        self.assertEqual(self.put({**self.payload(1),'unexpected':'secret'},self.confirm(1)).status_code,400)
-        self.assertEqual(self.put({**self.payload(1),'jsApiKey':None},self.confirm(1)).status_code,400)
+        self.assertEqual(self.put({**self.payload(2),'unexpected':'secret'},self.confirm(1)).status_code,400)
+        self.assertEqual(self.put({**self.payload(2),'jsApiKey':None},self.confirm(1)).status_code,400)
 
     def test_unavailable_key_and_corrupt_managed_do_not_fallback(self):
         from stores.models import StoreMapConfiguration

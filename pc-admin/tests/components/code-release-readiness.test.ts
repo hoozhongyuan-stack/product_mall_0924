@@ -56,23 +56,22 @@ describe('code release readiness', () => {
     expect(wrapper.text()).not.toContain('可以提审')
   })
 
-  it('uploads the selected key only after password confirmation, then clears local input', async () => {
+  it('uploads the selected key after business confirmation without operator password', async () => {
     const wrapper = await setup()
     const file = new File(['-----BEGIN PRIVATE KEY-----\nsynthetic\n-----END PRIVATE KEY-----'], 'private.key', { type: 'text/plain' })
     Object.defineProperty(wrapper.get('input[type="file"]').element, 'files', { configurable: true, value: [file] })
     await wrapper.get('input[type="file"]').trigger('change')
     await wrapper.get('[data-test="begin-key-upload"]').trigger('click')
-    await wrapper.get('[data-test="key-password"]').setValue('synthetic-password')
-    vi.mocked(api).mockResolvedValueOnce({ confirmationToken: 'synthetic-confirmation' } as never)
-      .mockResolvedValueOnce({ configured: true, revision: 1, appId: readiness.appId } as never)
+    expect(wrapper.find('[data-test="key-password"]').exists()).toBe(false);
+    vi.mocked(api).mockResolvedValueOnce({ configured: true, revision: 1, appId: readiness.appId } as never)
       .mockResolvedValueOnce({ ...readiness, uploadKey: { configured: true, revision: 1, appId: readiness.appId },
         checks: readiness.checks.map(check => check.code === 'UPLOAD_KEY' ? { ...check, status: 'PASS' } : check) } as never)
     await wrapper.get('[data-test="key-upload-form"]').trigger('submit')
     await flushPromises()
-    expect(api).toHaveBeenCalledWith('/auth/confirm', expect.objectContaining({ method: 'POST' }))
+    expect(vi.mocked(api).mock.calls.some(([path]) => path === '/auth/confirm')).toBe(false)
     const write = vi.mocked(api).mock.calls.find(([path, options]) => path === '/code-release/upload-key' && options?.method === 'PUT')
     expect(write).toBeDefined()
-    expect(write?.[1]?.headers).toEqual({ 'X-Action-Confirmation': 'synthetic-confirmation' })
+    expect(write?.[1]?.headers).toEqual({})
     expect(JSON.parse(String(write?.[1]?.body))).toEqual({ appId: readiness.appId, key: await file.text(), expectedRevision: 0 })
     expect(wrapper.text()).toContain('密钥已保存')
     expect(localStorage.length + sessionStorage.length).toBe(0)

@@ -1,12 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api, type Account } from '../api'
 import { paymentStatus } from './orders/offline-payment.mjs'
 import { fulfillmentLabel, shipmentEligible, shipmentError } from './orders/fulfillment.mjs'
 import { money, time, type Carrier, type OrderList } from './orders/types'
 import {isPointsOrder,orderSettlementValue,paymentMethodLabel} from '../shared/order-settlement.mjs'
 import './orders/orders.css'
+import OrderActionDialog from './orders/OrderActionDialog.vue'
+import {orderActions,actionLabels,pendingActions,actionPermission,type OrderAction} from './orders/order-actions.mjs'
+import type {Order} from './orders/types'
 const props = defineProps<{ account: Account }>()
+const action=ref<OrderAction|null>(null),actionOrderId=ref(''),actionNotice=ref('')
+function recoveries(order:Order){return pendingActions(props.account.accountId,order.orderId,sessionStorage).filter(a=>props.account.permissionCodes.includes(actionPermission(a)))}
+function openAction(order:Order,chosen:OrderAction){actionOrderId.value=order.orderId;action.value=chosen;actionNotice.value=''}
+function updatedOrder(updated:Order){if(data.value)data.value={...data.value,items:data.value.items.map(row=>row.orderId===updated.orderId?updated:row)}}
+watch(()=>props.account.accountId,()=>{action.value=null;actionOrderId.value='';data.value=null;selected.value=[];void load()})
 const loading = ref(false)
 const error = ref('')
 const data = ref<OrderList | null>(null)
@@ -113,6 +121,7 @@ onMounted(() => { void load(); void loadCarriers(); void loadStores(); void load
     </form>
     <p v-if="restaurantError" role="alert">{{restaurantError}} <button class="text-button" @click="loadRestaurants">重新读取餐饮店</button></p>
     <p v-if="storeError" role="alert">{{storeError}} <button class="text-button" @click="loadStores">重新读取前置仓</button></p>
+    <p v-if="actionNotice" class="order-success" role="status">{{actionNotice}}</p>
     <p v-if="loading" role="status" class="loading-inline">正在读取订单…</p>
     <div v-else-if="error" class="notice" role="alert">{{ error }} <button class="text-button" @click="load()">重新加载</button></div>
     <template v-else-if="data">
@@ -120,11 +129,12 @@ onMounted(() => { void load(); void loadCarriers(); void loadStores(); void load
       <p v-if="!data.items.length" class="empty-state">当前条件下暂无订单。可调整筛选条件后查询。</p>
       <div v-else class="panel table-wrap" tabindex="0" aria-label="订单列表，可横向滚动">
         <table><thead><tr><th v-if="canShip">选择</th><th>订单</th><th>订单归属</th><th>履约前置仓 / 仓库</th><th>付款截止</th><th>支付方式</th><th>结算状态</th><th>履约状态</th><th>结算金额 / 积分</th><th>操作</th></tr></thead>
-          <tbody><tr v-for="order in data.items" :key="order.orderId"><td v-if="canShip"><input v-if="shipmentEligible(order)" type="checkbox" :checked="selected.includes(order.orderId)" :aria-label="`选择订单 ${order.orderNo}`" @change="selectOrder(order.orderId, ($event.target as HTMLInputElement).checked)"><span v-else>—</span></td><td><strong class="order-number">{{ order.orderNo }}</strong><small class="order-muted">{{ time(order.createdAt) }}</small></td><td>{{order.source==='DINING'||order.dining?'餐饮联盟':'普通商城'}}<small v-if="order.dining" class="order-muted">餐饮店：{{order.dining.name}} · 桌号 {{order.dining.tableNumber}}</small></td><td>{{order.storeName||'平台订单'}}<small v-if="order.fulfillmentWarehouse" class="order-muted">仓库：{{order.fulfillmentWarehouse.name}}</small><small class="order-muted">{{({PICKUP:'到店自提',DELIVERY:'配送到家',EXPRESS:'快递发货'} as Record<string,string>)[order.deliveryMode||'']||'按商品履约'}}</small></td><td>{{ isPointsOrder(order) ? '无需付款' : time(order.expiresAt) }}</td><td>{{paymentMethodLabel(order)}}</td><td><span class="badge" :class="order.status === 'PAID' ? 'badge-good' : 'badge-muted'">{{ paymentStatus(order) }}</span></td><td>{{ order.status === 'PAID' ? fulfillmentLabel(order.fulfillmentStatus) : '—' }}</td><td class="order-money">{{orderSettlementValue(order)}}</td><td><RouterLink :to="`/orders/${order.orderId}`" class="text-link">查看详情</RouterLink></td></tr></tbody>
+          <tbody><tr v-for="order in data.items" :key="order.orderId"><td v-if="canShip"><input v-if="shipmentEligible(order)" type="checkbox" :checked="selected.includes(order.orderId)" :aria-label="`选择订单 ${order.orderNo}`" @change="selectOrder(order.orderId, ($event.target as HTMLInputElement).checked)"><span v-else>—</span></td><td><strong class="order-number">{{ order.orderNo }}</strong><small class="order-muted">{{ time(order.createdAt) }}</small></td><td>{{order.source==='DINING'||order.dining?'餐饮联盟':'普通商城'}}<small v-if="order.dining" class="order-muted">餐饮店：{{order.dining.name}} · 桌号 {{order.dining.tableNumber}}</small></td><td>{{order.storeName||'平台订单'}}<small v-if="order.fulfillmentWarehouse" class="order-muted">仓库：{{order.fulfillmentWarehouse.name}}</small><small class="order-muted">{{({PICKUP:'到店自提',DELIVERY:'配送到家',EXPRESS:'快递发货'} as Record<string,string>)[order.deliveryMode||'']||'按商品履约'}}</small></td><td>{{ isPointsOrder(order) ? '无需付款' : time(order.expiresAt) }}</td><td>{{paymentMethodLabel(order)}}</td><td><span class="badge" :class="order.status === 'PAID' ? 'badge-good' : 'badge-muted'">{{ paymentStatus(order) }}</span></td><td>{{ order.status === 'PAID' ? fulfillmentLabel(order.fulfillmentStatus) : '—' }}</td><td class="order-money">{{orderSettlementValue(order)}}</td><td><div class="fulfillment-actions"><button v-for="a in recoveries(order)" :key="a" class="text-button" @click="openAction(order,a)">核查{{actionLabels[a]}}结果</button><RouterLink :to="`/orders/${order.orderId}`" class="text-link">查看详情</RouterLink><button v-if="orderActions(order,account.permissionCodes)[0]" class="text-button" @click="openAction(order,orderActions(order,account.permissionCodes)[0]!)">{{actionLabels[orderActions(order,account.permissionCodes)[0]!]}}</button><select v-if="orderActions(order,account.permissionCodes).length>1" aria-label="更多订单操作" @change="openAction(order,($event.target as HTMLSelectElement).value as OrderAction);($event.target as HTMLSelectElement).value=''"><option value="">更多</option><option v-for="a in orderActions(order,account.permissionCodes).slice(1)" :key="a" :value="a">{{actionLabels[a]}}</option></select></div></td></tr></tbody>
         </table>
       </div>
       <div class="order-pagination"><span>共 {{ data.total }} 单 · 第 {{ page }} 页</span><div><button class="secondary-button" :disabled="page <= 1" @click="changePage(-1)">上一页</button><button class="secondary-button" :disabled="page * data.pageSize >= data.total" @click="changePage(1)">下一页</button></div></div>
     </template>
+    <OrderActionDialog :account="account" :order-id="actionOrderId" :action="action" @close="action=null" @updated="updatedOrder" @notice="actionNotice=$event"/>
     <el-dialog v-model="bulkOpen" title="批量发货" class="fulfillment-batch-dialog" :close-on-click-modal="false" :close-on-press-escape="!bulkBusy" :show-close="!bulkBusy"><p>仅提交当前页所选订单。每单填写实际快递公司和运单号；服务端逐单重新检查权限和订单状态。</p><p v-if="carriersLoading" role="status">正在读取可用快递公司…</p><p v-if="!carriersLoading && !activeCarriers.length" class="order-warning">暂无可用快递公司，暂不能发货。</p><div v-for="order in selectedOrders" :key="order.orderId" class="order-bulk-row"><strong>{{ order.orderNo }}</strong><label>快递公司<select v-model="bulkRows[order.orderId].carrierCode" :disabled="bulkBusy || Boolean(bulkResults.length)"><option value="">请选择</option><option v-for="carrier in activeCarriers" :key="carrier.code" :value="carrier.code">{{ carrier.name }}</option></select></label><label>运单号<input v-model="bulkRows[order.orderId].trackingNo" maxlength="80" autocomplete="off" :disabled="bulkBusy || Boolean(bulkResults.length)" placeholder="此单运单号"></label></div><p v-if="bulkValidation && !bulkResults.length" class="order-note">{{ bulkValidation }}</p><div v-if="bulkError" class="order-warning" role="alert">{{ bulkError }}</div><div v-if="bulkResults.length" role="status"><h3>逐单处理结果</h3><p v-for="item in bulkResults" :key="item.orderId" :class="item.success ? 'order-success' : 'order-warning'">{{ item.orderNo || item.orderId }}：{{ item.message }}</p><button class="secondary-button" @click="bulkOpen = false; load()">刷新订单列表</button></div><template #footer><div class="dialog-footer"><button class="secondary-button" :disabled="bulkBusy" @click="bulkOpen = false">{{ bulkResults.length ? '关闭' : '返回' }}</button><button v-if="!bulkResults.length" class="primary-button" :disabled="bulkBusy || !selectedOrders.length || Boolean(bulkValidation)" @click="submitBatch">{{ bulkBusy ? '逐单处理中…' : `确认发货 ${selectedOrders.length} 单` }}</button></div></template></el-dialog>
   </section>
 </template>

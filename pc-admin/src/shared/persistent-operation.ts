@@ -1,7 +1,7 @@
 import { confirmAction } from './confirm'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { api, ApiError, type Account, type Confirmation } from '../api'
+import { api, ApiError, type Account } from '../api'
 
 export interface PendingOperation {
   key: string
@@ -29,7 +29,7 @@ interface OperationOptions {
 /** Shared transport/lifecycle only. Domain validation and authorization policy are injected. */
 export function usePersistentOperation(options: OperationOptions) {
   const pending = ref<PendingOperation | null>(null)
-  const busy = ref(false), error = ref(''), notice = ref(''), password = ref('')
+  const busy = ref(false), error = ref(''), notice = ref('')
   const storageError = ref(''), verified = ref(false)
   let epoch = 0
 
@@ -37,7 +37,7 @@ export function usePersistentOperation(options: OperationOptions) {
     return options.storage(sessionStorage, options.account().accountId, options.target(), value)
   }
   function restore() {
-    password.value = ''; pending.value = null; verified.value = false; storageError.value = ''
+     pending.value = null; verified.value = false; storageError.value = ''
     try { pending.value = stored() }
     catch { storageError.value = '浏览器存储不可用，无法保留操作身份，请恢复存储后操作。' }
   }
@@ -89,7 +89,7 @@ export function usePersistentOperation(options: OperationOptions) {
   async function write(path: string, method: 'POST' | 'PUT', body: Record<string, unknown>, action = '', permission = options.writePermission) {
     const account = options.account()
     if (busy.value || storageError.value || !account.permissionCodes.includes(options.readPermission)
-      || !account.permissionCodes.includes(permission) || pending.value && !verified.value || action && !password.value) return
+      || !account.permissionCodes.includes(permission) || pending.value && !verified.value) return
     const seq = epoch, actor = account.accountId
     busy.value = true; error.value = ''
     let attempted = false
@@ -103,24 +103,18 @@ export function usePersistentOperation(options: OperationOptions) {
         pending.value = operation
       }
       const operation = pending.value!
-      let token = ''
-      if (operation.action) {
-        const confirmation = await api<Confirmation>('/auth/confirm', { method: 'POST', body: JSON.stringify({
-          action: operation.action, password: password.value, objectId: options.target().split(':')[0], revision: operation.body.expectedRevision,
-        }) })
-        token = confirmation.confirmationToken
-      }
+
       if (seq !== epoch || actor !== options.account().accountId) return
       attempted = true
       const result = await api<unknown>(operation.path, { method: operation.method, body: JSON.stringify(operation.body),
-        headers: { 'Idempotency-Key': operation.key, ...(token ? { 'X-Action-Confirmation': token } : {}) } })
+        headers: { 'Idempotency-Key': operation.key } })
       if (seq !== epoch) return
       if (!options.resultMatches(operation, result)) throw new Error('服务端返回结果无法确认。')
       clear(); notice.value = '操作已完成。'; busy.value = false
       await options.onSuccess(result)
     } catch (reason) {
       if (seq === epoch) writeFailure(reason, attempted)
-    } finally { if (seq === epoch) { password.value = ''; busy.value = false } }
+    } finally { if (seq === epoch) {  busy.value = false } }
   }
 
   function beforeUnload(event: BeforeUnloadEvent) {
@@ -136,11 +130,11 @@ export function usePersistentOperation(options: OperationOptions) {
     return allowed && !busy.value && currentEpoch === epoch
   }
   onMounted(() => { restore(); window.addEventListener('beforeunload', beforeUnload) })
-  onUnmounted(() => { epoch++; password.value = ''; window.removeEventListener('beforeunload', beforeUnload) })
+  onUnmounted(() => { epoch++;  window.removeEventListener('beforeunload', beforeUnload) })
   watch(() => JSON.stringify([options.account().accountId, options.account().permissionCodes, options.target()]), () => {
     epoch++; busy.value = false; error.value = ''; notice.value = ''; restore()
   }, { flush: 'sync' })
   onBeforeRouteLeave(mayLeave)
   onBeforeRouteUpdate(mayLeave)
-  return { pending, busy, error, notice, password, storageError, verified, recover, write }
+  return { pending, busy, error, notice, storageError, verified, recover, write }
 }

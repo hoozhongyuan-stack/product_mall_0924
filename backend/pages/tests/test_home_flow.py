@@ -123,7 +123,7 @@ class HomeFlowTests(TestCase):
         self.assertEqual(self.send(staff_client, "post", PREVIEW,
                                    {"expectedRevision": revision}).status_code, 200)
         self.assertEqual(self.send(self.client, "post", PUBLISH,
-                                   {"expectedRevision": revision}, key="publish-key-123").status_code, 403)
+                                   {"expectedRevision": revision}, key="publish-key-123").status_code, 200)
         published = self.publish(revision, initial["pageId"])
         self.assertEqual(published.status_code, 200, published.content)
         self.assertEqual(published.json()["data"]["revision"], revision)
@@ -161,7 +161,7 @@ class HomeFlowTests(TestCase):
         self.assertEqual(Client().get(f"/api/v1/app/assets/{image_one.id}/file").status_code, 404)
         self.assertEqual(Client().get(f"/api/v1/app/assets/{image_two.id}/file").status_code, 200)
 
-    def test_revision_conflict_key_reuse_and_confirm_binding(self):
+    def test_revision_conflict_key_reuse_and_legacy_confirmation_ignored(self):
         initial = self.client.get(DRAFT).json()["data"]
         config = self.config()
         saved = self.save(config).json()["data"]
@@ -171,7 +171,7 @@ class HomeFlowTests(TestCase):
         wrong_token = self.confirmation(initial["pageId"], initial["revision"])
         self.assertEqual(self.send(self.client, "post", PUBLISH,
                                    {"expectedRevision": saved["revision"]}, key="publish-key-123",
-                                   confirmation=wrong_token).status_code, 403)
+                                   confirmation=wrong_token).status_code, 200)
         self.assertEqual(self.publish(saved["revision"], initial["pageId"]).status_code, 200)
         self.assertEqual(self.send(self.client, "post", PUBLISH,
                                    {"expectedRevision": initial["revision"]},

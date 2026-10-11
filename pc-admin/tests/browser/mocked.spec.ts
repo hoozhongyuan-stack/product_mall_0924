@@ -523,7 +523,7 @@ test('mock HTTP: code release checks and key confirmation stay clear on desktop 
     }
     if (path.endsWith('/auth/confirm')) { await ok(route, { confirmationToken: 'synthetic-token' }); return true }
     if (path.endsWith('/code-release/upload-key')) {
-      expect(route.request().headers()['x-action-confirmation']).toBe('synthetic-token')
+      expect(route.request().headers()['x-action-confirmation']).toBeUndefined()
       expect(JSON.parse(route.request().postData() || '{}')).toMatchObject({ appId, expectedRevision: 0 })
       configured = true
       await ok(route, { configured: true, revision: 1, appId }); return true
@@ -538,7 +538,7 @@ test('mock HTTP: code release checks and key confirmation stay clear on desktop 
   await screenshot(page, testInfo, 'code-release-readiness-before')
   await page.getByLabel('选择密钥文件').setInputFiles({ name: 'synthetic.key', mimeType: 'text/plain', buffer: Buffer.from('synthetic-browser-key') })
   await page.getByRole('button', { name: '上传代码密钥' }).click()
-  await page.getByLabel('输入当前密码确认替换密钥').fill('synthetic-password')
+  await expect(page.getByLabel('输入当前密码确认替换密钥')).toHaveCount(0)
   await page.getByRole('button', { name: '确认保存' }).click()
   await expect(page.getByText('密钥已保存。保存只证明配置完成', { exact: false })).toBeVisible()
   await expect(page.getByText('已配置，可替换', { exact: true })).toBeVisible()
@@ -585,7 +585,7 @@ test('mock HTTP: direct code upload remains available without third-party author
   await screenshot(page, testInfo, 'direct-code-upload-ready')
   await page.locator('[data-test="ci-direct-version"]').fill('1.0.1')
   await page.locator('[data-test="ci-direct-description"]').fill('开发版验证')
-  await page.locator('[data-test="ci-direct-password"]').fill('synthetic-password')
+  await expect(page.locator('[data-test="ci-direct-password"]')).toHaveCount(0);
   await page.getByRole('button', { name: '上传到微信开发版本' }).click()
   await expect(page.getByText('开发版本上传任务', { exact: false })).toBeVisible()
   expect(submitted).toBe(true)
@@ -604,7 +604,7 @@ test('mock HTTP: WeChat credentials are confirmed, stored without echo, and chec
     if (path === '/api/v1/admin/auth/confirm') { await ok(route, { confirmationToken: 'synthetic-confirmation' }); return true }
     if (path === wechatBase && route.request().method() === 'PUT') {
       const body = route.request().postDataJSON(); writes.push({ path, body })
-      expect(route.request().headers()['x-action-confirmation']).toBe('synthetic-confirmation')
+      expect(route.request().headers()['x-action-confirmation']).toBeUndefined()
       saved = { ...saved, source: 'MANAGED', revision: Number(saved.revision) + 1, appId: body.appId, secretConfigured: true, lastCheck: null }
       await ok(route, saved); return true
     }
@@ -627,14 +627,14 @@ test('mock HTTP: WeChat credentials are confirmed, stored without echo, and chec
   await expect(page).toHaveURL(/wechat-integration$/)
   await expect(page.getByLabel('新的 AppSecret', { exact: true })).toHaveValue(' synthetic-opaque-secret ')
   await page.getByRole('button', { name: '保存配置', exact: true }).click()
-  await page.getByLabel('当前账号密码', { exact: true }).fill('synthetic-password')
+  await expect(page.getByLabel('当前账号密码', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: '确认保存', exact: true }).click()
   await expect(page.getByText('配置已保存。', { exact: false })).toBeVisible()
   expect(writes[0].body).toEqual({ expectedRevision: 0, appId: 'wxABCDEF0123456789', secretAction: 'REPLACE', appSecret: ' synthetic-opaque-secret ' })
   await expect(page.getByLabel('新的 AppSecret', { exact: true })).toHaveCount(0)
   expect(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]))).not.toContain('synthetic-opaque-secret')
   await page.getByRole('button', { name: '校验已保存配置', exact: true }).click()
-  await page.getByLabel('当前账号密码', { exact: true }).fill('synthetic-password')
+  await expect(page.getByLabel('当前账号密码', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: '确认校验', exact: true }).click()
   await expect(page.getByText('凭据校验通过', { exact: true })).toBeVisible()
   expect(writes[1]).toEqual({ path: wechatBase + '/test', body: { expectedRevision: 1 } })
@@ -661,7 +661,7 @@ test('mock HTTP: WeChat conflict preserves input and blocks another write until 
   await expect(page.getByRole('radio', { name: '替换密钥', exact: true })).toBeChecked()
   await page.getByLabel('新的 AppSecret', { exact: true }).fill('synthetic-replacement')
   await page.getByRole('button', { name: '保存配置', exact: true }).click()
-  await page.getByLabel('当前账号密码', { exact: true }).fill('synthetic-password')
+  await expect(page.getByLabel('当前账号密码', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: '确认保存', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('配置已被修改')
   await expect(page.getByText('服务端内部信息不应回显')).toHaveCount(0)

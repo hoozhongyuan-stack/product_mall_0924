@@ -137,16 +137,15 @@ class AdminMessageTaskApiTests(TestCase):
         self.assertFalse(detail["recoverable"])
         self.assertNotIn("leaseToken", json.dumps(detail))
 
-    def test_expired_reservation_requires_confirm_and_rechecks_stale_state(self):
+    def test_expired_reservation_without_password_rechecks_stale_state(self):
         task = self._task(status="RESERVED")
         path = f"{PATH}/{task.pk}/recover-reservation"
         self.assertEqual(self.client.get(f"{PATH}/{task.pk}").json()["data"]["recoverable"], True)
-        self.assertEqual(self._recover(self.client, task).status_code, 403)
         self.assertEqual(self._recover(self.client, task, token=self._confirm(self.client, task),
                                        body={"expectedUpdatedAt": task.updated_at.isoformat(),
                                              "expectedAttemptCount": 1}).status_code, 409)
         task.refresh_from_db()
-        result = self._recover(self.client, task, token=self._confirm(self.client, task))
+        result = self._recover(self.client, task)
         self.assertEqual(result.status_code, 200, result.content)
         self.assertIn("no-store", result["Cache-Control"])
         self.assertEqual(result.json()["data"]["status"], "READY")
@@ -191,7 +190,7 @@ class AdminMessageTaskApiTests(TestCase):
         detail = self.client.get(f"{PATH}/{task.pk}").json()["data"]
         self.assertTrue(detail["recoverable"])
         self.assertEqual(detail["attemptCount"], 1)
-        result = self._recover(self.client, task, token=self._confirm(self.client, task))
+        result = self._recover(self.client, task)
         self.assertEqual(result.status_code, 200, result.content)
         task.refresh_from_db()
         self.assertEqual((task.status, task.attempt_count), ("READY", 1))

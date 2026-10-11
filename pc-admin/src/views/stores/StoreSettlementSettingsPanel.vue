@@ -3,14 +3,14 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, confirmedWrite, type Account } from '../../api'
 interface SettlementSettings { receivedWindowDays: number; revision: number; appliesTo: 'NEW_ORDERS' }
 const props = defineProps<{ account: Account }>()
-const config = ref<SettlementSettings | null>(null), days = ref(''), password = ref('')
+const config = ref<SettlementSettings | null>(null), days = ref('')
 const loading = ref(false), busy = ref(false), confirming = ref(false), needsRead = ref(false)
 const error = ref(''), notice = ref('')
 let epoch = 0
 const permitted = computed(() => props.account.permissionCodes.includes('stores.manage'))
 const valid = computed(() => /^\d+$/.test(days.value) && Number(days.value) >= 1 && Number(days.value) <= 365)
 const saveAllowed = computed(() => permitted.value && config.value && valid.value && Number(days.value) !== config.value.receivedWindowDays && !loading.value && !busy.value && !needsRead.value)
-function clearConfirmation() { password.value = ''; confirming.value = false }
+function clearConfirmation() {  confirming.value = false }
 async function load() {
   if (!permitted.value || busy.value) return
   const current = ++epoch
@@ -21,13 +21,13 @@ async function load() {
   } catch { if (current === epoch) { config.value = null; error.value = '读取售后期失败，请重新读取售后期后重试。' } }
   finally { if (current === epoch) loading.value = false }
 }
-function begin() { if (saveAllowed.value) { confirming.value = true; password.value = ''; error.value = ''; notice.value = '' } }
+function begin() { if (saveAllowed.value) { confirming.value = true;  error.value = ''; notice.value = '' } }
 async function save() {
-  if (!saveAllowed.value || !confirming.value || !password.value || !config.value) return
+  if (!saveAllowed.value || !confirming.value  || !config.value) return
   const current = ++epoch, revision = config.value.revision, requestedDays = Number(days.value)
   busy.value = true
   try {
-    const result = await confirmedWrite<SettlementSettings>('stores.settlement.configure', password.value, '/stores/settlement-settings', 'PUT', { expectedRevision: revision, receivedWindowDays: requestedDays }, 'aftersale-policy', revision)
+    const result = await confirmedWrite<SettlementSettings>('stores.settlement.configure', '', '/stores/settlement-settings', 'PUT', { expectedRevision: revision, receivedWindowDays: requestedDays }, 'aftersale-policy', revision)
     if (current === epoch) {
       if (result.revision !== revision + 1 || result.receivedWindowDays !== requestedDays || result.appliesTo !== 'NEW_ORDERS') throw new Error('Unexpected result')
       config.value = result; days.value = String(result.receivedWindowDays); notice.value = '售后期已保存，仅新订单生效。'
@@ -57,9 +57,9 @@ onUnmounted(() => { epoch++; clearConfirmation() })
       <div class="store-actions wide"><button class="primary-button" type="submit" :disabled="!saveAllowed || confirming">保存售后期</button></div>
     </form>
     <form v-if="confirming" aria-label="确认保存售后期" @submit.prevent="save">
-      <h3>确认保存售后期</h3><p>本次修改影响新订单，请输入当前账号密码确认。</p>
-      <label for="store-settlement-password">当前账号密码 <input id="store-settlement-password" v-model="password" type="password" autocomplete="current-password" :disabled="busy" /></label>
-      <div class="store-actions"><button class="primary-button" type="submit" :disabled="busy || !password">{{ busy ? '正在保存…' : '确认保存售后期' }}</button><button class="secondary-button" type="button" :disabled="busy" @click="clearConfirmation">取消</button></div>
+      <h3>确认保存售后期</h3><p>本次修改影响新订单，请核对本次修改后确认保存。</p>
+
+      <div class="store-actions"><button class="primary-button" type="submit" :disabled="busy ">{{ busy ? '正在保存…' : '确认保存售后期' }}</button><button class="secondary-button" type="button" :disabled="busy" @click="clearConfirmation">取消</button></div>
     </form>
   </section>
 </template>

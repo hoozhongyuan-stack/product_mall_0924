@@ -75,15 +75,13 @@ class D5ApiTests(TestCase):
         self.assertEqual(self.write(self.client,'put',path,{'expectedRevision':1,'pointsPrice':201},uuid4()).status_code,200)
         self.assertEqual(AuditLog.objects.filter(action_code='exchange.create').count(),1)
 
-    def test_availability_csrf_password_target_and_replay(self):
+    def test_availability_without_password_keeps_csrf_and_replay(self):
         offer=ExchangeOffer.objects.create(sku=self.sku,points_price=100);path=BASE+'/'+str(offer.id)+'/availability'
         body={'expectedRevision':1,'status':'ON_SALE'}
         self.assertEqual(self.client.post(path,json.dumps(body),content_type='application/json').status_code,403)
-        self.assertEqual(self.write(self.client,'post',path,body,uuid4()).status_code,403)
-        self.assertEqual(self.write(self.client,'post',path,body,uuid4(),self.confirm(offer,object_id=uuid4())).status_code,403)
-        token=self.confirm(offer);key=uuid4();first=self.write(self.client,'post',path,body,key,token)
+        key=uuid4();first=self.write(self.client,'post',path,body,key)
         self.assertEqual(first.status_code,200,first.content)
-        self.assertEqual(self.write(self.client,'post',path,body,key,token).json()['data'],first.json()['data'])
+        self.assertEqual(self.write(self.client,'post',path,body,key).json()['data'],first.json()['data'])
 
     def test_readonly_live_revocation_and_actor_private_recovery(self):
         key=uuid4();self.write(self.client,'post',BASE,{'skuId':str(self.sku.id),'pointsPrice':100},key)

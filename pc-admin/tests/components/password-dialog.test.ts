@@ -16,7 +16,7 @@ async function setup(resetTarget?: Account) {
   return wrapper
 }
 async function fill(wrapper: ReturnType<typeof mount>, repeat = 'New safe password 2027!') {
-  await wrapper.get('input[autocomplete="current-password"]').setValue('Old safe password 2026!')
+  expect(wrapper.find('input[autocomplete="current-password"]').exists()).toBe(false)
   const inputs = wrapper.findAll('input[autocomplete="new-password"]')
   await inputs[0]!.setValue('New safe password 2027!')
   await inputs[1]!.setValue(repeat)
@@ -39,7 +39,7 @@ describe('admin password changes', () => {
   it('requires all fields and clears entered secrets when cancelled', async () => {
     const wrapper = await setup()
     await wrapper.get('form').trigger('submit')
-    expect(wrapper.text()).toContain('请填写当前密码、新密码和确认新密码')
+    expect(wrapper.text()).toContain('请填写新密码和确认新密码')
     expect(api).not.toHaveBeenCalled()
     await fill(wrapper)
     await wrapper.findAll('button').find(button => button.text() === '取消')!.trigger('click')
@@ -56,7 +56,7 @@ describe('admin password changes', () => {
     vi.mocked(api).mockResolvedValue({ requiresLogin: true })
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(api).toHaveBeenCalledWith('/auth/password', { method: 'POST', body: JSON.stringify({ currentPassword: 'Old safe password 2026!', newPassword: 'New safe password 2027!' }) })
+    expect(api).toHaveBeenCalledWith('/auth/password', { method: 'POST', body: JSON.stringify({ newPassword: 'New safe password 2027!' }) })
     expect(wrapper.emitted('changed')).toHaveLength(1)
     expect(wrapper.findAll('input').every(input => (input.element as HTMLInputElement).value === '')).toBe(true)
   })
@@ -69,18 +69,18 @@ describe('admin password changes', () => {
     await wrapper.get('form').trigger('submit')
     await wrapper.get('form').trigger('submit')
     expect(api).toHaveBeenCalledTimes(1)
-    expect(api).toHaveBeenCalledWith('/accounts/staff-id/password', expect.objectContaining({ body: JSON.stringify({ currentPassword: 'Old safe password 2026!', newPassword: 'New safe password 2027!', expectedRevision: 4 }) }))
+    expect(api).toHaveBeenCalledWith('/accounts/staff-id/password', expect.objectContaining({ body: JSON.stringify({ newPassword: 'New safe password 2027!', expectedRevision: 4 }) }))
     expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
     finish({ requiresLogin: false })
     await flushPromises()
   })
   it('shows server errors and clears passwords for retry', async () => {
-    vi.mocked(api).mockImplementation(async () => { throw new ApiError('当前密码不正确。', 403, 'CONFIRMATION_FAILED') })
+    vi.mocked(api).mockImplementation(async () => { throw new ApiError('当前账号无权修改此密码。', 403, 'FORBIDDEN') })
     const wrapper = await setup()
     await fill(wrapper)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(wrapper.get('[role="alert"]').text()).toContain('当前密码不正确')
+    expect(wrapper.get('[role="alert"]').text()).toContain('当前账号无权修改此密码')
     expect(wrapper.findAll('input').every(input => (input.element as HTMLInputElement).value === '')).toBe(true)
     expect(wrapper.emitted('changed')).toBeUndefined()
   })

@@ -11,8 +11,8 @@ from django.utils import timezone
 
 from common.http import method
 from .models import AccountGroup, ActionConfirmation, AdminAccount, AuditLog, GroupPermission, PermissionGroup
-from .security import (PERMISSION_CODES, audit, bump_versions, confirm_action, current_account,
-                       error, lock_until, parse_json, permissions, require, response,
+from .security import (ACTION_PERMISSIONS, ACTION_READ_PERMISSIONS, PERMISSION_CODES, audit, bump_versions, confirm_action, current_account,
+                       error, lock_until, parse_json, permissions, require, require_live, response,
                        source_fingerprint, validate_new_password)
 
 DUMMY_PASSWORD_HASH = make_password("unused-login-timing-value")
@@ -125,57 +125,10 @@ def confirm_view(request):
     if bad:
         return bad
     action = body.get("action")
-    required = {"account.create": "account.manage", "account.disable": "account.manage",
-                "group.create": "permission.manage", "group.update": "permission.manage",
-                "page.publish": "page.publish", "startup.publish": "startup.publish",
-                "page.rollback": "page.publish", "startup.rollback": "startup.publish",
-                "navigation.publish": "navigation.publish", "navigation.rollback": "navigation.publish",
-                "customer_service.publish": "customer_service.publish",
-                "customer_service.rollback": "customer_service.publish",
-                "payment.offline.confirm": "payment.offline.confirm",
-                "aftersale.review": "aftersale.review", "aftersale.return.accept": "aftersale.return.accept", "refund.offline.confirm": "refund.offline.confirm",
-                "refund.wechat.dispatch": "refund.prepare",
-                "refund.benefits.settle": "refund.prepare",
-                "member.rules.update": "member.rules.manage",
-                "coupon.publish": "coupon.publish", "coupon.issue": "coupon.issue",
-                "exchange.publish": "exchange.publish",
-                "notification.task.recover_reservation": "notification.recover",
-                "stores.map.configure": "stores.manage",
-                "stores.settlement.configure": "stores.manage",
-                "stores.cost.batch.configure": "stores.manage",
-                "stores.share.batch.configure": "stores.manage",
-                "stores.profit.configure": "stores.manage",
-                "stores.profit.batch.configure": "stores.manage",
-                "stores.withdrawal.review": "stores.accounts.manage",
-                'stores.procurement.configure': 'stores.procurement.manage',
-                'stores.procurement.confirm-payment': 'stores.procurement.finance',
-                'stores.procurement.close-cancel': 'stores.procurement.finance',
-                "stores.withdrawal.pay": "stores.accounts.manage",
-                "stores.withdrawal.payee": "stores.accounts.manage",
-                "wechat.integration.update": "wechat.integration.manage",
-                "wechat.integration.test": "wechat.integration.manage",
-                "code.release.upload_key": "code.release.manage",
-                "code.release.developer_upload_key": "code.release.manage",
-                "code.release.upload": "code.release.manage",
-                "code.release.resolve_upload": "code.release.manage",
-                "code.release.review": "code.release.manage",
-                "code.release.resolve_review": "code.release.manage",
-                "code.release.publish": "code.release.manage"}
+    required = ACTION_PERMISSIONS
     if not isinstance(action, str) or action not in required or required[action] not in permissions(account):
         return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
-    read_permission = {"page.rollback": "page.read", "startup.rollback": "startup.read",
-                       "navigation.rollback": "navigation.read",
-                       "customer_service.rollback": "customer_service.read",
-                       "notification.task.recover_reservation": "notification.read",
-                       "wechat.integration.update": "wechat.integration.read",
-                       "wechat.integration.test": "wechat.integration.read",
-                       "code.release.upload_key": "code.version.read",
-                       "code.release.developer_upload_key": "code.version.read",
-                       "code.release.upload": "code.version.read",
-                       "code.release.resolve_upload": "code.version.read",
-                       "code.release.review": "code.version.read",
-                       "code.release.resolve_review": "code.version.read",
-                       "code.release.publish": "code.version.read"}.get(action)
+    read_permission = ACTION_READ_PERMISSIONS.get(action)
     if read_permission and read_permission not in permissions(account):
         return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
     with transaction.atomic():
@@ -183,22 +136,10 @@ def confirm_view(request):
         if not live.enabled or required[action] not in permissions(live) or (
                 read_permission and read_permission not in permissions(live)):
             return error(request, 403, "PERMISSION_DENIED", "当前账号没有此操作权限。")
-        if live.locked_until and live.locked_until > timezone.now():
-            audit(request, "auth.confirm", "admin_account", live.id, live, result="DENIED")
-            return error(request, 429, "RATE_LIMITED", "操作确认暂时受限，请稍后再试。")
-        if live.locked_until and live.locked_until <= timezone.now():
-            live.failed_count = 0
-            live.locked_until = None
-        if not isinstance(body.get("password"), str) or not live.check_password(body["password"]):
-            live.failed_count += 1
-            live.locked_until = lock_until() if live.failed_count >= 5 else None
-            live.save(update_fields=["failed_count", "locked_until", "updated_at"])
-            audit(request, "auth.confirm", "admin_account", live.id, live, result="DENIED")
-            return error(request, 403, "CONFIRMATION_FAILED", "当前密码不正确。")
-        if live.failed_count or live.locked_until:
-            live.failed_count = 0
-            live.locked_until = None
-            live.save(update_fields=["failed_count", "locked_until", "updated_at"])
+        _, bad = require_live(request, required[action])
+        if bad:
+            return bad
+
     object_id = body.get("objectId", "")
     revision = body.get("revision", 0)
     if not isinstance(object_id, str) or type(revision) is not int or revision < 0:
@@ -252,6 +193,14 @@ def accounts_view(request):
             return error(request, 403, "PERMISSION_DENIED", "不能授予高于自身的权限。")
     try:
         with transaction.atomic():
+            account, bad = require_live(request, "account.manage")
+            if bad:
+                return bad
+            if account.kind == AdminAccount.Kind.STAFF:
+                assigned = set(GroupPermission.objects.filter(group__in=groups).values_list("code", flat=True))
+                if not assigned.issubset(set(permissions(account))):
+                    audit(request, "account.create", "admin_account", actor=account, result="DENIED")
+                    return error(request, 403, "PERMISSION_DENIED", "不能授予高于自身的权限。")
             created = AdminAccount.objects.create_user(name, body["password"], display_name=display.strip())
             AccountGroup.objects.bulk_create([AccountGroup(account=created, group=group) for group in groups])
             audit(request, "account.create", "admin_account", created.id, account,
@@ -280,6 +229,9 @@ def account_detail_view(request, account_id):
         target = AdminAccount.objects.select_for_update().filter(id=account_id).first()
         if not target:
             return error(request, 404, "NOT_FOUND", "账号不存在。")
+        actor, bad = require_live(request, "account.manage")
+        if bad:
+            return bad
         if target.kind == AdminAccount.Kind.OWNER or target.id == actor.id:
             audit(request, "account.disable", "admin_account", target.id, actor, result="DENIED")
             return error(request, 403, "PERMISSION_DENIED", "不能停用主账号或自己。")
@@ -320,6 +272,12 @@ def groups_view(request):
         return error(request, 403, "PERMISSION_DENIED", "不能授予高于自身的权限。")
     try:
         with transaction.atomic():
+            account, bad = require_live(request, "permission.manage")
+            if bad:
+                return bad
+            if account.kind == AdminAccount.Kind.STAFF and not set(codes).issubset(set(permissions(account))):
+                audit(request, "group.create", "permission_group", actor=account, result="DENIED")
+                return error(request, 403, "PERMISSION_DENIED", "不能授予高于自身的权限。")
             group = PermissionGroup.objects.create(code=code, name=name)
             GroupPermission.objects.bulk_create([GroupPermission(group=group, code=item) for item in set(codes)])
             audit(request, "group.create", "permission_group", group.id, account,
@@ -350,6 +308,9 @@ def group_detail_view(request, group_id):
         group = PermissionGroup.objects.select_for_update().filter(id=group_id).first()
         if not group:
             return error(request, 404, "NOT_FOUND", "权限组不存在。")
+        actor, bad = require_live(request, "permission.manage")
+        if bad:
+            return bad
         if group.revision != revision:
             return error(request, 409, "REVISION_CONFLICT", "权限组已被其他人修改。")
         if actor.kind == AdminAccount.Kind.STAFF and (

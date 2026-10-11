@@ -16,12 +16,8 @@ test('真实隔离数据库：采购核款、发货、整单幂等收货保留�
     const csrf = (await page.context().cookies()).find(c => c.name === 'csrftoken')!.value
     const adminHeaders = { 'X-CSRFToken': csrf }
     const current = (await (await page.request.get('/api/v1/admin/stores/procurement/settings')).json()).data
-    const confirmed = await page.request.post('/api/v1/admin/auth/confirm', { headers: adminHeaders,
-      data: { action: 'stores.procurement.configure', objectId: 'procurement-settings', revision: current.revision,
-        password: process.env.MALL_E2E_OWNER_PASSWORD } })
-    expect(confirmed.status()).toBe(200)
     const settings = await page.request.put('/api/v1/admin/stores/procurement/settings', {
-      headers: { ...adminHeaders, 'X-Action-Confirmation': (await confirmed.json()).data.confirmationToken },
+      headers: adminHeaders,
       data: { paymentInstructions: 'synthetic-procurement-only：隔离测试账户', expectedRevision: current.revision } })
     expect(settings.status()).toBe(200)
     const products = (await (await member.get(`${base}/products`)).json()).data.items
@@ -61,8 +57,7 @@ test('真实隔离数据库：采购核款、发货、整单幂等收货保留�
       data: { requestKey: randomUUID(), expectedRevision: order.revision, assetId: proof.assetId, note: '隔离测试付款' } })
     expect(report.status()).toBe(200)
     await page.reload()
-    await perform('确认实际到账', { '到账凭证编号': 'synthetic-cash-only', '处理备注': '实际足额核款',
-      '管理员密码': process.env.MALL_E2E_OWNER_PASSWORD! }, 'confirm-payment')
+    await perform('确认实际到账', { '到账凭证编号': 'synthetic-cash-only', '处理备注': '实际足额核款' }, 'confirm-payment')
     await perform('填写物流并发货', { '物流公司': '测试物流', '物流单号': 'SYNTHETIC-001' }, 'ship')
     order = await refresh()
     expect(order.status).toBe('SHIPPED')

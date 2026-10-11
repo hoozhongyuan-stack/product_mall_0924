@@ -31,8 +31,8 @@ async function replaceSecret(wrapper: ReturnType<typeof mount>, value = 'synthet
 }
 async function confirmAction(wrapper: ReturnType<typeof mount>, action = '保存配置') {
   await button(wrapper, action).trigger('click')
-  await wrapper.get('#wechat-confirm-password').setValue('synthetic-password')
-  await wrapper.get('[aria-label="二次确认"]').trigger('submit')
+  expect(wrapper.find('#wechat-confirm-password').exists()).toBe(false);
+  await wrapper.get('[aria-label="操作确认"]').trigger('submit')
   await flushPromises()
 }
 
@@ -50,11 +50,10 @@ describe('WeChat integration boundary', () => {
   it('sends a confirmed REPLACE once without trimming, storing, or retaining the secret after success', async () => {
     const { wrapper } = await setup()
     await replaceSecret(wrapper, '  opaque-密钥  ')
-    vi.mocked(api).mockResolvedValueOnce({ confirmationToken: 'synthetic-confirmation' } as never)
-      .mockResolvedValueOnce({ ...config, revision: 3 } as never)
+    vi.mocked(api).mockResolvedValueOnce({ ...config, revision: 3 } as never)
     await confirmAction(wrapper)
-    expect(api).toHaveBeenNthCalledWith(2, '/auth/confirm', expect.objectContaining({ body: JSON.stringify({ action: 'wechat.integration.update', password: 'synthetic-password', objectId: 'wechat-mini-program', revision: 2 }) }))
-    expect(api).toHaveBeenLastCalledWith(base, expect.objectContaining({ method: 'PUT', headers: { 'X-Action-Confirmation': 'synthetic-confirmation' }, body: JSON.stringify({ expectedRevision: 2, appId: config.appId, secretAction: 'REPLACE', appSecret: '  opaque-密钥  ' }) }))
+    expect(vi.mocked(api).mock.calls.some(([path]) => path === '/auth/confirm')).toBe(false)
+    expect(api).toHaveBeenLastCalledWith(base, expect.objectContaining({ method: 'PUT', headers: {}, body: JSON.stringify({ expectedRevision: 2, appId: config.appId, secretAction: 'REPLACE', appSecret: '  opaque-密钥  ' }) }))
     expect(wrapper.text()).toContain('配置已保存')
     expect(wrapper.find('#wechat-secret').exists()).toBe(false)
     expect(wrapper.find('#wechat-confirm-password').exists()).toBe(false)
@@ -63,8 +62,7 @@ describe('WeChat integration boundary', () => {
   it('tests only the saved revision and distinguishes credential validation from real login', async () => {
     const { wrapper } = await setup({ ...config, source: 'ENV', keyAvailable: false })
     expect(button(wrapper, '保存配置').attributes('disabled')).toBeDefined()
-    vi.mocked(api).mockResolvedValueOnce({ confirmationToken: 'synthetic-confirmation' } as never)
-      .mockResolvedValueOnce({ ...config, source: 'ENV', keyAvailable: false, lastCheck: { revision: 2, status: 'SUCCESS', code: 'OK', checkedAt: '2026-09-28T01:00:00Z' } } as never)
+    vi.mocked(api).mockResolvedValueOnce({ ...config, source: 'ENV', keyAvailable: false, lastCheck: { revision: 2, status: 'SUCCESS', code: 'OK', checkedAt: '2026-09-28T01:00:00Z' } } as never)
     await confirmAction(wrapper, '校验已保存配置')
     expect(api).toHaveBeenLastCalledWith(base + '/test', expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedRevision: 2 }) }))
     expect(wrapper.text()).toContain('凭据校验通过')
@@ -73,7 +71,7 @@ describe('WeChat integration boundary', () => {
   it.each([new ApiError('unsafe diagnostic synthetic-secret', 409, 'REVISION_CONFLICT'), new Error('network synthetic-secret')])('keeps edits and blocks retries after rejection or unknown outcome until a read', async failure => {
     const { wrapper } = await setup()
     await replaceSecret(wrapper)
-    vi.mocked(api).mockResolvedValueOnce({ confirmationToken: 'synthetic-confirmation' } as never).mockRejectedValueOnce(failure)
+    vi.mocked(api).mockRejectedValueOnce(failure)
     await confirmAction(wrapper)
     expect((wrapper.get('#wechat-secret').element as HTMLInputElement).value).toBe('synthetic-secret')
     expect(button(wrapper, '保存配置').attributes('disabled')).toBeDefined()
@@ -86,24 +84,25 @@ describe('WeChat integration boundary', () => {
     expect(wrapper.text()).toContain('请核对后重新确认')
     expect(button(wrapper, '保存配置').attributes('disabled')).toBeUndefined()
   })
-  it('stops before sending a write when permission is revoked during password confirmation', async () => {
+  it('discards late write receipt when permission is revoked during submission', async () => {
     const { wrapper } = await setup()
     await replaceSecret(wrapper)
     let resolve!: (value: unknown) => void
     vi.mocked(api).mockImplementationOnce(() => new Promise(done => { resolve = done }) as never)
     await button(wrapper, '保存配置').trigger('click')
-    await wrapper.get('#wechat-confirm-password').setValue('synthetic-password')
-    await wrapper.get('[aria-label="二次确认"]').trigger('submit')
+    expect(wrapper.find('#wechat-confirm-password').exists()).toBe(false);
+    await wrapper.get('[aria-label="操作确认"]').trigger('submit')
     await wrapper.setProps({ account: { ...account, permissionCodes: ['wechat.integration.read'] } })
-    resolve({ confirmationToken: 'stale-confirmation' }); await flushPromises()
-    expect(vi.mocked(api).mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(0)
+    resolve({ ...config, revision: 3 }); await flushPromises()
+    expect(vi.mocked(api).mock.calls.filter(([, options]) => options?.method === 'PUT')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('配置已保存')
     expect(wrapper.find('#wechat-secret').exists()).toBe(false)
   })
 })
 
 it('can explicitly save KEEP without sending any secret property', async () => {
   const { wrapper } = await setup()
-  vi.mocked(api).mockResolvedValueOnce({ confirmationToken: 'synthetic-confirmation' } as never).mockResolvedValueOnce({ ...config, revision: 3 } as never)
+  vi.mocked(api).mockResolvedValueOnce({ ...config, revision: 3 } as never)
   await confirmAction(wrapper)
   const request = vi.mocked(api).mock.calls.find(([, options]) => options?.method === 'PUT')!
   expect(JSON.parse(String(request[1]?.body))).toEqual({ expectedRevision: 2, appId: config.appId, secretAction: 'KEEP' })
@@ -112,7 +111,7 @@ it('can explicitly save KEEP without sending any secret property', async () => {
 it('locks a failed platform check until configuration is read again', async () => {
   const { wrapper } = await setup()
   const failed = { ...config, lastCheck: { revision: 2, status: 'FAILED', code: 'ADMIN_CONFIRMATION_REQUIRED', checkedAt: '2026-09-28T01:00:00Z' } }
-  vi.mocked(api).mockResolvedValueOnce({ confirmationToken: 'synthetic-confirmation' } as never).mockResolvedValueOnce(failed as never)
+  vi.mocked(api).mockResolvedValueOnce(failed as never)
   await confirmAction(wrapper, '校验已保存配置')
   expect(wrapper.text()).toContain('管理员须在微信平台确认')
   expect(button(wrapper, '校验已保存配置').attributes('disabled')).toBeDefined()
@@ -148,7 +147,7 @@ it('cancels confirmation without losing edits and protects tab closing', async (
   const { wrapper } = await setup()
   await replaceSecret(wrapper)
   await button(wrapper, '保存配置').trigger('click')
-  await wrapper.get('#wechat-confirm-password').setValue('synthetic-password')
+  expect(wrapper.find('#wechat-confirm-password').exists()).toBe(false);
   await button(wrapper, '取消').trigger('click')
   expect(wrapper.find('#wechat-confirm-password').exists()).toBe(false)
   expect((wrapper.get('#wechat-secret').element as HTMLInputElement).value).toBe('synthetic-secret')
@@ -166,7 +165,7 @@ it('ignores a stale read after switching accounts and rejects inconsistent write
   resolve(config); await flushPromises()
   expect((wrapper.get('#wechat-app-id').element as HTMLInputElement).value).toBe('wx1111111111111111')
   await replaceSecret(wrapper)
-  vi.mocked(api).mockResolvedValueOnce({ confirmationToken: 'synthetic-confirmation' } as never).mockResolvedValueOnce({ ...config, revision: 7 } as never)
+  vi.mocked(api).mockResolvedValueOnce({ ...config, revision: 7 } as never)
   await confirmAction(wrapper)
   expect(wrapper.text()).toContain('无法确认服务端结果')
   expect(button(wrapper, '保存配置').attributes('disabled')).toBeDefined()

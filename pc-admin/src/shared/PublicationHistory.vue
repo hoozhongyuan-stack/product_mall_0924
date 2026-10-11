@@ -25,7 +25,6 @@ const page = ref(1)
 const history = ref<HistoryPage | null>(null)
 const detail = ref<VersionDetail | null>(null)
 const reason = ref('')
-const password = ref('')
 const pending = ref<RollbackIntent | null>(null)
 const scope = computed(() => historyScope(props.account.accountId, props.base))
 const permission = computed(() => props.domain || (props.startup ? 'startup' : 'page'))
@@ -64,10 +63,10 @@ watch(scope, () => {
  syncRequested.value = false
  open.value = false; history.value = null; detail.value = null; pending.value = null
  loading.value = false; detailLoading.value = false; busy.value = false
- password.value = ''; reason.value = ''; error.value = ''; rollbackError.value = ''; notice.value = ''
+  reason.value = ''; error.value = ''; rollbackError.value = ''; notice.value = ''
  restoreIntent()
 }, { immediate: true })
-watch(open, value => { password.value = ''; if (!value) { generation++; detailGeneration++ } })
+watch(open, value => {  if (!value) { generation++; detailGeneration++ } })
 async function load() {
  if (!canRead.value) return
  const current = ++generation, target = scope.value
@@ -101,7 +100,7 @@ async function readDetail(versionId: string) {
 }
 function show() { if (!props.disabled) { open.value = true; page.value = 1; void load(); if (pending.value) void readDetail(pending.value.body.versionId) } }
 async function rollback() {
- if (!canRollback.value || busy.value || props.disabled || recoveryBlocked.value || !password.value || !history.value || (!pending.value && !detail.value)) return
+ if (!canRollback.value || busy.value || props.disabled || recoveryBlocked.value  || !history.value || (!pending.value && !detail.value)) return
  const wasRecovery = !!pending.value
  let intent = pending.value
  try {
@@ -110,7 +109,7 @@ async function rollback() {
  if (!wasRecovery && !saveIntent(intent)) { rollbackError.value = '浏览器无法保存原请求的恢复记录，回退未提交。请启用会话存储后重试。'; return }
  const current = ++operationGeneration, targetScope = scope.value, targetBase = props.base
  const targetObject = `${props.objectId}:${intent.body.versionId}`
- const action = `${permission.value}.rollback`, secret = password.value
+ const action = `${permission.value}.rollback`, secret = ''
  let accepted = false
  busy.value = true; rollbackError.value = ''; notice.value = ''
  try {
@@ -119,7 +118,7 @@ async function rollback() {
   accepted = true
   saveIntent(null, targetScope)
   if (alive && current === operationGeneration && targetScope === scope.value) {
-   password.value = ''; reason.value = ''; syncRequested.value = true
+    reason.value = ''; syncRequested.value = true
    notice.value = '原回退请求已成功记录，正在读取当前线上状态。'
    const latest = await load()
    if (!latest) notice.value = '原回退请求已成功记录，但当前线上状态读取失败。请重新读取历史，当前草稿与编辑保持原样。'
@@ -128,11 +127,11 @@ async function rollback() {
   if (alive && current === operationGeneration && targetScope === scope.value) {
    if (accepted) { rollbackError.value = '原回退已成功记录，但当前线上状态读取失败，请重新读取历史。'; return }
    if (!keepRollbackIntent(failure instanceof ApiError ? failure.status : undefined, wasRecovery)) saveIntent(null)
-   rollbackError.value = `${failure instanceof Error ? failure.message : '回退失败。'}${pending.value ? ' 结果未确认，保留原版本、原因和请求编号，请输入密码后按原请求恢复。' : ' 当前线上版本保持不变，请重新读取历史后重试。'}`
+   rollbackError.value = `${failure instanceof Error ? failure.message : '回退失败。'}${pending.value ? ' 结果未确认，保留原版本、原因和请求编号，请按原请求恢复。' : ' 当前线上版本保持不变，请重新读取历史后重试。'}`
   }
- } finally { if (alive && current === operationGeneration && targetScope === scope.value) { busy.value = false; password.value = '' } }
+ } finally { if (alive && current === operationGeneration && targetScope === scope.value) { busy.value = false; } }
 }
-onBeforeUnmount(() => { alive = false; generation++; detailGeneration++; operationGeneration++; password.value = '' })
+onBeforeUnmount(() => { alive = false; generation++; detailGeneration++; operationGeneration++; })
 </script>
 <template>
  <el-button v-if="canRead" :disabled="disabled" @click="show">发布历史与回退</el-button>
@@ -159,12 +158,12 @@ onBeforeUnmount(() => { alive = false; generation++; detailGeneration++; operati
    <div v-else-if="serviceConfig" class="history-service-preview" aria-label="历史客服悬浮入口预览"><p>展示：{{ serviceConfig.enabled ? '开启' : '关闭' }} · 方式：{{ serviceConfig.mode === 'PHONE' ? '拨打电话' : serviceConfig.mode === 'QR' ? '客服二维码' : '未设置' }}</p><p v-if="serviceConfig.prompt">入口文案：{{ serviceConfig.prompt }}</p><p v-if="serviceConfig.mode === 'PHONE' && serviceConfig.phone">联系电话：{{ serviceConfig.phone }}</p><figure v-if="serviceConfig.qrAssetId"><img v-if="!failedMedia.includes('qr')" :src="assetUrl(serviceConfig.qrAssetId)" alt="历史客服二维码" @error="failedMedia = [...failedMedia, 'qr']" /><figcaption v-else>历史二维码素材无法读取。</figcaption></figure></div>
    <HomePagePreview v-else-if="pageConfig" :config="pageConfig" :stale="false" :page-name="detail.name" />
    <form v-if="canRollback && (!detail.isCurrent || pending)" class="history-rollback" @submit.prevent="rollback">
-    <h3>{{ pending ? '恢复原回退请求' : '切换线上到此版本' }}</h3><p>需填写原因并确认当前账号密码。此操作不会覆盖草稿。</p>
+    <h3>{{ pending ? '恢复原回退请求' : '切换线上到此版本' }}</h3><p>请填写原因并核对所选版本。此操作不会覆盖草稿。</p>
     <label>回退原因<el-input v-model="reason" type="textarea" :rows="3" maxlength="200" show-word-limit :disabled="busy || !!pending" /></label>
-    <label>当前账号密码<el-input v-model="password" type="password" show-password autocomplete="current-password" :disabled="busy" /></label>
+
     <p v-if="pending" class="help-text">原请求已固定到此版本。恢复时使用原请求编号和原始修订号，不生成新回退。</p>
     <p v-if="rollbackError" class="error" role="alert">{{ rollbackError }}</p>
-    <el-button native-type="submit" type="primary" :loading="busy" :disabled="disabled || loading || recoveryBlocked || !password || !reason.trim()">{{ pending ? '按原请求恢复' : '确认回退线上版本' }}</el-button>
+    <el-button native-type="submit" type="primary" :loading="busy" :disabled="disabled || loading || recoveryBlocked  || !reason.trim()">{{ pending ? '按原请求恢复' : '确认回退线上版本' }}</el-button>
    </form>
    <p v-else-if="!canRollback" class="help-text">当前账号仅可查看发布历史，没有发布及回退权限。</p>
    <p v-else class="help-text">此版本已在线上生效。</p>

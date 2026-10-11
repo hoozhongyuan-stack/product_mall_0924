@@ -135,16 +135,16 @@ class AfterSaleApiTests(TransactionTestCase):
             Client().get("/api/v1/app/aftersales/" + case["caseId"]).status_code, 401
         )
 
-    def test_review_requires_scoped_confirmation(self):
+    def test_review_without_confirmation_still_checks_revision(self):
         case = self.apply()
         path = "admin/aftersales/" + case["caseId"] + "/review"
         body = {"approve": False, "reason": "合成拒绝申请原因", "expectedRevision": 1}
-        self.assertEqual(self.post(self.admin, path, body).status_code, 403)
+        self.assertEqual(self.post(self.admin, path, body).status_code, 200)
         token = self.confirm(
             self.admin, "aftersale.review", uuid.uuid4(), 1, "Long test password 2026!"
         )
         self.assertEqual(
-            self.post(self.admin, path, body, token=token).status_code, 403
+            self.post(self.admin, path, body, token=token).status_code, 409
         )
 
     def test_saved_facts_only_dual_authorization_refund_once(self):
@@ -368,7 +368,7 @@ class AfterSaleApiTests(TransactionTestCase):
             400,
         )
 
-    def test_review_confirmation_revision_session_and_revoked_permissions(self):
+    def test_review_revision_and_revoked_permissions_without_reauthentication(self):
         case = self.apply()
         path = "admin/aftersales/" + case["caseId"] + "/review"
         body = {"approve": True, "reason": "合成授权审核原因", "expectedRevision": 1}
@@ -380,7 +380,7 @@ class AfterSaleApiTests(TransactionTestCase):
             "Long test password 2026!",
         )
         self.assertEqual(
-            self.post(self.admin, path, body, token=token).status_code, 403
+            self.post(self.admin, path, {**body, "expectedRevision": 2}, token=token).status_code, 409
         )
         token = self.confirm(
             self.admin,
@@ -390,7 +390,7 @@ class AfterSaleApiTests(TransactionTestCase):
             "Long test password 2026!",
         )
         self.assertEqual(
-            self.post(self.login(self.owner), path, body, token=token).status_code, 403
+            self.post(self.login(self.owner), path, body, token=token).status_code, 200
         )
         reviewer = AdminAccount.objects.create_user(
             login_name="revoked-reviewer",

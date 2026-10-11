@@ -16,7 +16,6 @@ const loginName = ref('')
 const displayName = ref('')
 const newPassword = ref('')
 const groupIds = ref<string[]>([])
-const currentPassword = ref('')
 const disableTarget = ref<Account | null>(null)
 const passwordTarget = ref<Account | null>(null)
 const canManage = computed(() => props.account.permissionCodes.includes('account.manage'))
@@ -65,8 +64,8 @@ function groupNames(ids: string[]) {
 }
 
 async function createAccount() {
-  if (!loginName.value.trim() || !displayName.value.trim() || !newPassword.value || !groupIds.value.length || !currentPassword.value) {
-    error.value = '请填写账号资料、至少选择一个权限组，并输入当前账号密码。'
+  if (!loginName.value.trim() || !displayName.value.trim() || !newPassword.value || !groupIds.value.length ) {
+    error.value = '请填写账号资料，并至少选择一个权限组。'
     return
   }
   const issue = passwordIssue(newPassword.value)
@@ -74,7 +73,7 @@ async function createAccount() {
   saving.value = true
   error.value = ''
   try {
-    await confirmedWrite<Account>('account.create', currentPassword.value, '/accounts', 'POST', {
+    await confirmedWrite<Account>('account.create', '', '/accounts', 'POST', {
       loginName: loginName.value.trim(), displayName: displayName.value.trim(),
       password: newPassword.value, groupIds: groupIds.value,
     })
@@ -88,21 +87,20 @@ async function createAccount() {
     error.value = reason instanceof Error ? reason.message : '创建失败。'
   } finally {
     newPassword.value = ''
-    currentPassword.value = ''
     saving.value = false
   }
 }
 
 async function disableAccount() {
   const target = disableTarget.value
-  if (!target || !currentPassword.value) {
-    error.value = '请输入当前账号密码完成停用确认。'
+  if (!target ) {
+    error.value = '请选择要停用的账号。'
     return
   }
   saving.value = true
   error.value = ''
   try {
-    await confirmedWrite<Account>('account.disable', currentPassword.value,
+    await confirmedWrite<Account>('account.disable', '',
       `/accounts/${target.accountId}`, 'PATCH',
       { enabled: false, expectedRevision: target.revision }, target.accountId, target.revision)
     disableTarget.value = null
@@ -117,21 +115,18 @@ async function disableAccount() {
       error.value = reason instanceof Error ? reason.message : '停用失败。'
     }
   } finally {
-    currentPassword.value = ''
     saving.value = false
   }
 }
 
 function openCreate() {
   disableTarget.value = null
-  currentPassword.value = ''
   error.value = ''
   formOpen.value = true
 }
 
 function openDisable(target: Account) {
   formOpen.value = false
-  currentPassword.value = ''
   error.value = ''
   disableTarget.value = target
 }
@@ -140,8 +135,7 @@ function closeForm() {
   formOpen.value = false
   disableTarget.value = null
   newPassword.value = ''
-  currentPassword.value = ''
-}
+  }
 </script>
 
 <template>
@@ -177,13 +171,13 @@ function closeForm() {
           <input type="checkbox" :checked="groupIds.includes(group.groupId)" @change="toggleGroup(group.groupId)" />{{ group.name }}
         </label>
       </fieldset>
-      <label class="confirm-field">当前账号密码（二次确认）<input v-model="currentPassword" type="password" autocomplete="current-password" required /></label>
+
       <button class="primary-button" type="submit" :disabled="saving">{{ saving ? '创建中…' : '确认创建' }}</button>
     </form>
     <form v-if="disableTarget" class="panel action-panel" @submit.prevent="disableAccount">
       <div class="panel-heading"><h2>停用 {{ disableTarget.displayName }}</h2><button class="text-button" type="button" @click="closeForm">取消</button></div>
       <p>停用后，该子账号现有会话会失效，无法再次登录。</p>
-      <label class="confirm-field">当前账号密码（二次确认）<input v-model="currentPassword" type="password" autocomplete="current-password" required /></label>
+
       <button class="danger-button" type="submit" :disabled="saving">{{ saving ? '停用中…' : '确认停用' }}</button>
     </form>
   </section>

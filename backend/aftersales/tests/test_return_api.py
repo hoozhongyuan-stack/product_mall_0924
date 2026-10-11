@@ -1,4 +1,4 @@
-"""D2 HTTP permissions, scoped password confirmation, privacy, and race boundaries."""
+"""D2 HTTP permissions, passwordless business confirmation, privacy, and race boundaries."""
 import uuid
 from django.test import Client,TransactionTestCase,override_settings
 from . import test_returns as return_fixture
@@ -30,9 +30,8 @@ class ReturnApiTests(TransactionTestCase):
         preview=f"admin/aftersales/{c.id}/return-acceptance/preview"
         r=self.post(admin,preview,body); self.assertEqual(r.status_code,200,r.content)
         path=f"admin/aftersales/{c.id}/return-acceptance"; key=uuid.uuid4()
-        self.assertEqual(self.post(admin,path,body,key).status_code,403)
         confirmation=self.confirm(admin,"aftersale.return.accept",c.id,c.revision,"Long test password 2026!")
-        r=self.post(admin,path,body,key,confirmation); self.assertEqual(r.status_code,200,r.content)
+        r=self.post(admin,path,body,key); self.assertEqual(r.status_code,200,r.content)
         dto=r.json()["data"]; self.assertEqual(dto["status"],"WAITING_REFUND")
         self.assertEqual(dto["refundSource"]["amountFen"],dto["effectiveRefundAmountFen"])
         self.assertEqual(self.post(admin,path,body,key).status_code,200)

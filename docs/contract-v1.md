@@ -2,6 +2,8 @@
 
 状态：阶段 A 的分类、状态、编码与规格、素材上限、默认权限和主账号方案已获项目确认，2026-09-24；B0 交易契约及 B1—B4 的库存、报价、订单与权益结算已完成本机实现与验证。C0 已建立独立支付凭证、事件去重、异常历史与统一收款结算入口；该入口只供后续可信渠道适配器调用，线下实际到账核实与微信支付尚未接入。微信和线下两种公开下单方式均关闭。本文是研发契约，不改变《B2C商城小程序V1.0需求文档.md》的业务规则。工程骨架、账号权限、分类/商品/SKU 基础切片、批量分类、商品图片/视频、原生小程序商品浏览、首页草稿/预览/发布、已有草稿商品规格与 SKU 编辑、独立微页面，以及冷启动 GIF 与静态兜底图切片已落地；验证结果见[研发评审记录](phase-a-preparation.md)。E1页面版本列表与回退见5.22；E1.1底部导航和客服悬浮配置见5.23。
 
+后台免密码操作与订单弹窗本地实现说明见 [后台订单操作](admin-order-operations.md)。新接口复用原权限与状态机，发布状态以该记录的验证阶段为准。
+
 ## 1. 契约通则
 
 - 服务端：Django 模块化单体，PostgreSQL；PC 后台：Vue 3、TypeScript、Vite、Element Plus、Vue Router；小程序：微信原生。首切片依赖版本已锁定于 `backend/requirements.lock` 与 `pc-admin/pnpm-lock.yaml`。
@@ -12,6 +14,17 @@
 - 页码分页参数 `page` 从 1 开始，`pageSize` 默认 20、上限 100（具体接口的页码上限及筛选规则见各节）；响应 `meta` 包含 `page`、`pageSize`、`total`。游标分页接受不透明 `cursor`，响应 `meta` 为 `{ "nextCursor": "..." }`，到末页为 `null`，不虚构页码或总数。排序字段使用服务端白名单。PC 表格勾选只表示当前页，不在服务端保存跨页选择。
 - PC 写操作使用服务端会话、CSRF 保护和操作权限校验；建议同源部署。小程序公开读接口不要求登录，用户私有数据接口使用微信登录换取的站内会话并校验资源归属。凭据不在 URL、响应或普通日志中出现。
 - 更新商品和页面草稿使用 `expectedRevision` 防止覆盖他人的编辑；版本不匹配返回 `REVISION_CONFLICT` 和最新版本摘要。资金、库存、发布接口还需幂等或状态机保护。
+
+### 2026-10-11 现行后台操作密码策略
+
+用户确认取消全部后台业务操作的操作员密码验证：保存、提交、审核、确认收款、退款、资金登记、敏感资料读取、停用、发布、回退及小程序上传/提审/发布均无需再次输入密码。业务确认弹窗用于核对操作内容，普通保存完成输入校验后直接提交。
+
+- 登录仍验证账号密码，保留原登录限流、停用检查、授权版本和30分钟闲置失效规则。AppSecret、微信上传私钥、支付/地图凭据仍按所属业务配置；商品编辑的 `previewToken`、会员令牌、微信签名及第三方授权令牌不属于本次移除范围。
+- 所有受保护的后台请求仍需有效会话与当前操作权限；写操作及原本要求CSRF的敏感业务读取继续校验CSRF，等待领域行锁后复核实时权限与会话，保留资源归属、真实状态、修订、幂等、审计和原有登记人与复核人分离规则。按钮隐藏不能替代服务端检查。
+- `X-Action-Confirmation` 不再必填，存在时也不用于授权、动作/对象/修订绑定或拒绝业务请求。兼容 `POST /api/v1/admin/auth/confirm` 仅检查会话、动作与所需当前权限，忽略旧 `password`，返回原 `confirmationToken/expiresInSeconds` 结构供旧客户端过渡；新客户端不调用该接口。历史 `ActionConfirmation` 表及历史审计保留，兼容令牌不能替代任何业务授权。
+- 修改本人密码与主账号重置子账号密码只提交 `newPassword`，重置另带 `expectedRevision`；旧 `currentPassword` 忽略。原6字符最低长度、1024字符输入上限、不得与目标原密码相同、主账号重置范围和20次/15分钟成功修改配额保持。成功更新目标 `auth_version` 与修订，撤销目标旧会话；本人改密后退出，主账号重置子账号后保持本人登录及子账号原启停状态。确认新密码是客户端输入一致性校验，不重新验证旧密码。
+
+**历史说明：** 本文按阶段积累的 C0/C1/D1—D5/E1—E3 记录曾要求当前密码、五分钟一次性确认令牌和绑定动作/目标/修订；该操作员二次验证策略于2026-10-11被本节取代。历史业务凭证、当时测试/发布记录不改写；以下现行接口段落已同步免密码契约，业务金额、状态和发布平台验收边界保持原规则。
 
 ### v1 分页兼容规则（工程健康治理）
 
@@ -60,8 +73,8 @@
 |---|---|---|
 | `POST /api/v1/admin/auth/login` | `loginName`、`password` | `accountId`、`displayName`、`permissionCodes`、会话状态；不返回密码哈希。失败次数与锁定时限在服务端执行。 |
 | `GET /api/v1/admin/me`、`POST /api/v1/admin/auth/logout` | 会话 Cookie | 当前账号、权限；退出使会话失效。高影响操作仍重新确认当前会话。 |
-| `POST /api/v1/admin/auth/password` | `currentPassword`、`newPassword` | 所有已登录管理员均可修改自己的密码，无需账号管理权限；返回 `{accountId,revision,requiresLogin:true}` 并退出当前登录。 |
-| `POST /api/v1/admin/accounts/{id}/password` | 主账号的 `currentPassword`、子账号的 `newPassword`、`expectedRevision` | 仅 OWNER 可重置 STAFF；返回 `{accountId,revision,requiresLogin:false}`，保持主账号登录和子账号原有启停状态。 |
+| `POST /api/v1/admin/auth/password` | `newPassword`（兼容旧请求时忽略 `currentPassword`） | 所有已登录管理员均可修改自己的密码，无需账号管理权限；返回 `{accountId,revision,requiresLogin:true}` 并退出当前登录。 |
+| `POST /api/v1/admin/accounts/{id}/password` | 子账号的 `newPassword`、`expectedRevision`（忽略旧 `currentPassword`） | 仅 OWNER 可重置 STAFF；返回 `{accountId,revision,requiresLogin:false}`，保持主账号登录和子账号原有启停状态。 |
 | `GET/POST /api/v1/admin/accounts`、`PATCH /api/v1/admin/accounts/{id}` | 登录名、状态、权限组 ID、`expectedRevision` | 账号摘要；主账号和子账号权限边界在服务端执行，停用立即失效。凭据重置单独动作并审计。 |
 | `GET/POST /api/v1/admin/permission-groups`、`PATCH /api/v1/admin/permission-groups/{id}` | 组名、`permissionCodes[]`、`expectedRevision` | 权限组及成员数；不能通过自改组提升自己的权限。 |
 | `GET/POST /api/v1/admin/categories`、`PATCH /api/v1/admin/categories/{id}` | `parentId`、名称、排序、状态、`expectedRevision` | 两级分类树；管理端读取时返回关联商品数与在售商品数，停用前检查在售商品。 |
@@ -79,10 +92,10 @@
 | `POST /api/v1/admin/assets` | `multipart/form-data` 的 `kind=IMAGE/VIDEO/GIF` 与 `file` | 仅 `asset.upload` 可调用，返回 `assetId`、MIME、大小、宽高及 `adminUrl`；校验文件声明、容器结构和实际解码，GIF 须至少 2 帧。图片/GIF 10 MiB、视频 50 MiB。本机使用已安装的 `ffmpeg`；上传服务缺少解码器时返回 503。文件写入 `MALL_MEDIA_ROOT`，生产环境必须显式配置持久目录。未绑定素材分别受单账号 200 MiB、全站 1 GiB 配额限制，超过 24 小时由 `purge_orphan_media` 清理，上传时也会补充清理。 |
 | `GET /api/v1/admin/assets/{id}/file`、`GET /api/v1/app/assets/{id}/file` | 管理端预览、公开素材读取 | 管理端需 `asset.read` 或符合页面/启动草稿、当前或历史发布引用及本人未绑定上传的受限预览条件；公开 URL 在素材被当前上架商品、首页/微页面当前发布版本的可见组件，或启动页当前发布版本引用时可访问；草稿、隐藏组件和旧版独占素材不可公开。MP4 支持单段 `Range` 请求。 |
 | `GET/PUT /api/v1/admin/pages/home/draft` | 首页组件、顺序、显隐、站内链接与三项主题颜色；PUT 含 `expectedRevision` | 返回 `pageId`、草稿 `revision`、`config`、`publishedRevision`；保存草稿允许逐步配置未完成组件，不改变线上版本。`page.read` 可读，`page.edit` 可写。 |
-| `POST /api/v1/admin/pages/home/preview`、`POST /api/v1/admin/pages/home/publish` | 预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另需 `Idempotency-Key` 和绑定账号、动作、页面 ID、修订号的一次性 `X-Action-Confirmation` | 预览严格校验可见组件、素材和站内目标；发布在事务内生成不可变版本、切换当前指针并写审计。过期修订返回 `REVISION_CONFLICT`；同键同修订重试返回原版本，同修订换键拒绝再次发布。 |
-| `GET/POST /api/v1/admin/pages`、`GET/PUT /api/v1/admin/pages/{id}/draft`、`POST /api/v1/admin/pages/{id}/preview/publish` | 列表 `page/pageSize`；创建 `{name}`；草稿 PUT `{name,expectedRevision,config}`；预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另带 `Idempotency-Key`、一次性 `X-Action-Confirmation` | 仅列出 `MICRO` 页面，分页上限 100；创建返回 201 与初始草稿。草稿返回 `pageId/name/revision/config/publishedRevision`；预览严格校验可见组件与目标；发布事务生成不可变版本并原子切换指针。`page.read/edit/publish` 分别校验；版本列表与回退见5.22。 |
+| `POST /api/v1/admin/pages/home/preview`、`POST /api/v1/admin/pages/home/publish` | 预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另需 `Idempotency-Key`，无需操作员密码或 `X-Action-Confirmation` | 预览严格校验可见组件、素材和站内目标；发布在事务内生成不可变版本、切换当前指针并写审计。过期修订返回 `REVISION_CONFLICT`；同键同修订重试返回原版本，同修订换键拒绝再次发布。 |
+| `GET/POST /api/v1/admin/pages`、`GET/PUT /api/v1/admin/pages/{id}/draft`、`POST /api/v1/admin/pages/{id}/preview/publish` | 列表 `page/pageSize`；创建 `{name}`；草稿 PUT `{name,expectedRevision,config}`；预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另带 `Idempotency-Key`，无需操作员密码确认 | 仅列出 `MICRO` 页面，分页上限 100；创建返回 201 与初始草稿。草稿返回 `pageId/name/revision/config/publishedRevision`；预览严格校验可见组件与目标；发布事务生成不可变版本并原子切换指针。`page.read/edit/publish` 分别校验；版本列表与回退见5.22。 |
 | `GET/PUT /api/v1/admin/startup/draft` | GET 无；PUT `{expectedRevision,gifAssetId,fallbackAssetId}`，两个素材 ID 可暂空 | 返回 `{revision,gifAssetId,fallbackAssetId,publishedRevision}`。`startup.read` 可读，`startup.edit` 可写；素材类型与文件存在性由服务端校验；过期修订返回 `REVISION_CONFLICT`。 |
-| `POST /api/v1/admin/startup/preview`、`POST /api/v1/admin/startup/publish` | 预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另需 `Idempotency-Key` 与绑定 `startup.publish`、对象 `startup`、当前修订的一次性 `X-Action-Confirmation` | 预览返回修订及两张素材的管理端 URL；发布要求两项有效并返回 `versionId/revision/gifUrl/fallbackUrl`，后两项为公开相对路径。同键同修订重试返回原版本；不同键重复发布当前修订返回 409；版本、指针、请求记录和审计同事务提交，失败旧版继续生效。 |
+| `POST /api/v1/admin/startup/preview`、`POST /api/v1/admin/startup/publish` | 预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另需 `Idempotency-Key`，无需操作员密码确认 | 预览返回修订及两张素材的管理端 URL；发布要求两项有效并返回 `versionId/revision/gifUrl/fallbackUrl`，后两项为公开相对路径。同键同修订重试返回原版本；不同键重复发布当前修订返回 409；版本、指针、请求记录和审计同事务提交，失败旧版继续生效。 |
 | `GET /api/v1/app/startup` | 无 | 只返回当前发布版本的 `versionId/revision/gifUrl/fallbackUrl`，素材 URL 为 `/api/v1/app/assets/{id}/file` 相对路径；未发布返回 `404 STARTUP_UNPUBLISHED`。 |
 
 启动页采用自定义导航，发布图片按比例覆盖完整视口，跳过和倒计时叠加在图片上并避开微信胶囊及安全区。
@@ -174,7 +187,7 @@
 | 库存管理 | 无阶段 A 业务操作权限；阶段 B 增加库存权限时再配置，不获得 SKU 改价权限。 |
 | 会员营销 | 首页/微页面与启动配置读取、草稿编辑、素材读取/上传；默认无发布权。阶段 D 再增加会员与营销权限。 |
 
-主账号首次建立由本机管理命令交互输入凭据，仅允许建立一个 `OWNER`，不提供代码内默认密码；实际初始化前指定凭据保管与交接人。PC 会话采用服务端存储、HttpOnly Cookie 与 CSRF 防护；每次请求检查账号启用状态、会话空闲时间和当前授权版本，不信任登录时返回的 `permissionCodes` 缓存。账号组变更、组权限修改或组停用时，事务内提升所有受影响账号的 `auth_version`；资金与发布等高影响动作还需二次确认并重新校验会话。登录失败 5 次限制 15 分钟、空闲 30 分钟会话失效，来源频率限制按需求文档第 12.1 节执行。
+主账号首次建立由本机管理命令交互输入凭据，仅允许建立一个 `OWNER`，不提供代码内默认密码；实际初始化前指定凭据保管与交接人。PC 会话采用服务端存储、HttpOnly Cookie 与 CSRF 防护；每次请求检查账号启用状态、会话空闲时间和当前授权版本，不信任登录时返回的 `permissionCodes` 缓存。账号组变更、组权限修改或组停用时，事务内提升所有受影响账号的 `auth_version`；资金与发布等动作在业务确认弹窗核对内容，服务端重新校验会话及当前操作权限，无需再次输入操作员密码。登录失败 5 次限制 15 分钟、空闲 30 分钟会话失效，来源频率限制按需求文档第 12.1 节执行。
 
 ## 4. 交易关键数据对象：阶段 B、C 开发前定稿
 
@@ -200,7 +213,7 @@
 | `GET /api/v1/app/orders/{id}` | 登录用户与订单 ID | 只返回本人订单；明确支付、履约、优惠及异常状态，客户端超时后以此查询最终结果。 |
 | `POST /api/v1/app/orders/{id}/wechat-prepay` | 订单 ID、幂等键 | 仅固定微信支付且仍待付款的订单可发起；预支付受理不等于订单已付款。 |
 | `POST /api/v1/callbacks/wechat/pay` | 微信原始通知与签名头 | 验签、解密并核对商户号、订单号、金额后，按事件 ID 与订单状态幂等处理；关闭后到账进入异常队列。 |
-| `POST /api/v1/admin/orders/{id}/confirm-offline-payment` | 实际到账金额、方式、凭证引用、必要备注、二次确认 | 仅授权人员核实到账后调用；金额不符拒绝确认并记录原因；只允许一次有效收款。 |
+| `POST /api/v1/admin/orders/{id}/confirm-offline-payment` | 实际到账金额、方式、凭证引用、必要备注及业务确认 | 仅授权人员核实到账后调用；金额不符拒绝确认并记录原因；只允许一次有效收款。 |
 | `POST /api/v1/app/orders/{id}/cancel`、内部超时任务 | 订单 ID、幂等键或到期时间快照 | 仅待付款订单释放占用并关闭；收款确认与关单竞争同一订单锁，只能有一个有效状态结果。 |
 
 并发锁序建议：提交订单按 `(warehouse_id, sku_id)` 排序后锁定余额行，再锁券和积分记录；收款、关单先锁订单行，再按固定顺序处理占用与余额。外部支付请求与回调处理不占用长数据库事务。需要用 PostgreSQL 并发用例验证多 SKU 部分不足、重复提交、回调与超时竞争、迟到通知及零元订单。具体隔离级别、锁等待超时和死锁重试次数由实现试验定稿。
@@ -287,7 +300,7 @@ B1 仅完成真实入库与库存读取；人工出库、盘点、订单占用�
 - 入口禁止嵌套外部事务：先独立提交到账凭证，再独立登记通知事件，最后应用订单。带事件的新凭证初始 `ready_for_settlement:false`；事件身份核验成功后才可结算。事件冲突保留新到账，进入 `IDENTIFIER_CONFLICT`；恢复入口不能越过未完成登记或身份冲突。
 - 结算事务先锁订单，再锁收据，按既有顺序核对并结算库存、券和积分。库存占用必须覆盖全部订单项且数量、SKU、仓库一致；权益占用金额、积分总数及会员归属必须与成交快照一致。订单已付款、已关闭或方式/金额不符的另一笔真实到账均记异常，不重复结算。未关单但已到期的订单先关闭释放，再将到账记异常，不以到账时间回写恢复原单。
 - 结算中途失败不抹去已提交资金事实；库存、券、积分、订单和凭证应用时间共同回滚，记录 `SETTLEMENT_FAILED`。`settle_recorded_payment(UUID)` 是内部恢复入口；成功后解决异常并写历史，订单已关闭则重分类为 `CLOSED_ORDER`。旧失败记录不能覆盖新的身份冲突或其他待核查原因。
-- 异常当前状态只有 `OPEN/RESOLVED`；C0 仅自动解决成功重试的结算故障，资金不符、迟到账和身份冲突不自动处置。凭证、通知、异常历史、订单状态时间约束及一单最多一笔应用收据均有 PostgreSQL 保护。人工退款/补单、权限及二次确认、预支付、验签、查单和部署补偿调度留后续切片，不能将 C0 自动化称为真实收款验收。
+- 异常当前状态只有 `OPEN/RESOLVED`；C0 仅自动解决成功重试的结算故障，资金不符、迟到账和身份冲突不自动处置。凭证、通知、异常历史、订单状态时间约束及一单最多一笔应用收据均有 PostgreSQL 保护。人工退款/补单、权限及业务确认、预支付、验签、查单和部署补偿调度留后续切片，不能将 C0 自动化称为真实收款验收。
 
 ## 6. 阶段 A 评审与未决项
 
@@ -312,8 +325,8 @@ C1 接入线下服务端与客户端闭环，**公开下单仍按支付方式关
 | `POST /api/v1/app/orders/{id}/payment-report` | 本人；UUID `Idempotency-Key`；`{note}` | 线下待付款、未过期订单可报告，说明 1—500 字，每单最多 20 条；报告不可改写，不生成资金凭证，不改变待付款状态、库存或权益。原键原内容重试复用，改内容拒绝；报告后显示待核实。 |
 | `GET /api/v1/admin/orders`、`GET /api/v1/admin/orders/{id}` | `order.read` | 列表分页同上；详情增加实际到账 `receipts` 和操作员核对 `confirmations`，各最多最近 50 条，并返回总数。确认资料含原操作员 `actorId`、授权时间、结果与关联收据。 |
 | `POST /api/v1/admin/orders/{id}/offline-reconciliations` | `order.read` + `payment.offline.confirm`；CSRF；UUID `Idempotency-Key` | 输入 `expectedRevision/merchantAccountId/externalTradeNo/amountFen/paidAt/note/verified:true`。实际账户须与下单快照一致；金额为正整数分，时间带时区且不晚于当前；备注最多 500 字，金额不符必须说明原因。保存不可变核对记录，**尚不代表资金登记或付款确认**。返回记录及 `confirmationObjectId`、`confirmationRevision:1`。同操作员原键原内容重试复用。 |
-| `POST /api/v1/admin/auth/confirm` | 当前密码；`payment.offline.confirm`；对象为上述不可变核对记录 ID，修订 1 | 原有一次性、五分钟、账号与会话绑定的二次确认。令牌授权的是记录中的固定账户、流水、金额与时间。 |
-| `POST /api/v1/admin/payments/offline-reconciliations/{id}/confirm` | 同两项权限、原核对操作员、CSRF；空对象；首次需 `X-Action-Confirmation` | 授权与审计独立持久化，随后调用可信资金入口。结果 `PAID/ANOMALY/PENDING`、`receiptId/orderStatus/order`；金额不符、关闭后或额外到账进入异常，不恢复原单。结算失败返回 503 且保留资金和授权资料。已授权记录可由原操作员在仍有权限时重试，PC 从历史记录恢复同一对象。 |
+| `POST /api/v1/admin/auth/confirm` | 兼容接口：`action/objectId/revision`；忽略旧 `password` | 无需调用。仅复核实时会话及动作权限，兼容返回 `confirmationToken/expiresInSeconds`；该令牌不授权任何业务操作，业务接口忽略 `X-Action-Confirmation`。 |
+| `POST /api/v1/admin/payments/offline-reconciliations/{id}/confirm` | 同两项权限、原核对操作员、CSRF；空对象；无需操作员密码或确认令牌 | 授权与审计独立持久化，随后调用可信资金入口。结果 `PAID/ANOMALY/PENDING`、`receiptId/orderStatus/order`；金额不符、关闭后或额外到账进入异常，不恢复原单。结算失败返回 503 且保留资金和授权资料。已授权记录可由原操作员在仍有权限时重试，PC 从历史记录恢复同一对象。 |
 
 2026-09-28 视觉推广的兼容扩展：小程序与后台上述订单列表新增可选 `fulfillment=WAITING_SHIPMENT|IN_TRANSIT|WAITING_REDEMPTION|AFTER_SALE`；未知枚举或重复该参数返回 400。省略或空值保持原查询；与原状态、支付方式、核款、搜索、`orderKind` 条件取交集，在数据库中先过滤再计数、分页。页码仍为 1—10000，旧 `data.items/page/pageSize/total` 与统一 `meta:{page,pageSize,total}` 不变。本人范围和 `order.read` 权限不变。
 
@@ -389,7 +402,7 @@ C2 已实现开发功能，**未连接真实商户、未发起实际收款，微
 
 ### 5.14 D0 售后占用与退款最终确认基础
 
-本片只交付内部服务和既有订单读模型增量，没有公开售后写接口、退款网络适配器或完整操作页面。微信退款验签/查询/真实商户验收、线下凭证表单及密码二次确认由后续切片接入；不得直接把内部 `VerifiedRefund` 作为客户端可提交的数据。
+本片只交付内部服务和既有订单读模型增量，没有公开售后写接口、退款网络适配器或完整操作页面。微信退款验签/查询/真实商户验收、线下凭证表单由后续切片接入（此处为历史阶段记录；现行操作员免密码策略见第1节）；不得直接把内部 `VerifiedRefund` 作为客户端可提交的数据。
 
 - `aftersales` 拥有 `AfterSalePolicy`（收货后默认15天、范围1—365天）、新订单不可改写的 `OrderAfterSaleSnapshot`、每订单项一个 `AfterSaleAllocation` 和多个 `AfterSaleCase`/不可改写事件。历史无时限快照的订单返回 `AFTERSALE_POLICY_MISSING`，不自动套用当前规则；未发货、已发货、未核销和已核销分别校验。超过站内时限的依法售后义务仍须后续人工路径承接。
 - 一申请对应一个订单项，同项最多一笔进行中售后。金额由服务端按 `floor(订单项实付分 × (已退款数量 + 本次数量) / 购买数量) − 已退款商品金额` 计算，最后数量承接尾差；以 `OrderLine.payable_fen` 的历史券/积分分摊为准。占用及累计退款不超过购买数量与商品实付；不把运费混入商品退款。本片暂拒绝零现金分摊申请，纯积分/零现金和券积分退款权益结算留D3；运费退款留独立规则与占用入口。
@@ -397,7 +410,7 @@ C2 已实现开发功能，**未连接真实商户、未发起实际收款，微
 - 状态：`PENDING_REVIEW → WAITING_REFUND`（仅退款）或 `WAITING_RETURN`（退货退款）；待审核可由本人撤销为 `WITHDRAWN`，授权人员可拒绝为 `REJECTED`，二者释放占用。`WAITING_RETURN` 本片不能进入退款，须D2验收入口。`WAITING_REFUND → COMPLETED` 只由可信退款最终确认触发，失败/未知保持占用。审核需 `aftersale.review`，申请/审核/撤销递增订单修订；事件记录操作员与原因。
 - 履约与售后均先锁同一Order：当前整单发货入口遇任一实物项进行中售后或已退款时拒绝；核销可用量扣除未核销售后占用，成功后才永久作废。已核销部分售后冻结/成功时拒绝撤销核销，退款不恢复已核销容量、不回库存。未发货实物退款成功沿下单仓和单位快照经 `inventory.refunds.restore_unshipped_refund_locked` 回库一次；已发货退款须验收，本片不自动回库。
 - `payments.refunds.prepare_refund` 创建每case唯一意图、原收款凭证/商户/渠道/交易号/金额快照及稳定退款业务号，需 `refund.prepare`。内部派发/查单以30秒租约隔离，网络调用应在事务外；`UNKNOWN/PROCESSING` 禁止新派发，先查单；`FAILED` 仍沿原意图/业务号重试。已有任何资金凭证时禁止再次派发，优先本地结算恢复或人工核查；D0没有实际网络派发。
-- 内部 `record_verified_refund(VerifiedRefund)` 先独立提交成功资金证据，再经 `settle_recorded_refund` 锁Order→case→intent→evidence，统一完成库存/核销副作用与售后。微信来源限定通知/主动查询，通知须事件ID；渠道、商户、原付款交易号和金额必须匹配意图。线下证据需不同于意图登记人的当前授权复核员（`refund.offline.confirm`）；没有HTTP接口替代密码二次确认。重复通知不重复退款结算，额外资金身份、金额或事件冲突进入异常，不改已完成业务。
+- 内部 `record_verified_refund(VerifiedRefund)` 先独立提交成功资金证据，再经 `settle_recorded_refund` 锁Order→case→intent→evidence，统一完成库存/核销副作用与售后。微信来源限定通知/主动查询，通知须事件ID；渠道、商户、原付款交易号和金额必须匹配意图。线下证据需不同于意图登记人的当前授权复核员（`refund.offline.confirm`）；此处为内部服务历史阶段记录，当前HTTP接口沿有效会话、CSRF和实时权限调用，不再要求操作员密码。重复通知不重复退款结算，额外资金身份、金额或事件冲突进入异常，不改已完成业务。
 - 资金证据已提交但业务事务失败，返回 `SETTLEMENT_FAILED`、保留证据和占用；恢复不发起新资金动作。失败记录不能覆盖 `IDENTIFIER_CONFLICT` 等待核查异常。`manage.py recover_recorded_refunds --limit 100` 每次最多1—500，跳过人工异常，失败/新异常非零退出；本片未安装部署调度。
 - 数据库约束及触发器保护成交金额计数、占用聚合、资金身份唯一、不可改写证据与成功终态。售后完成必须匹配已应用退款资金及原收款；未发货回库和未核销作废也必须匹配同case/订单项/数量，不能只构造任意UUID副作用。隔离空库回退仅证明schema可逆，不代表有资金业务数据的生产降级方案。
 - 既有订单列表/详情新增 `afterSaleSummary:{activeCount,refundedQuantity,refundedFen}`；订单项核销新增 `heldQuantity/availableQuantity`，原 `remainingQuantity` 表示尚未永久消耗数量。进行中整单/受影响订单项为 `AFTER_SALE`，全量退款为 `REFUNDED`，部分退款后的其他项独立推进。支付事实仍为 `PAID`，不得把退款等同于删除原收款。PC/小程序已有状态文案已兼容，完整申请/审核/退款页面留D1/D2。
@@ -416,9 +429,9 @@ D1 接入下列 HTTP 和页面入口，业务数量、金额、占用及退款�
 | `POST /app/aftersales/{caseId}/withdraw` | 本人会员；仅 `{expectedRevision}` | 仅待审核可撤销；修订/状态变化409。拒绝或撤销释放占用；会员停用后不能通过内部入口绕过检查。 |
 | `GET /admin/aftersales` | `aftersale.read`；同上分页/筛选字段 | case列表含订单号、订单项成交资料、申请类型/数量/商品金额/状态；不附逐项资金详情。 |
 | `GET /admin/aftersales/{caseId}` | `aftersale.read` | case、处理事件；另有 `refund.prepare` 或 `refund.offline.confirm` 才返回 `refundSource` 和 `offlineRefund`，普通售后查看人员不获取资金流水与档案号。 |
-| `POST /admin/aftersales/{caseId}/review` | `aftersale.read`＋`aftersale.review`；仅 `{approve,reason,expectedRevision}`；密码确认令牌 | `approve`须布尔值、原因5—500字；令牌绑定 `aftersale.review`、case ID、case revision及当前会话。审核通过只进入待退款/待退货；拒绝释放占用，不确认资金。 |
+| `POST /admin/aftersales/{caseId}/review` | `aftersale.read`＋`aftersale.review`；仅 `{approve,reason,expectedRevision}`；无需操作员密码 | `approve`须布尔值、原因5—500字；实时校验审核权限、资源及修订。审核通过只进入待退款/待退货；拒绝释放占用，不确认资金。 |
 | `POST /admin/aftersales/{caseId}/offline-refunds` | `aftersale.read`＋`refund.prepare`；UUID防重复键 | 仅线下方式、WAITING_REFUND；下述实际转账资料保存为不可改写核对记录，初态 `PENDING_CONFIRMATION`。保存不写成功资金凭证、不回补库存、不作废额度。 |
-| `POST /admin/refunds/offline-reconciliations/{id}/confirm` | `aftersale.read`＋`refund.offline.confirm`；空JSON `{}`；密码确认令牌 | 另一名当前授权人员确认保存的资料；令牌绑定 `refund.offline.confirm`、记录ID、revision1和当前会话。已授权记录的恢复只允许原复核员；完成后重复处理沿同一资金身份重放，不重新转账。 |
+| `POST /admin/refunds/offline-reconciliations/{id}/confirm` | `aftersale.read`＋`refund.offline.confirm`；空JSON `{}`；无需操作员密码 | 另一名当前授权人员确认保存的资料，登记人与复核员分离规则保持。已授权记录的恢复只允许原复核员；完成后重复处理沿同一资金身份重放，不重新转账。 |
 
 case DTO 的共同字段为 `caseId/orderId/orderNo/lineId/title/fulfillmentKind/kind/redemptionScope/quantity/amountFen/reason/status/revision/createdAt/updatedAt/canWithdraw`；detail另有 `refundStatus/events[{action,status,reason,occurredAt}]`。后台额外返回支付方式及脱敏会员标识；有资金权限时 `refundSource:{merchantAccountId,originalTradeNo,amountFen}` 来自原已应用收款。PC审核原因会向本人展示，应填写可公开的审核依据。
 
@@ -433,9 +446,9 @@ PC路径为 `/aftersales`、`/aftersales/{caseId}`，由订单列表/详情和�
 ### 5.16 D2 退货验收与微信退款适配
 
 - 本人 `POST /api/v1/app/aftersales/{caseId}/return-shipment`：UUID `Idempotency-Key`；精确字段 `{expectedRevision,carrierName,trackingNo}`。只允许 `WAITING_RETURN`，同键同内容重放；更正产生新历史，不覆盖既有事实。退货地址须与店铺沟通，本片不虚构地址或自动预约寄件。
-- `POST /api/v1/admin/aftersales/{caseId}/return-acceptance/preview` 预览；同路径去掉 `/preview` 保存。精确字段 `{expectedRevision,mode,receivedQuantity,salableQuantity,refundQuantity,refundAmountFen,reason}`；`mode=RECEIVED/WAIVED_RETURN`，金额为整数分或 `null`（由服务端计算），不得高于快照范围；免寄回的收货/可售数量为0，原因5—500字。保存需 `aftersale.read`、`aftersale.return.accept`、UUID防重复键及绑定case/修订/会话的密码二次确认。
+- `POST /api/v1/admin/aftersales/{caseId}/return-acceptance/preview` 预览；同路径去掉 `/preview` 保存。精确字段 `{expectedRevision,mode,receivedQuantity,salableQuantity,refundQuantity,refundAmountFen,reason}`；`mode=RECEIVED/WAIVED_RETURN`，金额为整数分或 `null`（由服务端计算），不得高于快照范围；免寄回的收货/可售数量为0，原因5—500字。保存需 `aftersale.read`、`aftersale.return.accept`、UUID防重复键、有效会话及实时权限，保存前核对case状态和修订，无需操作员密码。
 - 原申请数量/金额不可改写；验收一笔形成最终结论，详情另返回 `returnShipment`、`returnAcceptance`、`effectiveRefundQuantity/effectiveRefundAmountFen`。部分批准释放差额占用，零批准结束为拒绝；验收可售数量在验收事务回库，不可售数量只保存处置事实。免寄回无库存回补。资金成功后使用有效批准值，不再次回补已验收库存。
-- 微信原路退款发起 `POST /api/v1/admin/aftersales/{caseId}/wechat-refund`，body `{expectedRevision}`、UUID键及动作 `refund.wechat.dispatch` 的密码二次确认，权限 `aftersale.read/refund.prepare`；查单 `POST .../wechat-refund/query` body `{}`。原收款与商品退款金额只取服务器快照，客户端不能提交商户、交易号或可信退款凭证。
+- 微信原路退款发起 `POST /api/v1/admin/aftersales/{caseId}/wechat-refund`，body `{expectedRevision}`、UUID键及实时动作权限校验，无需操作员密码，权限 `aftersale.read/refund.prepare`；查单 `POST .../wechat-refund/query` body `{}`。原收款与商品退款金额只取服务器快照，客户端不能提交商户、交易号或可信退款凭证。
 - 微信退款请求/响应RSA签名验签、退款通知AES-GCM解密与身份/币种/原支付总额/退款金额核对沿共同资金入口；受理不等于成功，失败仍沿原退款业务号，未知/处理中先查单，已有资金凭证只恢复本地结算。实际商户网络默认关闭且配置缺失不请求第三方。
 - 图片/凭证原件上传、退货物流实时轨迹及上门取件、真实微信退款联调、权益/运费与零现金退款、正式补偿调度、真机验收继续分别记录后置状态。
 
@@ -449,7 +462,7 @@ PC路径为 `/aftersales`、`/aftersales/{caseId}`，由订单列表/详情和�
 - 订单域 `orders.benefit_lifecycle.reconcile_benefits_locked` 协调履约完成事实、售后累计商品退款、已成功运费退款，调用 `benefits.lifecycle` 与 `customers.consumption` 的命名入口。先锁 Order，再 Member；涉及库存先锁stock，然后券、积分账户与批次；网络不进入结算事务。
 - 所有订单项履约或售后结束且无进行中售后后，按最终有效现金实付累计消费并发消费积分。核销撤销同步撤回消费与奖励，重新完成只补累计目标差额。退款返还抵扣积分按订单项原分摊及累计现金退款比例；零现金项按累计批准退款数量比例，末笔补齐尾差。原批次未过期沿原有效期，已过期使用成交规则快照中的短期有效期。奖励扣回可形成负余额，后续取得积分先抵债，抵债部分不得再次到期扣减。
 - 运费与商品金额分离：所有快递项未发货且全部获准退款时，最后一项批准领取唯一整单运费退款占用。金额冻结后不可改写；退款请求使用商品与运费合计，仍核对原渠道收款身份、总实付及共同成功凭证。已发货或部分退款不自动退运费。优惠券只在整单全部商品数量和现金均退完后、原有效期仍有效时恢复；部分退款不返券。
-- `POST /api/v1/admin/aftersales/{caseId}/settle-benefits`：body `{expectedRevision}`，UUID `Idempotency-Key`；需 `aftersale.read`、`refund.prepare` 及密码确认动作 `refund.benefits.settle`，objectId 为 caseId、revision 为当前修订号。仅批准且现金合计为零的售后可处理，建立独立不可改写权益完成凭证；不创建 `RefundIntent` 或 `RefundEvidence`。含商品现金或运费现金必须沿原资金路径确认。重复同键同内容返回已完成结果；同键不同内容冲突。
+- `POST /api/v1/admin/aftersales/{caseId}/settle-benefits`：body `{expectedRevision}`，UUID `Idempotency-Key`；需 `aftersale.read`、`refund.prepare` 及有效会话、CSRF和case当前修订校验，无需操作员密码。仅批准且现金合计为零的售后可处理，建立独立不可改写权益完成凭证；不创建 `RefundIntent` 或 `RefundEvidence`。含商品现金或运费现金必须沿原资金路径确认。重复同键同内容返回已完成结果；同键不同内容冲突。
 - 售后 DTO 的 `effectiveRefundAmountFen` 继续表示批准商品金额；新增 `goodsRefundAmountFen`、`shippingRefundAmountFen`、`totalRefundAmountFen`、`canSettleBenefits`。`refundSource.amountFen` 是资金核对合计。订单及售后详情的 `orderBenefits` 是**整单累计权益结果**：`status` (`PENDING/SETTLED/SKIPPED`)、`effectiveSpendFen`、`earnedPoints`、`returnedPoints`、`clawedBackPoints`、`couponRestored`、`policyRevision`；历史缺快照只返回跳过原因。不得把累计数据当成本次退款增量。
 - PC 使用资金合计录入/核对，零现金页面明确没有现金转出；未知结果先 GET 售后最终状态，再沿保存的原 body/key 重试。会员页面分别显示商品、运费与合计，不以售后批准替代退款成功。
 - `reconcile_order_benefits --batch-size 1..500 --after-order-id UUID` 仅恢复有规则快照的已付款订单本地权益，返回 `nextCursor`，失败非零退出；不触发渠道退款。`expire_points --limit 1..500` 处理到期可用批次，保留已有冻结事实。正式调度与部署另验收。积分及等级规则配置此片提供受信任领域入口，营销运营配置页面、纯积分商城另片交付。
@@ -468,7 +481,7 @@ PC路径为 `/aftersales`、`/aftersales/{caseId}`，由订单列表/详情和�
 | `GET /api/v1/admin/members/{memberId}/points` | `member.read`；积分明细分页。 |
 | `GET /api/v1/admin/members/{memberId}/consumption` | `member.read`；消费、评级变化与公开原因分页。 |
 | `GET /api/v1/admin/member-rules` | `member.rules.read` 或 `member.rules.manage`；当前规则。 |
-| `PUT /api/v1/admin/member-rules` | `member.rules.manage` + CSRF + 密码确认；修订、幂等与审计。 |
+| `PUT /api/v1/admin/member-rules` | `member.rules.manage` + CSRF + 实时会话；修订、幂等与审计。 |
 | `GET /api/v1/app/member/overview` | 本人Bearer；权益摘要、当前规则及已启用等级规则修订，追加本人 `orderCounts`（口径见下文）。 |
 | `GET /api/v1/app/member/points`、`/consumption` | 本人Bearer；本人明细分页，禁止传其他会员标识。 |
 
@@ -478,7 +491,7 @@ PC路径为 `/aftersales`、`/aftersales/{caseId}`，由订单列表/详情和�
 
 会员摘要包括 `effectiveSpendFen`、`gradeEffectiveAt`、`gradePolicyRevision`，积分 `settledPoints/frozenPoints/availablePoints/debtPoints/expiredPendingPoints/expiringPoints/nextExpiryAt`。自然到期但尚未扣账的积分不计可用；欠额不与冻结混为一项。积分旧事件与权益生命周期流水合并查询，EARN／RETURN对应的GRANT仅显示一次。冻结／释放标记 `effect=FREEZE|RELEASE`，其余 `BALANCE`；旧记录无余额快照时明确返回null。`sourceRef` 为公开原因枚举：`ORDER_COMPLETED/REFUND_COMPLETED/FULFILLMENT_REVERSED/POINTS_EXPIRED` 或安全的既有类型／`ORDER_SETTLEMENT`，不返回内部原因原串。
 
-规则响应为 `revision`、`grades:[{id,code,name,rank,minimumSpendFen}]` 与 `points:{earnUnitFen,earnPoints,deductPoints,deductFen,maxPercent,validDays,refundValidDays}`。更新body严格为 `expectedRevision`、完整points、所有启用等级 `{id,minimumSpendFen}` 及1—200字reason。首级0、门槛严格递增；积分单位参数1—1000000、抵扣上限1—100%、期限1—3650天，金额整数分。确认动作 `member.rules.update`，对象 `member-rules`、修订绑定，使用 `Idempotency-Key` UUID及 `X-Action-Confirmation`。同账号同键同内容返回原保存结果，不重复修订／审计；不同内容冲突，未知结果先GET再按原body/key恢复。
+规则响应为 `revision`、`grades:[{id,code,name,rank,minimumSpendFen}]` 与 `points:{earnUnitFen,earnPoints,deductPoints,deductFen,maxPercent,validDays,refundValidDays}`。更新body严格为 `expectedRevision`、完整points、所有启用等级 `{id,minimumSpendFen}` 及1—200字reason。首级0、门槛严格递增；积分单位参数1—1000000、抵扣上限1—100%、期限1—3650天，金额整数分。使用 `Idempotency-Key` UUID及真实规则修订校验，无需 `X-Action-Confirmation`；内部 `member.rules.update` 校验实时管理权限。同账号同键同内容返回原保存结果，不重复修订／审计；不同内容冲突，未知结果先GET再按原body/key恢复。
 
 报价和订单记录完整规则快照；提交时重新校验并锁定政策，变化返回 `BENEFIT_POLICY_CHANGED` 409，客户端重新报价。抵扣钱数 `floor(pointsToUse × deductFen / deductPoints)`，0分抵扣拒绝消费积分；订单项退款的积分数量按实际核销积分分摊，不能拿抵扣分金额充当积分。订单政策不可改写，数据库核对政策换算并拒绝JSON null。
 
@@ -493,13 +506,13 @@ PC路径为 `/aftersales`、`/aftersales/{caseId}`，由订单列表/详情和�
 | `GET/POST /api/v1/admin/coupon-campaigns` | 查询需 `coupon.read`；新建另需 `coupon.manage`。 |
 | `GET/PUT /api/v1/admin/coupon-campaigns/{id}` | 查询需read；完整草稿修改另需manage、`expectedRevision`。 |
 | `GET /api/v1/admin/coupon-product-options` | read + manage；按商品分页，避免多个SKU造成选择重复。 |
-| `POST /api/v1/admin/coupon-campaigns/{id}/publish`、`/distribution` | read + `coupon.publish`、CSRF、密码确认动作 `coupon.publish`；对象活动UUID、当前修订绑定。 |
-| `GET/POST /api/v1/admin/coupon-campaigns/{id}/issuances` | 查询需read；发放另需 `coupon.issue/member.read`、密码确认动作 `coupon.issue`。 |
+| `POST /api/v1/admin/coupon-campaigns/{id}/publish`、`/distribution` | read + `coupon.publish`、CSRF、有效会话；服务端核对活动UUID及当前修订，无需操作员密码。 |
+| `GET/POST /api/v1/admin/coupon-campaigns/{id}/issuances` | 查询需read；发放另需 `coupon.issue/member.read`、有效会话及CSRF，无需操作员密码。 |
 | `GET /api/v1/admin/coupon-operations/{key}` | 当前账号的原操作结果，复查原动作权限；重复发放另复查 `coupon.issue.repeat`。 |
 | `GET /api/v1/app/coupon-campaigns`、`POST /{id}/claim` | 本人Bearer；当前开放有效活动、本人领取次数、领取。 |
 | `GET /api/v1/app/member/coupons`、`/coupon-claims/{key}` | 本人券分页及本人原领取结果，不接受别人的会员标识。 |
 
-后台写入统一严格JSON、UUID `Idempotency-Key`、当前权限和CSRF；发布、开关、发放须 `X-Action-Confirmation`。草稿完整字段为 `code/title/kind/minGoodsFen/discountFen/productIds/redeemEligible/validFrom/validUntil/totalQuantity/selfClaimLimit/claimMode/issuanceEnabled`，编辑另含 `expectedRevision`。编码ASCII字母数字下划线短横线1—64位，标题1—100字，时间带时区且结束晚于开始；商品最多100个不重复存在UUID，空表示全场；总量1—1000000，上限1—min(总量,100)，方式 `SELF/ADMIN/BOTH`。现金券门槛0，满减券门槛正数，金额整数分；核销商品默认不参与，需明确启用。
+后台写入统一严格JSON、UUID `Idempotency-Key`、当前权限和CSRF；发布、开关、发放直接提交对应业务请求，无需 `X-Action-Confirmation`。草稿完整字段为 `code/title/kind/minGoodsFen/discountFen/productIds/redeemEligible/validFrom/validUntil/totalQuantity/selfClaimLimit/claimMode/issuanceEnabled`，编辑另含 `expectedRevision`。编码ASCII字母数字下划线短横线1—64位，标题1—100字，时间带时区且结束晚于开始；商品最多100个不重复存在UUID，空表示全场；总量1—1000000，上限1—min(总量,100)，方式 `SELF/ADMIN/BOTH`。现金券门槛0，满减券门槛正数，金额整数分；核销商品默认不参与，需明确启用。
 
 发布body `{expectedRevision}`；开关body `{expectedRevision,issuanceEnabled}`；发放body `{expectedRevision,memberId,quantity,reason}`，数量1—100、原因最多200字。后台默认1张；同活动同会员已有后台发放或本次数量大于1时，必须有重复权限及非空原因。后台发放占永久总量，不占个人SELF限额；用券、取消和返券都不恢复发放额度。只有有效且启用的当前应用会员可领取／受领。发放锁序为member→campaign→allocation；发布只锁campaign，无反向member锁。等待领域锁后重验当前会话、账号与权限；内部受信任发放入口也验证操作员当前能力。
 
@@ -519,7 +532,7 @@ PC路径为 `/aftersales`、`/aftersales/{caseId}`，由订单列表/详情和�
 | --- | --- |
 | `GET/POST /api/v1/admin/exchange-offers` | 查询需 `exchange.read`；创建另需 `exchange.manage`。 |
 | `GET/PUT /api/v1/admin/exchange-offers/{id}` | 查询及修改独立积分售价，修改需read/manage与 `expectedRevision`。 |
-| `POST /api/v1/admin/exchange-offers/{id}/availability` | read/publish、CSRF及密码确认动作 `exchange.publish`，绑定兑换商品UUID和当前修订。 |
+| `POST /api/v1/admin/exchange-offers/{id}/availability` | read/publish、CSRF及有效会话，核对兑换商品UUID和当前修订，无需操作员密码。 |
 | `GET /api/v1/admin/exchange-sku-options` | read/manage；既有SKU分页选择及结构可用状态。 |
 | `GET /api/v1/admin/exchange-operations/{key}` | 当前操作员原请求的结果恢复，重验当前动作权限。 |
 | `GET /api/v1/app/exchange-products`、`/{id}` | 公开兑换商品列表及详情。 |
@@ -558,7 +571,7 @@ D5列表默认20、最大100、页码最多10000。报价返回quoteId、expires
 
 页面域提供首页、独立微页面和启动配置历史。`GET /api/v1/admin/pages/home/versions`、`GET /api/v1/admin/pages/{pageId}/versions`、`GET /api/v1/admin/startup/versions` 默认20、最大100分页，`page` 为1—100000；页面需 `page.read`，启动需 `startup.read`。返回 `{list,total,page,pageSize,currentVersionId,publicationRevision,draftRevision}`，条目包含 `versionId/revision/name/publishedAt/publishedBy/isCurrent`；按配置修订及UUID倒序稳定排序，操作者只返回展示名，不返回账号凭据。相同路径追加 `/{versionId}` 查看快照，页面附 `config`，启动附管理端 `gifUrl/fallbackUrl`。页面版本必须属于URL指定页面，历史可看不等于当前可发布。私有响应禁止缓存。
 
-三个领域路径下的 `POST /rollback` 精确接收 `{expectedRevision,expectedPublicationRevision,versionId,reason}`；草稿修订为正整数、发布修订为非负整数，原因去首尾空白后1—200字，需CSRF、8—128位可打印ASCII `Idempotency-Key` 及一次性密码确认凭证。页面需 `page.read`＋`page.publish`，启动需 `startup.read`＋`startup.publish`。确认动作 `page.rollback/startup.rollback` 复用对应发布权限，绑定对象 `{pageUUID}:{versionUUID}`／`startup:{versionUUID}`，确认修订是 `expectedPublicationRevision`，防止确认后换目标。
+三个领域路径下的 `POST /rollback` 精确接收 `{expectedRevision,expectedPublicationRevision,versionId,reason}`；草稿修订为正整数、发布修订为非负整数，原因去首尾空白后1—200字，需CSRF、8—128位可打印ASCII `Idempotency-Key`，无需操作员密码确认。页面需 `page.read`＋`page.publish`，启动需 `startup.read`＋`startup.publish`。回退直接提交目标版本及双修订，服务端在锁内复核目标归属、发布修订及对应发布权限；无需先签发或绑定密码确认令牌。
 
 回退只切换当前发布版本指针，保留草稿内容、名称、修订和素材引用；不产生重复配置快照，不切换小程序代码版本。独立 `publicationRevision` 初始0，存量已发布记录回填1，每次正常发布／回退递增；E1起普通发布也精确接收 `{expectedRevision,expectedPublicationRevision}`，旧发布客户端须升级；升级前单修订成功请求的旧摘要与E1双修订摘要不同，旧键返回409，升级时须先核对当前线上状态和原发布版本，再以新键执行明确的新操作，不能把旧键冲突当未知请求自动重试；与 `expectedRevision` 草稿修订同时核对，防止A→B→A后的旧请求误覆盖。草稿DTO补 `publishedVersionId/publicationRevision`。已生成过版本的同一草稿修订不能再次创建快照，可通过历史切换该版本，或先修改草稿再发布。
 
@@ -566,13 +579,13 @@ D5列表默认20、最大100、页码最多10000。报价返回quoteId、expires
 
 成功操作保存不可改写的请求凭证、目标、修订、原因和审计；同键同内容返回原结果，同键异内容409。重放返回原操作结果，不再次切指针；原结果可能已被后续操作取代，客户端需读取当前历史状态。未知网络结果保留原键和原body，仅允许恢复同一请求，不能改选版本或生成新键盲重试。回退当前版本拒绝，不无意义增加发布修订。
 
-数据库禁止UPDATE／DELETE历史配置、历史素材关系和成功操作凭证；页面指针只允许指向本页版本，发布指针不可删除重建计数，已发布指针不可置空。素材关系的INSERT只由当前发布路径建立，本片不声称数据库独立解析全部配置并核对关系集合。`page.read/startup.read` 可读取所属域历史保留素材，公开访问仍只跟随当前可见发布引用；历史引用继续阻止素材清理。PC共用历史抽屉，覆盖加载、空、错误重试、分页、详情、当前标签、原因／密码确认及只读状态；回退后更新线上信息并保留编辑器未保存内容。底部导航和客服悬浮配置另属E1.1。
+数据库禁止UPDATE／DELETE历史配置、历史素材关系和成功操作凭证；页面指针只允许指向本页版本，发布指针不可删除重建计数，已发布指针不可置空。素材关系的INSERT只由当前发布路径建立，本片不声称数据库独立解析全部配置并核对关系集合。`page.read/startup.read` 可读取所属域历史保留素材，公开访问仍只跟随当前可见发布引用；历史引用继续阻止素材清理。PC共用历史抽屉，覆盖加载、空、错误重试、分页、详情、当前标签、原因／业务确认及只读状态；回退后更新线上信息并保留编辑器未保存内容。底部导航和客服悬浮配置另属E1.1。
 
 ### 5.23 E1.1：底部导航与客服悬浮配置
 
 导航与客服是两个独立单例领域，分别维护草稿修订、线上发布修订、不可变版本、历史素材引用和幂等操作凭证；一个领域回退不改动另一领域。导航始终为 `HOME 首页`、`CATEGORY 分类`、`CART 购物车`、`ME 我的` 四项，顺序、名称和目标页不可修改。每项可选择一对普通／选中静态图标；未设置时小程序使用随包默认图标，不产生空白导航。客服可关闭或开启；开启时只允许 `PHONE`（ASCII数字构成的有效11位大陆手机号）与 `QR`（一张静态二维码图片）二选一，可设不超过20字的入口文案及可选图标。关闭配置发布后公开接口不返回联系方式与私有素材 URL；草稿及历史仍保留，以便后续编辑或授权回退。仅接受已存在、可绑定、文件可读取且实际格式、尺寸、字节数与SHA256元信息一致的静态 PNG/JPEG 素材，预览、发布和回退均重验。
 
-管理接口为 `GET/PUT /api/v1/admin/navigation/draft` 和 `/api/v1/admin/customer-service/draft`，PUT 精确提交 `{expectedRevision,config}`；`POST .../preview` 精确提交 `{expectedRevision}`；`POST .../publish` 精确提交 `{expectedRevision,expectedPublicationRevision}`，需 `Idempotency-Key` 与 `X-Action-Confirmation`；`GET .../versions` 支持与5.22相同的分页，`GET .../versions/{versionId}` 查看本域快照；`POST .../rollback` 精确提交 `{expectedRevision,expectedPublicationRevision,versionId,reason}`，确认与幂等约束同5.22。草稿包含 `revision/config/publishedRevision/publishedVersionId/publicationRevision`，成功发布／回退返回 `versionId/revision/publicationRevision/draftRevision`。确认动作是 `navigation.publish/rollback`、`customer_service.publish/rollback`，发布绑定对应领域对象与草稿修订；回退绑定 `领域:目标版本UUID` 与当前发布修订。新草稿、预览、历史与回退分别要求本域 `read/edit/publish` 权限，等待行锁后及成功重放前再次核对实时会话与授权；私有响应不可缓存。`member_marketing` 默认含两个领域的 read/edit，不含 publish，主账号可发布，其他账号须显式授权。
+管理接口为 `GET/PUT /api/v1/admin/navigation/draft` 和 `/api/v1/admin/customer-service/draft`，PUT 精确提交 `{expectedRevision,config}`；`POST .../preview` 精确提交 `{expectedRevision}`；`POST .../publish` 精确提交 `{expectedRevision,expectedPublicationRevision}`，需 `Idempotency-Key`，无需操作员密码或 `X-Action-Confirmation`；`GET .../versions` 支持与5.22相同的分页，`GET .../versions/{versionId}` 查看本域快照；`POST .../rollback` 精确提交 `{expectedRevision,expectedPublicationRevision,versionId,reason}`，确认与幂等约束同5.22。草稿包含 `revision/config/publishedRevision/publishedVersionId/publicationRevision`，成功发布／回退返回 `versionId/revision/publicationRevision/draftRevision`。服务端直接核对领域、目标版本、草稿修订与当前发布修订，无需密码确认凭证。新草稿、预览、历史与回退分别要求本域 `read/edit/publish` 权限，等待行锁后及成功重放前再次核对实时会话与授权；私有响应不可缓存。`member_marketing` 默认含两个领域的 read/edit，不含 publish，主账号可发布，其他账号须显式授权。
 
 公开 `GET /api/v1/app/storefront` 返回 `{navigation:{versionId,items:[{key,label,iconUrl,selectedIconUrl}]},customerService:{versionId,enabled,mode,phone,qrUrl,prompt,iconUrl}}`，只读取两个当前成功发布指针；未发布时固定四项默认图标、客服关闭。小程序在首页、分类、购物车、会员主入口渲染共用四项底栏，详情页保留原底部购买操作；首页、分类、会员及商品／微页面详情按已发布配置显示悬浮客服，并避开固定底栏和购买操作。客服电话由用户点击后触发拨号，二维码由用户点击后预览；读取失败退回固定底栏并隐藏客服。分类带搜索词／分类ID的现有深链仍由原页面承接，底栏切换固定一级页面。
 
@@ -610,7 +623,7 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 | --- | --- |
 | `GET /api/v1/admin/subscription-message-tasks` | 需 `notification.read`；筛选 `eventType/status/createdFrom/createdTo`，默认近90天、跨度最大90天、每页默认20最多100；按创建时间与任务ID倒序，使用不透明 `cursor` 翻页。返回 `data:{items,nextCursor}`。 |
 | `GET /api/v1/admin/subscription-message-tasks/{taskId}` | 需 `notification.read`；返回单任务与按次序排列的发送尝试。无权或不存在分别返回403／404。 |
-| `POST /api/v1/admin/subscription-message-tasks/{taskId}/recover-reservation` | 需 `notification.read` 与 `notification.recover`、CSRF、密码二次确认；严格 body `{expectedUpdatedAt,expectedAttemptCount}`。确认动作 `notification.task.recover_reservation`，对象为任务 UUID，修订绑定尝试次数。仅行锁内重新确认状态仍为 `RESERVED`、租约已过期、**本次租约**没有发送尝试且提交快照未过期时，把任务恢复为 `READY`。以往已完成的可重试尝试不妨碍本次安全恢复。其余返回409要求重读；操作本身不发送消息。 |
+| `POST /api/v1/admin/subscription-message-tasks/{taskId}/recover-reservation` | 需 `notification.read` 与 `notification.recover`、CSRF、有效会话，无需操作员密码；严格 body `{expectedUpdatedAt,expectedAttemptCount}`。服务端校验任务UUID、实际更新时间及尝试次数，恢复动作保持实时权限核验。仅行锁内重新确认状态仍为 `RESERVED`、租约已过期、**本次租约**没有发送尝试且提交快照未过期时，把任务恢复为 `READY`。以往已完成的可重试尝试不妨碍本次安全恢复。其余返回409要求重读；操作本身不发送消息。 |
 
 任务摘要字段为 `taskId/eventType/status/reasonCode/attemptCount/occurredAt/createdAt/updatedAt/nextAttemptAt/leaseUntil/recoverable`；详情另有 `attempts:[{ordinal,outcome,failureCode,startedAt,finishedAt}]`。`recoverable` 是服务端按当前事实计算的提示，不代替 POST 中的行锁重验。筛选只接受固定事件和任务状态；日期可为 `YYYY-MM-DD` 或带时区 ISO 时间。只读和写入均使用当前会话鉴权、私有响应不缓存；写入在领域锁后复查当前权限并记录审计。
 
@@ -638,7 +651,7 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 代码包选择允许列表的 `STORED_UNVERIFIED`（文件存在、尚未重算摘要）以及详情核验后的 `READY`；`UNAVAILABLE` 不可选。最新代码包仍须通过准备检测，所有提交由服务端再次完整核验，不把列表状态当作微信已接收。
 
-管理台优先提供 `CI_DIRECT` 直传操作：选择已同步到后台的不可变代码版本、微信版本号及说明，凭目标小程序上传私钥和密码确认创建 `POST /api/v1/admin/code-release/uploads` 任务。服务器对所选版本重新核对摘要、AppID、HTTPS API 地址与密钥修订，再由隔离 worker 调用 `miniprogram-ci`；最新版本的只读条件检查不阻止选择其他已就绪版本，所选版本以服务端提交校验为准。直传成功仅表示微信接收开发版本，`reviewAvailable=false`，不得据此开放本系统的第三方平台提审按钮。未知结果禁止自动重试，须核查微信后台后处理。
+管理台优先提供 `CI_DIRECT` 直传操作：选择已同步到后台的不可变代码版本、微信版本号及说明，凭目标小程序上传私钥、有效后台会话和发布管理权限创建 `POST /api/v1/admin/code-release/uploads` 任务。服务器对所选版本重新核对摘要、AppID、HTTPS API 地址与密钥修订，再由隔离 worker 调用 `miniprogram-ci`；最新版本的只读条件检查不阻止选择其他已就绪版本，所选版本以服务端提交校验为准。直传成功仅表示微信接收开发版本，`reviewAvailable=false`，不得据此开放本系统的第三方平台提审按钮。未知结果禁止自动重试，须核查微信后台后处理。
 
 `POST /api/v1/admin/code-release/domain-check` 需要 `code.version.read` 和 CSRF，限流每分钟10次，接受可选 `{versionId}`，省略时查询最新不可变包。核对所选包摘要、AppID及HTTPS API源站后，以已配置AppSecret获取普通稳定token（不强制刷新、不持久化），调用微信 `getwxadevinfo`。返回 `versionId/appId/checkedAt/status/code/detail/requiredRequestDomains/configuredRequestDomains/missingRequestDomains/platformErrorCode`。缺配置或缺域名为 `BLOCKED`；网络、权限及未知平台结果为 `UNVERIFIED`。域名检查仅反映所选包API所需的 request 域名，不代表图片、下载、业务域名或真机验证，也不作为直传鉴权门槛。用户修改包或AppID后页面清除旧检查结果。微信代码上传IP白名单仍在实际上传时验证。
 
@@ -648,11 +661,11 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 #### E3.2 第三方平台代码发布链路
 
-第三方平台组件与开发小程序分别配置。`GET/PUT /api/v1/admin/integrations/wechat-open-platform` 管理组件 AppID、开发小程序 AppID、固定 HTTPS 授权回调地址及加密保存的组件 AppSecret、消息 Token 和 EncodingAESKey；写操作需要微信集成管理权限和密码确认，不回显原文。`POST .../authorize` 生成目标小程序管理员授权链接；微信票据和授权回调经签名、AES、组件 AppID、时效与一次性 state 校验。授权状态向微信实时查询，必须确认目标 AppID、小程序类型、正常账号状态及代码管理权限集 18；网络或平台异常显示 `UNVERIFIED`，不得据已保存令牌显示 `PASS`。
+第三方平台组件与开发小程序分别配置。`GET/PUT /api/v1/admin/integrations/wechat-open-platform` 管理组件 AppID、开发小程序 AppID、固定 HTTPS 授权回调地址及加密保存的组件 AppSecret、消息 Token 和 EncodingAESKey；写操作需要微信集成管理与读取权限、有效会话及CSRF，无需操作员密码，不回显原文。`POST .../authorize` 生成目标小程序管理员授权链接；微信票据和授权回调经签名、AES、组件 AppID、时效与一次性 state 校验。授权状态向微信实时查询，必须确认目标 AppID、小程序类型、正常账号状态及代码管理权限集 18；网络或平台异常显示 `UNVERIFIED`，不得据已保存令牌显示 `PASS`。
 
-`GET/PUT /api/v1/admin/code-release/developer-upload-key` 独立保存开发小程序的 PEM RSA 上传私钥，不复用目标小程序直传私钥。`POST /api/v1/admin/code-release/uploads` 选择不可变版本、版本号、说明与 `DIRECT_COMMIT` 渠道，需 UUID 幂等键、管理权限和密码确认；调度在专用临时卷重验包摘要、AppID、实时授权与密钥修订，临时覆盖 `project.config.json` 并添加 `ext.json`，交由隔离 Node 容器运行 `miniprogram-ci`。成功仅表示微信接收该待审核版本。超时与不明错误记录 `UNKNOWN`，禁止自动重试；管理员核查后可带说明关闭未知任务，但关闭不标记成功。
+`GET/PUT /api/v1/admin/code-release/developer-upload-key` 独立保存开发小程序的 PEM RSA 上传私钥，不复用目标小程序直传私钥。`POST /api/v1/admin/code-release/uploads` 选择不可变版本、版本号、说明与 `DIRECT_COMMIT` 渠道，需 UUID 幂等键、实时读取/管理权限、有效会话及CSRF，无需操作员密码；调度在专用临时卷重验包摘要、AppID、实时授权与密钥修订，临时覆盖 `project.config.json` 并添加 `ext.json`，交由隔离 Node 容器运行 `miniprogram-ci`。成功仅表示微信接收该待审核版本。超时与不明错误记录 `UNKNOWN`，禁止自动重试；管理员核查后可带说明关闭未知任务，但关闭不标记成功。
 
-仅成功的 `DIRECT_COMMIT` 上传可进入审核。`GET /api/v1/admin/code-release/categories` 读取微信类目；`POST .../reviews` 在外部调用前持久化审核尝试，检查授权和类目、UUID 幂等键、密码确认，成功记录微信 `auditid`。`POST .../reviews/{id}/refresh` 查询审核单，明确审核通过后才允许 `POST .../reviews/{id}/release`。发布前再次核对具体审核单已通过且为微信最新通过版本；平台发布接口不接受审核单号，故仍需排除平台侧并发改版风险。网络结果未知时不自动重复提审或发布，只能人工核查并以说明关闭，不把关闭当作成功。后台 `RELEASE_REQUESTED` 只证明微信接受发布请求，正式线上版本仍需微信后台及真机验收。上述能力在 Compose 中默认关闭上传 worker，真实账号、IP 白名单、合法域名和平台回执未在本地测试中证明。
+仅成功的 `DIRECT_COMMIT` 上传可进入审核。`GET /api/v1/admin/code-release/categories` 读取微信类目；`POST .../reviews` 在外部调用前持久化审核尝试，检查授权和类目、UUID 幂等键、实时读取/管理权限及会话，成功记录微信 `auditid`。`POST .../reviews/{id}/refresh` 查询审核单，明确审核通过后才允许 `POST .../reviews/{id}/release`。发布前再次核对具体审核单已通过且为微信最新通过版本；平台发布接口不接受审核单号，故仍需排除平台侧并发改版风险。网络结果未知时不自动重复提审或发布，只能人工核查并以说明关闭，不把关闭当作成功。后台 `RELEASE_REQUESTED` 只证明微信接受发布请求，正式线上版本仍需微信后台及真机验收。上述能力在 Compose 中默认关闭上传 worker，真实账号、IP 白名单、合法域名和平台回执未在本地测试中证明。
 
 ### 5.28 E3.1：可信 Git 来源与部署自动同步
 
@@ -695,7 +708,7 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 | `PUT` 同路径 | 同时需 `wechat.integration.read/manage`。严格 JSON `{expectedRevision,appId,secretAction:KEEP\|REPLACE,appSecret?}`，最多8 KiB。`KEEP` 必须省略 appSecret 且目标 AppID 不变、已有 Secret；`REPLACE` 必须提供新的 Secret。保存成功修订加一，清除此前校验结果。每账号一小时最多30次成功保存。 |
 | `POST /api/v1/admin/integrations/wechat-mini-program/test` | 同时需上述双权限；严格 `{expectedRevision}`，只校验当前有效已存凭据，不接受待保存 Secret。每账号5分钟最多5次获准测试。测试不增加配置修订；平台拒绝或暂不可用返回 HTTP 200 与安全 lastCheck 状态，传输响应本身不代表凭据通过。 |
 
-保存与测试均须先通过 `POST /api/v1/admin/auth/confirm` 验证当前密码，动作分别为 `wechat.integration.update`、`wechat.integration.test`，`objectId` 固定 `wechat-mini-program`，`revision` 使用当前配置修订；实际调用带 `X-Action-Confirmation`。凭证绑定操作者、会话、动作、对象和修订，5分钟有效且核销使用行锁。主账号默认拥有新增权限，现有预设组不自动增加权限。服务端在配置行锁与账号行锁内复核当前会话和双权限。
+保存与测试直接提交对应业务请求，无需调用 `POST /api/v1/admin/auth/confirm` 或携带 `X-Action-Confirmation`。服务端核对当前配置修订及实时会话和双权限；AppSecret仍是需要配置的微信凭据，不是操作员二次密码。主账号默认拥有新增权限，现有预设组不自动增加权限。服务端在配置行锁与账号行锁内复核当前会话和双权限。
 
 成功 GET／PUT／测试的 `data` 统一为：
 
@@ -726,7 +739,7 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 校验固定 HTTPS POST 微信 stable_token，显式 `force_refresh=false`，TLS验证、禁重定向和环境代理、5秒超时、8 KiB响应上限；不自动重试、不回退其它token接口。平台普通模式仍可能在临近过期时更新token，不承诺永不轮转。token不落库、不回传，校验不创建会员／登录会话／登录code使用记录。平台调用在事务外，回写前再次核对修订、快照及当前权限；并发改配置后丢弃旧结果。微信错误40013/40125/40001归为INVALID_CREDENTIALS，40164为IP_NOT_ALLOWED，89503为ADMIN_CONFIRMATION_REQUIRED，89506/89507为ADMIN_REJECTED，45009/45011为PLATFORM_RATE_LIMITED；其它平台原文不出站。
 
-业务错误：401会话过期；403权限或密码确认失败；405保留Allow；409 `REVISION_CONFLICT`（可附currentRevision）、`APP_ID_LOCKED`、`CREDENTIALS_NOT_CONFIGURED`；503 `CREDENTIALS_UNAVAILABLE`；429 `RATE_LIMITED` 附Retry-After。响应私有禁止缓存，保留请求ID；框架CSRF错误遵循通则。审计只含配置来源、修订及安全状态，不含AppSecret、密文、token、内部指纹或平台原文。网络结果未知时客户端重新GET核对，不能仅凭revision/AppID断言Secret替换成功，不能自动重发或持久化秘密请求体；需要再次操作时重新取得密码确认凭证。
+业务错误：401会话过期；403权限拒绝；405保留Allow；409 `REVISION_CONFLICT`（可附currentRevision）、`APP_ID_LOCKED`、`CREDENTIALS_NOT_CONFIGURED`；503 `CREDENTIALS_UNAVAILABLE`；429 `RATE_LIMITED` 附Retry-After。响应私有禁止缓存，保留请求ID；框架CSRF错误遵循通则。审计只含配置来源、修订及安全状态，不含AppSecret、密文、token、内部指纹或平台原文。网络结果未知时客户端重新GET核对，不能仅凭revision/AppID断言Secret替换成功，不能自动重发或持久化秘密请求体；需要再次操作时读取最新状态，由当前授权操作者重新确认业务内容后提交。
 
 
 ## 会员资料与后台交互补充（2026-09-30）
@@ -747,7 +760,7 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 后台 `POST /api/v1/admin/pages/coupon-preview` body `{props}` 需要 `page.read` 与 `coupon.read`，返回 `{coupons:CouponCard[]}`，以游客状态显示安全券卡。完整页面 preview 包含可见优惠券组件时同样需要 coupon.read，componentData 保持商品数据，另返回 couponData 券卡映射；配置和 metadata 仍完整保留。发布页面默认能力仍为 schema 1，只有已部署且验证对应小程序渲染器后人工提高 `PAGE_RUNTIME_SCHEMA_VERSION`；当前实现允许 1—4。公开页面 GET 需声明支持 `schemaVersion=4`，旧客户端不支持时返回明确兼容错误。运营 metadata 不加入普通公开 config，分享资料从已发布完整配置独立返回。公开 config 以不改写发布快照的投影清除未激活来源选择器：AUTO 优惠券的 campaignIds 置空，CATEGORY 商品的 productIds 置空，MANUAL 商品的 categoryId 置空；草稿可保留这些暂未使用的选择值，不参与对应来源查询和发布引用校验。
 
-`POST /api/v1/admin/pages/{home|UUID}/release-report` 需要 page.read 与 CSRF，body 为 `{expectedRevision,expectedPublicationRevision}`。报告在页面／线上指针及发布链接图锁内读取一致快照，不保存、不发布、不领取、不创建业务审计事实。任一版本变化分别返回 409 `REVISION_CONFLICT`／`PUBLICATION_REVISION_CONFLICT`。响应为 `{pageId,revision,publicationRevision,publishedVersionId,schemaVersion,runtimeSchemaVersion,runtimeSupported,diff,issues,canPublish}`。`diff` 为 `{addedComponentIds,removedComponentIds,updatedComponentIds,orderChanged,themeChanged,metadataChanged,nameChanged}`；metadataChanged 包含后台标签变化，标签本身不展示在消费者页面；nameChanged 比较当前草稿页面名称与当前发布版本名称，无线上版本时为true，名称单独变化也属于公开页面变化。`issues` 每项为 `{componentId?,path,code,message,severity:'ERROR'|'WARNING'}`，分别收集配置、图片／分享封面、商品／分类、PAGE 未发布／循环、优惠券公开引用及运行时兼容问题。公开券当前领完／过期／未开始／停发为 WARNING；私有或失效引用为 ERROR。报告允许读取未补完整的草稿，`canPublish` 仅表示当前快照未发现 ERROR，不能取代提交发布时的完整校验、密码确认、双修订号和幂等协议。报告成功不证明已发布、部署或微信真机验收。
+`POST /api/v1/admin/pages/{home|UUID}/release-report` 需要 page.read 与 CSRF，body 为 `{expectedRevision,expectedPublicationRevision}`。报告在页面／线上指针及发布链接图锁内读取一致快照，不保存、不发布、不领取、不创建业务审计事实。任一版本变化分别返回 409 `REVISION_CONFLICT`／`PUBLICATION_REVISION_CONFLICT`。响应为 `{pageId,revision,publicationRevision,publishedVersionId,schemaVersion,runtimeSchemaVersion,runtimeSupported,diff,issues,canPublish}`。`diff` 为 `{addedComponentIds,removedComponentIds,updatedComponentIds,orderChanged,themeChanged,metadataChanged,nameChanged}`；metadataChanged 包含后台标签变化，标签本身不展示在消费者页面；nameChanged 比较当前草稿页面名称与当前发布版本名称，无线上版本时为true，名称单独变化也属于公开页面变化。`issues` 每项为 `{componentId?,path,code,message,severity:'ERROR'|'WARNING'}`，分别收集配置、图片／分享封面、商品／分类、PAGE 未发布／循环、优惠券公开引用及运行时兼容问题。公开券当前领完／过期／未开始／停发为 WARNING；私有或失效引用为 ERROR。报告允许读取未补完整的草稿，`canPublish` 仅表示当前快照未发现 ERROR，不能取代提交发布时的完整校验、实时会话与操作权限、双修订号和幂等协议。报告成功不证明已发布、部署或微信真机验收。
 
 
 ## 前置仓扩展契约（2026-10-10）
@@ -761,11 +774,11 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 - 前置仓售后 GET 列表及详情和 POST `/aftersales/{caseId}/notes`：`kind=ADVICE|RECEIPT/note/expectedRevision/receivedQuantity/salableQuantity`，使用 UUID `Idempotency-Key`。RECEIPT 是前置仓实际收货证据，返回 `platformReviewRequired=true`；不直接执行退款或回库。统一平台售后详情公开 `storeNotes` 供审核及正式验收。
 - 后台权限 `stores.read/stores.manage/stores.accounts.read` 与会员员工的 `products/orders/accounts` 前置仓权限分离。后台 Cookie 写入保留 CSRF，员工接口使用会员会话并实时校验前置仓授权。
 - 分润口径已确认：平台比例作用于订单实付减规格进货成本后的利润；前置仓结算包括成本，等于订单实付减平台利润再减订单配置运费。多规格订单分摊整单运费后逐行计算平台利润（向下取整），保持平台利润、前置仓结算、运费合计等于订单实付。规格规则在下单时保存不可变快照，销售单位版本变化需重新配置，历史未配置订单不自动套用新规则。
-- 高德 `GET/PUT /api/v1/admin/stores/map-settings` 支持三项加密凭据，读取仅返回配置状态与末四位；正常写入空值保留现有值，JS 参数成对校验，使用 `stores.manage`、CSRF、`stores.map.configure` 密码确认和修订锁。托管配置优先，解密失败明确拒绝；未托管时兼容环境 `AMAP_WEB_SERVICE_KEY`。具体字段与恢复规则见前置仓模块文档。
-- 售后期限 `GET/PUT /api/v1/admin/stores/settlement-settings` 复用平台现有售后策略，读取 `receivedWindowDays/revision/appliesTo=NEW_ORDERS`，写入 `receivedWindowDays/expectedRevision`（1–365 天），使用 `stores.manage`、CSRF、`stores.settlement.configure` 密码确认（对象 `aftersale-policy`）和修订锁。既有订单售后快照不变，结算以订单自身快照期限判断。
-- 商品规格分润 `GET /api/v1/admin/stores/profit-rules`、`PUT /profit-rules/{skuId}` 返回／保存 `purchaseCostFen/platformShareBps/revision`，写入使用 `expectedRevision`、`stores.manage`、CSRF 与 `stores.profit.configure` 密码确认（对象 SKU ID）；返回 `requiresReconfiguration` 标记单位版本变化。资金规则及完整提现字段见前置仓模块文档。
+- 高德 `GET/PUT /api/v1/admin/stores/map-settings` 支持三项加密凭据，读取仅返回配置状态与末四位；正常写入空值保留现有值，JS 参数成对校验，使用 `stores.manage`、CSRF、有效会话和修订锁，无需操作员密码。托管配置优先，解密失败明确拒绝；未托管时兼容环境 `AMAP_WEB_SERVICE_KEY`。具体字段与恢复规则见前置仓模块文档。
+- 售后期限 `GET/PUT /api/v1/admin/stores/settlement-settings` 复用平台现有售后策略，读取 `receivedWindowDays/revision/appliesTo=NEW_ORDERS`，写入 `receivedWindowDays/expectedRevision`（1–365 天），使用 `stores.manage`、CSRF、有效会话和修订锁，无需操作员密码。既有订单售后快照不变，结算以订单自身快照期限判断。
+- 商品规格分润 `GET /api/v1/admin/stores/profit-rules`、`PUT /profit-rules/{skuId}` 返回／保存 `purchaseCostFen/platformShareBps/revision`，写入使用 `expectedRevision`、`stores.manage`、CSRF与实时会话，不要求操作员密码；返回 `requiresReconfiguration` 标记单位版本变化。资金规则及完整提现字段见前置仓模块文档。
 - 前置仓账户返回实际可用、冻结、累计发放和待结算金额，收入及提现各最多100条；异常收入未知金额返回 null。提现 POST `/api/v1/app/store-center/stores/{storeId}/withdrawals` 接受 `requestKey/amountFen/payeeName/bankName/bankAccount`，原子冻结并对固定请求键防重复；普通读取脱敏，银行卡加密保存。
-- 平台提现 `POST /api/v1/admin/stores/{storeId}/withdrawals/{id}/{review|pay|payee}` 需要 `stores.accounts.manage`、CSRF、当前修订和各自密码确认。状态 `PENDING_REVIEW → APPROVED_PENDING_PAYMENT → PAID`，或审核驳回 `REJECTED` 并解冻。pay 必须提供线下付款凭证，审批不等于付款；payee 是单独敏感读取。结算命令接入现有维护调度，严格超过订单售后快照期限且无处理中售后才入账，读取账户不会写资金事实。
+- 平台提现 `POST /api/v1/admin/stores/{storeId}/withdrawals/{id}/{review|pay|payee}` 需要 `stores.accounts.manage`、CSRF、当前修订和实时会话，不要求操作员密码。状态 `PENDING_REVIEW → APPROVED_PENDING_PAYMENT → PAID`，或审核驳回 `REJECTED` 并解冻。pay 必须提供线下付款凭证，审批不等于付款；payee 是单独敏感读取。结算命令接入现有维护调度，严格超过订单售后快照期限且无处理中售后才入账，读取账户不会写资金事实。
 
 ### 前置仓工作台概览与待办（2026-10-11）
 
@@ -777,7 +790,7 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 - 人员查询：`GET /api/v1/admin/stores/{storeId}/staff?memberSearch=...` 要求 `stores.manage`；查询 2–100 字的会员编号、昵称或 UUID，最多返回 20 个启用会员，响应 `{members:[{id,memberNo,name}]}`，不包含手机号或微信身份，禁止缓存。无查询参数的人员列表仍返回 `{items:[...]}`。
 - 人员授权：`POST /api/v1/admin/stores/{storeId}/staff` 接受 `{memberId,permissions,enabled}` 或 `{memberNo,permissions,enabled}`，两种身份字段互斥；保存时重新校验管理权限和会员启用状态，页面先查找并选择会员。
-- 批量分润：`POST /api/v1/admin/stores/profit-rules` 接受 `{items:[{skuId,expectedRevision}],purchaseCostFen,platformShareBps}`，最多 100 个不同规格，整体事务保存；任一规格不存在、单位缺失或修订冲突时整批不保存。使用 `stores.manage`、CSRF 和密码确认动作 `stores.profit.batch.configure`，修订号 `0`，对象 ID 为 canonical JSON `[purchaseCostFen,platformShareBps,[[skuId,expectedRevision],...]]` 的 SHA-256；规格 UUID 转小写并排序。单项 PUT 保留。PC 当前页选择、单项与批量设置均使用弹窗。
+- 批量分润：`POST /api/v1/admin/stores/profit-rules` 接受 `{items:[{skuId,expectedRevision}],purchaseCostFen,platformShareBps}`，最多 100 个不同规格，整体事务保存；任一规格不存在、单位缺失或修订冲突时整批不保存。使用 `stores.manage`、CSRF及实时会话，逐个核对实际规格修订；无需操作员密码或确认令牌。单项 PUT 保留。PC 当前页选择、单项与批量设置均使用弹窗。
 - 系统展示名称统一为“前置仓”；已有接口路径、权限代码及数据库标识保留，历史成交快照不重写。预置权限组展示名称通过 `accounts.0013_front_warehouse_labels` 更新，保留用户自定义名称。
 
 ### 配送地址位置与门牌分离（本地实现，待 UAT／真机验收）
@@ -810,8 +823,8 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 本节替代5.28中PC进货价与平台比例共用弹窗的使用方式；历史订单快照和分润公式不变。进货成本按销售规格设置，平台比例按商品设置。旧SKU组合接口保留兼容性，但新PC管理页不调用它。
 
 - `GET /api/v1/admin/stores/product-profit-rules`：`stores.read`；接受分页、`search`、`categoryId`、`configuration`。商品行返回 `productId/productName/productNo/categoryId/platformShareBps/shareRevision/shareSource/skus`；规格返回既有 `skuId/specLabel/skuCode/saleUnit/currentUnitVersionId/purchaseCostFen/revision/requiresReconfiguration`。商品比例来源区分明确商品规则、旧一致规则、旧冲突、未配置；冲突不能任取旧值。
-- `POST /api/v1/admin/stores/purchase-costs`：仅 `{items:[{skuId,expectedRevision,purchaseCostFen,expectedUnitVersionId}]}`，1–100个不同规格；整体事务。密码确认动作 `stores.cost.batch.configure`、revision0，target为按小写UUID排序的 `[[skuId,expectedRevision,purchaseCostFen,expectedUnitVersionId],...]` canonical JSON的SHA-256。只保存进货成本与当前销售单位版本，不改变商品比例；保存时对锁定规格重验 `expectedUnitVersionId`，单位变化返回409 `UNIT_REVISION_CONFLICT`，整批不保存并要求刷新核对。
-- `POST /api/v1/admin/stores/platform-shares`：仅 `{items:[{productId,expectedRevision}],platformShareBps}`，1–100个不同商品；比例整数0–10000，整体事务。密码确认动作 `stores.share.batch.configure`、revision0，target为 `[platformShareBps,[[productId,expectedRevision],...]]` canonical JSON的SHA-256，小写UUID排序。只保存商品比例，不改SKU成本。两种写操作均需 `stores.manage`、有效后台身份、CSRF与密码确认；任何修订冲突均409整批不保存。
+- `POST /api/v1/admin/stores/purchase-costs`：仅 `{items:[{skuId,expectedRevision,purchaseCostFen,expectedUnitVersionId}]}`，1–100个不同规格；整体事务。服务端逐项核对SKU、真实修订和单位版本，无需操作员密码或确认令牌。只保存进货成本与当前销售单位版本，不改变商品比例；保存时对锁定规格重验 `expectedUnitVersionId`，单位变化返回409 `UNIT_REVISION_CONFLICT`，整批不保存并要求刷新核对。
+- `POST /api/v1/admin/stores/platform-shares`：仅 `{items:[{productId,expectedRevision}],platformShareBps}`，1–100个不同商品；比例整数0–10000，整体事务。服务端逐项核对商品及真实修订，无需操作员密码或确认令牌。只保存商品比例，不改SKU成本。两种写操作均需 `stores.manage`、有效后台身份、CSRF与实时会话；任何修订冲突均409整批不保存。
 - 分类创建与更新新增可空 `imageAssetId/bannerAssetId`；一级仅允许正方形入口图，二级仅允许宽大于高横幅；图片复用现有素材授权、有效文件验证、引用保护和回收。后台返回素材DTO，公开分类仅返回 `imageUrl/bannerImageUrl`等公开字段。未配置图片为空，不提供虚构素材。
 - `GET /api/v1/admin/storefront/filing` 返回 `{recordNo,revision}`，需 `navigation.read`；`PUT` 接受 `{expectedRevision,recordNo}`，需 `navigation.edit`与CSRF。备案号最长100字符，不允许控制字符，可清空，修订冲突409；后台读取和保存共用每账号60次/分钟数据库额度，超额429。`GET /api/v1/app/storefront`新增 `filing:{recordNo}`；个人中心底部显示，空值隐藏。
 - 新小程序路由 `pages/member/center` 承载权益与等级、积分账户和规则；复用会员概览、积分明细与消费历史接口，不新增积分账本或消费统计口径。
@@ -820,13 +833,13 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 采购单独立于顾客销售订单、前置仓收入及提现账本；线下采购付款不扣可提现余额，销售结算仍按已确认公式计算，不再重复扣采购款。第一版整单一次发货、全部验收后增量入库，异常补齐后重验或整单取消退款，不支持部分收货与部分退款，不扣平台总仓库存。采购运费由平台审单时确认，前置仓承担，独立于顾客订单配置运费。
 
-- 人员新增 `procurement`（进货申请、报价确认、付款凭证、取消）及 `receiving`（收货、异常）授权，不自动给现有人员开通。任一授权可读本仓进货列表／详情；服务端在事务中锁定并重验会员及人员授权。后台新增 `stores.procurement.read/manage/finance`，核款与退款关闭须 finance 和订单绑定的密码确认，其他管理动作须 manage；后台写接口沿用 Cookie、CSRF 及实时权限检查。
+- 人员新增 `procurement`（进货申请、报价确认、付款凭证、取消）及 `receiving`（收货、异常）授权，不自动给现有人员开通。任一授权可读本仓进货列表／详情；服务端在事务中锁定并重验会员及人员授权。后台新增 `stores.procurement.read/manage/finance`，核款与退款关闭须 finance、有效会话和订单状态/修订校验，无需操作员密码，其他管理动作须 manage；后台写接口沿用 Cookie、CSRF 及实时权限检查。
 - 仓端根路径 `/api/v1/app/store-center/stores/{storeId}/procurement`：GET `/products` 支持 q/page/pageSize，提供平台在售实物商品的规格、真实规格名、销售单位、基础单位、换算比例、当前单位版本、成本修订及进货价。未配置当前单位进货价的规格不能提交；本仓下架不阻止进货。GET/POST `/orders`、GET `/orders/{orderId}`；创建仅接受 `{requestKey,lines:[{skuId,quantity,expectedCostRevision,expectedUnitVersionId}],note}`，1–100 个不同规格、每项 1–999 整数，服务端重新计算金额并冻结成本、规格与单位换算。
 - 仓端 POST `/orders/{orderId}/{action}` 共同携带 `{expectedRevision,requestKey}`。`confirm-quote` 无额外字段；`payment-proof` 追加 `{assetId,note}`；`cancel` 追加 `{reason}`；`exception` 追加 `{note}`；`receive` 追加 `{lineIds}`，必须且只能为本单全部不重复行 ID，逐行实际验收确认。申请与动作 UUID 请求键持久化，结果未知时客户端保留原请求和键；相同人员同正文重放返回已完成结果，换正文或订单返回409。
 - 平台根路径 `/api/v1/admin/stores/procurement`：GET `/orders` 支持 q/status/storeId/page/pageSize；GET `/orders/{orderId}`；POST `/orders/{orderId}/{action}`。共同字段同上：`review` 追加 `{freightFen}`，只确认运费并冻结已配置采购收款说明；`reject` 追加 `{reason}`；`confirm-payment` 追加 `{paymentReference,note}`，代表人工确认实际足额到账；`reject-proof` 追加 `{reason}`；`ship` 追加 `{carrier,tracking}`；`resolve-exception`、`verify-units` 追加 `{reference,note}`；`close-cancel` 追加 `{reference,note,refundConfirmed:true}`，须核清款项并完成所需线下退款。核款／关闭确认 action 为 `stores.procurement.confirm-payment/close-cancel`，objectId 为订单 UUID，revision 为当前订单修订。
 - 状态依次 REVIEW → QUOTE → PAYMENT → PROOF → PAID → SHIPPED → RECEIVED；退回凭证回 PAYMENT；收货异常 EXCEPTION，经平台处理回 SHIPPED。REVIEW/QUOTE 可取消或拒绝直接关闭；从 PAYMENT 起申请取消进入 CANCEL_REVIEW，人工核款／退款后关闭，不能因未上传凭证认定没有付款。已收货为终态。
 - GET `/orders/{orderId}/operations/{requestKey}` 仅平台使用，返回本人持久事件对应 `{status:"COMPLETED",result:order}` 或 `{status:"NOT_FOUND"}`；其他人员事件不作为当前操作的成功证据。仓端未知操作直接原请求重放，由服务端幂等记录核验。
-- GET/PUT `/settings` 管理独立采购收款说明，GET 返回 `{paymentInstructions,revision}`；PUT 接受 `{paymentInstructions,expectedRevision}`，最多2000字符，需 manage、CSRF 与密码确认 `stores.procurement.configure`、objectId `procurement-settings`。加密落库，审单冻结到订单；列表不解密或返回收款说明及事件历史，详情受权限保护。
+- GET/PUT `/settings` 管理独立采购收款说明，GET 返回 `{paymentInstructions,revision}`；PUT 接受 `{paymentInstructions,expectedRevision}`，最多2000字符，需 manage、CSRF、有效会话及真实配置修订，无需操作员密码。加密落库，审单冻结到订单；列表不解密或返回收款说明及事件历史，详情受权限保护。
 - 仓端 POST `/proofs` multipart 单 `file`，PNG/JPEG 最大5MB，真实图片解码后返回 `{assetId,previewUrl}`。文件属于本仓上传会员，不能引用公共素材；查看 GET `/proofs/{assetId}/file` 需本仓身份与授权，后台需 read 且已绑定订单。私有文件不进入公开 Asset 目录，响应 private/no-store。小程序使用 Bearer 下载到临时文件，隐藏／退出清理，不能把带敏感凭证的URL发送第三方。
 - 入库由 inventory 域执行：锁仓、按固定顺序锁规格及库存，使用订单冻结换算向库存池基础单位增量写入；保留 `reserved_base_units`。每采购行唯一 PROCURE 流水，保存原单位及会员操作者。事务原子性、幂等事件与数据库不可变约束防止重复加库存或改写历史事实。销售单位变化需平台人工核对冻结单位，核对绑定所审当前版本，之后再次变更重新阻止入库；库存池或基础单位变化不能批准自动入库。
 

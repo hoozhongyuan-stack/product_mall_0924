@@ -31,7 +31,7 @@ export interface RedemptionRecord {
 export interface RedemptionLookup {
   voucherId: string; orderId: string; orderNo: string; pointsUnitPrice?:number; pointsTotal?:number
   orderLineId: string; name: string; skuCode?: string
-  quantity: number; redeemedQuantity: number; voidedQuantity: number; remainingQuantity: number; validUntil: string | null
+  quantity: number; redeemedQuantity: number; voidedQuantity: number; remainingQuantity: number; availableQuantity: number; validUntil: string | null
   status: string; revision: number; events?: RedemptionRecord[]; eventCount?: number
 }
 export interface PaymentReport { reportId: string; note: string; reportedAt: string }
@@ -45,6 +45,8 @@ export interface Reconciliation {
   actorId: string; actorName?: string; createdAt?: string; authorizedAt?: string | null; receiptId?: string | null; outcome?: string
 }
 export interface Order {
+  hasShipment?:boolean;redeemEligible?:boolean
+  localDeliveryEvents?:{eventId:string;requestKey?:string;action:string;note:string;actorName:string;actorKind:string;occurredAt:string}[];localDeliveryEventCount?:number
   source?:'DINING'|'REGULAR';fulfillmentWarehouse?:{id:string;name:string}|null
   dining?:{restaurantId:string;name:string;address:string;tableNumber:string}|null
   storeId?:string|null;storeName?:string;deliveryMode?:string

@@ -6,7 +6,7 @@ const port = new URL(baseURL).port
 
 export default defineConfig({
   testDir: './tests/browser',
-  testMatch: integration ? (process.env.MALL_E2E_DINING === '1' ? '**/dining-alliance-integration.spec.ts' : process.env.MALL_E2E_PROCUREMENT === '1' ? '**/procurement-integration.spec.ts' : '**/integration.spec.ts') : ['**/mocked.spec.ts', '**/inventory-pilot.spec.ts', '**/passwords.spec.ts', '**/store-module.spec.ts', '**/warehouse-map-logo.spec.ts', '**/procurement.spec.ts', '**/dining-alliance.spec.ts'],
+  testMatch: integration ? (process.env.MALL_E2E_DINING === '1' ? '**/dining-alliance-integration.spec.ts' : process.env.MALL_E2E_PROCUREMENT === '1' ? '**/procurement-integration.spec.ts' : '**/integration.spec.ts') : ['**/mocked.spec.ts', '**/inventory-pilot.spec.ts', '**/passwords.spec.ts', '**/store-module.spec.ts', '**/warehouse-map-logo.spec.ts', '**/procurement.spec.ts', '**/dining-alliance.spec.ts', '**/order-actions.spec.ts'],
   outputDir: integration ? './test-results/integration' : './test-results/browser',
   fullyParallel: false,
   workers: 1,

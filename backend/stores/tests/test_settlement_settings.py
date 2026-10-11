@@ -44,19 +44,18 @@ class SettlementSettingsTests(TestCase):
         self.assertEqual(self.put({'expectedRevision':1,'receivedWindowDays':20},self.confirm()).status_code,409)
         self.assertEqual(AfterSalePolicy.objects.get(pk=1).received_window_days,30)
 
-    def test_auth_csrf_confirmation_and_invalid_values(self):
+    def test_auth_csrf_without_password_and_invalid_values(self):
         from django.test import Client
         from accounts.models import AdminAccount
         self.assertEqual(Client().get('/api/v1/admin/stores/settlement-settings').status_code,401)
         self.assertEqual(self.client.put('/api/v1/admin/stores/settlement-settings',data='{}',content_type='application/json').status_code,403)
-        self.assertEqual(self.put({'expectedRevision':1,'receivedWindowDays':20}).status_code,403)
         for days in (0,366,True,'20',None):
             self.assertEqual(self.put({'expectedRevision':1,'receivedWindowDays':days},self.confirm()).status_code,400)
         self.assertEqual(self.put({'expectedRevision':1,'receivedWindowDays':20,'unexpected':True},self.confirm()).status_code,400)
         self.assertEqual(self.put({'expectedRevision':False,'receivedWindowDays':20},self.confirm()).status_code,400)
         token=self.confirm()
-        self.assertEqual(self.put({'expectedRevision':1,'receivedWindowDays':20},token).status_code,200)
-        self.assertEqual(self.put({'expectedRevision':2,'receivedWindowDays':20},token).status_code,403)
+        self.assertEqual(self.put({'expectedRevision':1,'receivedWindowDays':20}).status_code,200)
+        self.assertEqual(self.put({'expectedRevision':2,'receivedWindowDays':20},token).status_code,200)
         AdminAccount.objects.create_user('policy-staff','Map safe password 2026',kind='STAFF')
         self.post('/api/v1/admin/auth/login',{'loginName':'policy-staff','password':'Map safe password 2026'})
         self.assertEqual(self.client.get('/api/v1/admin/stores/settlement-settings').status_code,403)

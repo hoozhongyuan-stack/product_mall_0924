@@ -88,12 +88,12 @@ class HistoryTests(TestCase):
         self.assertEqual(current["publicationRevision"], 2)
         self.assertEqual(current["config"], second["config"])
 
-    def test_rollback_requires_confirmation_and_nonempty_reason(self):
+    def test_rollback_without_confirmation_still_requires_nonempty_reason(self):
         _, second, a, _ = self.two_versions()
-        self.assertEqual(self.rollback(second, a, 2, token=False).status_code, 403)
         for reason in ("", " " * 3, "x" * 201, 42):
             result = self.rollback(second, a, 2, reason=reason)
             self.assertEqual(result.status_code, 400, result.content)
+        self.assertEqual(self.rollback(second, a, 2, token=False).status_code, 200)
 
     def test_audit_failure_rolls_back_pointer_and_idempotency(self):
         _, second, a, b = self.two_versions()
@@ -189,7 +189,7 @@ class HistoryTests(TestCase):
                                key="e1-strict-rollback")
             self.assertEqual(result.status_code, 400, result.content)
 
-    def test_rollback_confirmation_is_bound_to_target_and_publication_epoch(self):
+    def test_rollback_ignores_legacy_confirmation_target_and_keeps_publication_epoch(self):
         _, second, a, b = self.two_versions()
         confirmed = self.send(self.client, "post", "/api/v1/admin/auth/confirm", {
             "action": "page.rollback", "password": PASSWORD,
@@ -198,8 +198,8 @@ class HistoryTests(TestCase):
             "expectedRevision": second["revision"], "expectedPublicationRevision": 2,
             "versionId": a["versionId"], "reason": "恢复"}, key="e1-target-bound-key",
             confirmation=confirmed.json()["data"]["confirmationToken"])
-        self.assertEqual(result.status_code, 403)
-        self.assertEqual(self.client.get(DRAFT).json()["data"]["publicationRevision"], 2)
+        self.assertEqual(result.status_code, 200, result.content)
+        self.assertEqual(self.client.get(DRAFT).json()["data"]["publicationRevision"], 3)
 
     def test_rollback_rechecks_category_state(self):
         from catalog.models import Category

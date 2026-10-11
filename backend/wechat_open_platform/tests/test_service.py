@@ -202,14 +202,7 @@ class PlatformServiceTests(TestCase):
                   'redirectUri': 'https://admin.example.test/api/v1/wechat/open-platform/authorization-callback',
                   'componentAppSecret': 'rotated-secret', 'messageToken': 'message-token',
                   'encodingAesKey': KEY, 'expectedRevision': 1}
-        denied = self.client.put(base, update, content_type='application/json')
-        self.assertEqual(denied.status_code, 403)
-        confirmed = self.client.post('/api/v1/admin/auth/confirm', {
-            'action': 'wechat.integration.update', 'objectId': 'wechat-open-platform',
-            'revision': 1, 'password': password}, content_type='application/json')
-        self.assertEqual(confirmed.status_code, 200, confirmed.content)
-        saved = self.client.put(base, update, content_type='application/json',
-                                HTTP_X_ACTION_CONFIRMATION=confirmed.json()['data']['confirmationToken'])
+        saved = self.client.put(base, update, content_type='application/json')
         self.assertEqual(saved.status_code, 200, saved.content)
         self.assertNotIn('rotated-secret', saved.content.decode())
         started = self.client.post(base + '/authorize', {'targetAppId': TARGET},

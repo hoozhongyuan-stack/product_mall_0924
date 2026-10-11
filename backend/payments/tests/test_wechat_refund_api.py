@@ -1,4 +1,4 @@
-"""D2 admin authorization, password binding, and provider callback HTTP limits."""
+"""D2 admin authorization, passwordless confirmation, and provider callback HTTP limits."""
 import json
 import uuid
 from types import SimpleNamespace
@@ -42,26 +42,27 @@ class WechatRefundApiTests(TransactionTestCase):
             {'expectedRevision': intent.case.revision, **changes},
             HTTP_IDEMPOTENCY_KEY=str(uuid.uuid4()), HTTP_X_ACTION_CONFIRMATION=token)
 
-    def test_dispatch_requires_password_and_amount_fields_rejected(self):
+    def test_dispatch_without_password_and_amount_fields_rejected(self):
         intent = self.intent()
-        self.assertEqual(self.dispatch(intent).status_code, 403)
         self.assertEqual(self.dispatch(intent, amountFen=1).status_code, 400)
         self.gateway.refund.assert_not_called()
         self.gateway.refund.return_value = self.payload(intent, "PROCESSING")
-        response = self.dispatch(intent, self.confirm(intent.case))
+        response = self.dispatch(intent)
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response['Cache-Control'], 'private, no-store')
         self.assertEqual(response.json()['data']['status'], 'PROCESSING')
 
-    def test_password_token_bound_to_action_case_revision_and_session(self):
+    def test_legacy_token_ignored_and_actual_case_revision_still_required(self):
         intent = self.intent()
         token = self.confirm(intent.case, action="aftersale.review")
-        self.assertEqual(self.dispatch(intent, token).status_code, 403)
-        token = self.confirm(intent.case, revision=intent.case.revision+1)
-        self.assertEqual(self.dispatch(intent, token).status_code, 403)
-        response = self.dispatch(intent, expectedRevision=intent.case.revision+1)
+        response = self.dispatch(intent, token, expectedRevision=intent.case.revision+1)
         self.assertEqual(response.status_code, 409)
         self.assertEqual(RefundOperation.objects.count(), 0)
+        self.gateway.refund.return_value = self.payload(intent, "PROCESSING")
+        response = self.dispatch(intent, token)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.gateway.refund.assert_called_once()
+        self.assertEqual(RefundOperation.objects.count(), 1)
 
     def test_unauthenticated_and_staff_without_funds_permission_rejected(self):
         intent = self.intent()

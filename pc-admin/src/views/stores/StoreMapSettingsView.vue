@@ -16,7 +16,7 @@ const fields = [
 ] as const
 const config = ref<MapSettings | null>(null)
 const secrets = ref({ webServiceKey: '', jsApiKey: '', jsSecurityCode: '' })
-const password = ref(''), error = ref(''), notice = ref('')
+const  error = ref(''), notice = ref('')
 const loading = ref(false), busy = ref(false), confirming = ref(false), needsRead = ref(false)
 let epoch = 0
 const canManage = computed(() => props.account.permissionCodes.includes('stores.manage'))
@@ -29,7 +29,7 @@ const issue = computed(() => {
   return js !== security ? 'JS API Key 与 Web 端安全密钥需要一起配置。' : ''
 })
 const saveAllowed = computed(() => canManage.value && config.value && dirty.value && !issue.value && !needsRead.value && !loading.value && !busy.value)
-function clearInputs() { secrets.value = { webServiceKey: '', jsApiKey: '', jsSecurityCode: '' }; password.value = ''; confirming.value = false }
+function clearInputs() { secrets.value = { webServiceKey: '', jsApiKey: '', jsSecurityCode: '' };  confirming.value = false }
 async function load() {
   if (!canManage.value || busy.value) return
   const current = ++epoch
@@ -40,14 +40,14 @@ async function load() {
   } catch { if (current === epoch) { config.value = null; error.value = '读取地图配置失败，请重新读取后重试。' } }
   finally { if (current === epoch) loading.value = false }
 }
-function begin() { if (saveAllowed.value) { confirming.value = true; password.value = ''; error.value = ''; notice.value = '' } }
+function begin() { if (saveAllowed.value) { confirming.value = true;  error.value = ''; notice.value = '' } }
 async function save() {
-  if (!saveAllowed.value || !confirming.value || !password.value || !config.value) return
+  if (!saveAllowed.value || !confirming.value  || !config.value) return
   const current = ++epoch, revision = config.value.revision
   const body = { expectedRevision: revision, ...Object.fromEntries(Object.entries(secrets.value).map(([key, value]) => [key, value.trim()])) }
   busy.value = true; error.value = ''
   try {
-    const result = await confirmedWrite<MapSettings>('stores.map.configure', password.value, '/stores/map-settings', 'PUT', body, 'amap', revision)
+    const result = await confirmedWrite<MapSettings>('stores.map.configure', '', '/stores/map-settings', 'PUT', body, 'amap', revision)
     if (current === epoch) {
       if (result.revision !== revision + 1) throw new Error('Unexpected result')
       config.value = result; notice.value = '配置已保存。请到前置仓详情验证地址搜索；保存不代表高德服务已验证。'
@@ -80,9 +80,9 @@ onUnmounted(() => { epoch++; clearInputs() })
       <div class="store-actions"><button class="primary-button" type="submit" :disabled="!saveAllowed || confirming">保存配置</button></div>
     </form>
     <form v-if="confirming" class="panel store-section" aria-label="确认保存地图配置" @submit.prevent="save">
-      <h2>确认保存地图配置</h2><p>修改后将用于前置仓定位。请输入当前账号密码确认本次操作。</p>
-      <label for="amap-password">当前账号密码 <input id="amap-password" v-model="password" type="password" autocomplete="current-password" :disabled="busy" /></label>
-      <div class="store-actions"><button class="primary-button" type="submit" :disabled="busy || !password">{{ busy ? '正在保存…' : '确认保存' }}</button><button class="secondary-button" type="button" :disabled="busy" @click="clearInputs">取消</button></div>
+      <h2>确认保存地图配置</h2><p>修改后将用于前置仓定位。请核对本次修改后确认保存。</p>
+
+      <div class="store-actions"><button class="primary-button" type="submit" :disabled="busy ">{{ busy ? '正在保存…' : '确认保存' }}</button><button class="secondary-button" type="button" :disabled="busy" @click="clearInputs">取消</button></div>
     </form>
     <StoreSettlementSettingsPanel :account="account" />
   </section>

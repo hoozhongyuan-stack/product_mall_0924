@@ -235,11 +235,10 @@ class ProcurementApiTests(ProcurementFixture,TestCase):
         self.assertEqual(result.status_code,200,result.content)
         return result.json()['data']['confirmationToken']
 
-    def test_settings_private_password_revision_audit(self):
+    def test_settings_private_revision_audit_without_password(self):
         body={'paymentInstructions':'真实独立采购说明','expectedRevision':0}
-        self.assertEqual(self.send('put',self.base+'/settings',body).status_code,403)
         token=self.confirm('stores.procurement.configure','procurement-settings',0)
-        result=self.send('put',self.base+'/settings',body,HTTP_X_ACTION_CONFIRMATION=token)
+        result=self.send('put',self.base+'/settings',body)
         self.assertEqual(result.status_code,200,result.content)
         self.assertEqual(result.json()['data']['revision'],1)
         self.assertNotIn('真实独立采购说明',ProcurementSettings.objects.get(pk=1).encrypted_instructions)
@@ -259,9 +258,8 @@ class ProcurementApiTests(ProcurementFixture,TestCase):
         row=self.move(row,'cancel',reason='退货')
         body={'expectedRevision':row.revision,'requestKey':str(uuid.uuid4()),'reference':'REFUND','note':'全额核清','refundConfirmed':True}
         path=f'{self.base}/orders/{row.pk}/close-cancel'
-        self.assertEqual(self.send('post',path,body).status_code,403)
         token=self.confirm('stores.procurement.close-cancel',row.pk,row.revision)
-        result=self.send('post',path,body,HTTP_X_ACTION_CONFIRMATION=token)
+        result=self.send('post',path,body)
         self.assertEqual(result.status_code,200,result.content)
         self.assertEqual(self.send('post',path,body).status_code,200)
 
@@ -319,9 +317,8 @@ class ProcurementApiTests(ProcurementFixture,TestCase):
         row.refresh_from_db();row=self.move(row,'payment-proof',assetId=str(proof.pk),note='')
         body={'expectedRevision':row.revision,'requestKey':str(uuid.uuid4()),'paymentReference':'BANK','note':'到账'}
         path=f'{self.base}/orders/{row.pk}/confirm-payment'
-        self.assertEqual(self.send('post',path,body).status_code,403)
         token=self.confirm('stores.procurement.confirm-payment',row.pk,row.revision)
-        result=self.send('post',path,body,HTTP_X_ACTION_CONFIRMATION=token)
+        result=self.send('post',path,body)
         self.assertEqual(result.status_code,200,result.content)
         self.assertEqual(self.send('post',path,body).status_code,200)
         self.assertEqual(self.send('post',path,{**body,'note':'changed'}).status_code,409)

@@ -31,16 +31,13 @@ class ProfitBatchTests(FinanceApiTests):
     def submit(self, body, token=''):
         return self.post('/api/v1/admin/stores/profit-rules', body, HTTP_X_ACTION_CONFIRMATION=token)
 
-    def test_batch_confirms_exact_payload_and_persists_all_selected_rules(self):
-        self.assertEqual(self.submit(self.batch).status_code, 403)
-        token = self.token(self.batch)
-        self.assertEqual(self.submit({**self.batch, 'purchaseCostFen': 6100}, token).status_code, 403)
-        self.assertEqual(StoreSkuProfitRule.objects.count(), 0)
-        result = self.submit(self.batch, self.token(self.batch))
+    def test_batch_without_confirmation_persists_all_selected_rules(self):
+        result = self.submit(self.batch)
         self.assertEqual(result.status_code, 200, result.content)
         self.assertEqual(len(result.json()['data']['items']), 3)
         self.assertEqual(set(StoreSkuProfitRule.objects.values_list('revision', flat=True)), {1})
         self.assertEqual(set(StoreSkuProfitRule.objects.values_list('purchase_cost_fen', flat=True)), {6000})
+        self.assertEqual(self.submit(self.batch).status_code, 409)
 
     def test_stale_revision_invalid_sku_and_missing_unit_never_partially_save(self):
         for items in [

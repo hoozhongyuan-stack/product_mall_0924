@@ -14,15 +14,20 @@ from .service import FulfillmentError, _locked_order, _paid, _aftersale_guard
 from .store_service import pickup_code
 
 
-def preview(member, store_id, order_id, body):
+def preview(member, store_id, order_id, body, *, admin_actor=None):
     if not isinstance(body, dict) or set(body) != {'pickupCode'}:
         raise FulfillmentError('请提供自提凭证。')
     with transaction.atomic():
-        require_staff(member, store_id, permission='orders')
+        if admin_actor is None:
+            require_staff(member, store_id, permission='orders')
         order = _locked_order(order_id)
-        from stores.models import StoreStaff
-        list(StoreStaff.objects.select_for_update().filter(store_id=store_id, member=member))
-        require_staff(member, store_id, permission='orders')
+        if admin_actor is None:
+            from stores.models import StoreStaff
+            list(StoreStaff.objects.select_for_update().filter(store_id=store_id, member=member))
+            require_staff(member, store_id, permission='orders')
+        else:
+            from .store_service import require_admin_operator
+            require_admin_operator(admin_actor)
         if str(order.store_id) != str(store_id):
             raise FulfillmentError('订单不存在。', 'ORDER_NOT_FOUND', 404)
         _paid(order)

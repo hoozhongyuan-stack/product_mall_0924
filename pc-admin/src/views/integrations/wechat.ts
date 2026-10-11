@@ -76,7 +76,7 @@ export function safeFailure(reason: unknown) {
   }
   if (reason instanceof ApiError) {
     if (reason.status === 401) return '登录已失效，请重新登录。'
-    if (reason.status === 403) return '权限或密码确认未通过，请重新读取后核对。'
+    if (reason.status === 403) return '当前账号没有操作权限，请重新读取后核对。'
     if (messages[reason.code]) return messages[reason.code]
   }
   return '无法确认服务端结果，请重新读取配置后核对。'

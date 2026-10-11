@@ -60,7 +60,7 @@ def pickup_available(order):
     return any(line.quantity > facts.get(line.id, {}).get('refundedQuantity', 0) for line in lines)
 
 
-def operate(member, store_id, order_id, body, request_key):
+def operate(member, store_id, order_id, body, request_key, *, admin_actor=None):
     from .service import FulfillmentError, _locked_order, _paid, _revision, _aftersale_guard
     from stores.access import require_staff
     from .codes import new_nonce, normalized_code
@@ -77,23 +77,29 @@ def operate(member, store_id, order_id, body, request_key):
     with transaction.atomic():
         from aftersales.returns import _identity_lock
         _identity_lock('store-fulfillment', request_key, 'STORE_FULFILLMENT')
-        require_staff(member, store_id, permission='orders')
+        if admin_actor is None:
+            require_staff(member, store_id, permission='orders')
         order = _locked_order(order_id)
-        from stores.models import StoreStaff
-        list(StoreStaff.objects.select_for_update().filter(store_id=store_id, member=member))
-        require_staff(member, store_id, permission='orders')
+        if admin_actor is None:
+            from stores.models import StoreStaff
+            list(StoreStaff.objects.select_for_update().filter(store_id=store_id, member=member))
+            require_staff(member, store_id, permission='orders')
+        else:
+            require_admin_operator(admin_actor)
         if str(order.store_id) != str(store_id):
             raise FulfillmentError('订单不存在。', 'ORDER_NOT_FOUND', 404)
         previous = StoreDeliveryEvent.objects.filter(request_key=request_key).first()
         if previous:
-            if previous.actor_id != member.id or previous.order_id != order.id or previous.request_digest != digest:
+            if previous.actor_id != (member.id if member else None) or previous.admin_actor_id != (admin_actor.id if admin_actor else None) or previous.order_id != order.id or previous.request_digest != digest:
                 raise FulfillmentError('防重复标识对应不同请求。', 'IDEMPOTENCY_CONFLICT', 409)
             return delivery_data(order)
         _paid(order)
         _revision(order, body['expectedRevision'])
         if action == 'SHIP':
+            if admin_actor is not None:
+                raise FulfillmentError('快递订单请使用发货操作。', 'DELIVERY_MODE_MISMATCH', 409)
             _ship_express_locked(order, member, body, request_key)
-            StoreDeliveryEvent.objects.create(order=order, actor=member, action=action, request_key=request_key, request_digest=digest, note=note.strip())
+            StoreDeliveryEvent.objects.create(order=order, actor=member, admin_actor=admin_actor, action=action, request_key=request_key, request_digest=digest, note=note.strip())
             order.revision += 1
             order.save(update_fields=['revision'])
             return delivery_data(order)
@@ -123,7 +129,7 @@ def operate(member, store_id, order_id, body, request_key):
                 raise FulfillmentError('请先开始配送，并填写至少 5 字的交付说明。', 'DELIVERY_EVIDENCE_REQUIRED', 409)
             row.status, row.completed_at = 'COMPLETED', now
             row.save(update_fields=['status', 'completed_at'])
-        StoreDeliveryEvent.objects.create(order=order, actor=member, action=action, request_key=request_key, request_digest=digest, note=note.strip())
+        StoreDeliveryEvent.objects.create(order=order, actor=member, admin_actor=admin_actor, action=action, request_key=request_key, request_digest=digest, note=note.strip())
         order.revision += 1
         order.save(update_fields=['revision'])
         if row.status == 'COMPLETED':
@@ -157,3 +163,11 @@ def _ship_express_locked(order, member, body, request_key):
         auto_confirm_at=now + timedelta(days=snapshot.auto_confirm_days), request_key=request_key)
     from notifications.service import ORDER_SHIPPED, record_event
     record_event(ORDER_SHIPPED, shipment.id, order.member_id, occurred_at=now)
+
+
+def require_admin_operator(actor):
+    """Recheck enabled actor and live permissions after the order lock."""
+    from accounts.security import operation_permissions
+    from .service import FulfillmentError
+    if 'fulfillment.ship' not in operation_permissions(actor):
+        raise FulfillmentError('当前账号没有此操作权限。', 'PERMISSION_DENIED', 403)

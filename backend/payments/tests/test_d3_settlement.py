@@ -116,7 +116,7 @@ class D3SettlementTests(TransactionTestCase):
         from payments.refund_amounts import shipping_refunded_fen
         self.assertEqual(shipping_refunded_fen(order.id),order.shipping_fee_fen)
 
-    def test_zero_api_password_revision_and_replay(self):
+    def test_zero_api_without_password_keeps_revision_and_replay(self):
         import json
         from aftersales.models import BenefitOnlySettlement
         order,line=self._zero_order()
@@ -129,14 +129,7 @@ class D3SettlementTests(TransactionTestCase):
         self.assertEqual(login.status_code,200,login.content)
         url=f'/api/v1/admin/aftersales/{case.id}/settle-benefits'
         k=str(uuid.uuid4());body={'expectedRevision':case.revision}
-        denied=post(url,body,HTTP_IDEMPOTENCY_KEY=k)
-        self.assertEqual(denied.status_code,403,denied.content)
-        self.assertFalse(BenefitOnlySettlement.objects.exists())
-        confirmation=post('/api/v1/admin/auth/confirm',{'action':'refund.benefits.settle','objectId':str(case.id),
-              'revision':case.revision,'password':'Long test password 2026!'})
-        self.assertEqual(confirmation.status_code,200,confirmation.content)
-        token=confirmation.json()['data']['confirmationToken']
-        done=post(url,body,HTTP_IDEMPOTENCY_KEY=k,HTTP_X_ACTION_CONFIRMATION=token)
+        done=post(url,body,HTTP_IDEMPOTENCY_KEY=k)
         self.assertEqual(done.status_code,201,done.content)
         self.assertEqual(done.json()['data']['status'],'COMPLETED')
         replay=post(url,body,HTTP_IDEMPOTENCY_KEY=k)

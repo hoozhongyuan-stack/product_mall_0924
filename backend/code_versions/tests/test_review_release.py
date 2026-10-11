@@ -51,12 +51,9 @@ class ReviewReleaseTests(TestCase):
                 content_type='application/json', **headers)
         return result, remote
 
-    def test_submit_refresh_and_release_guarded_by_confirmation(self):
-        denied, remote = self.submit(confirmed=False)
-        self.assertEqual(denied.status_code, 403)
-        remote.assert_not_called()
+    def test_submit_refresh_and_release_without_password_keeps_platform_guards(self):
         key = str(uuid.uuid4())
-        created, remote = self.submit(key=key)
+        created, remote = self.submit(key=key, confirmed=False)
         self.assertEqual(created.status_code, 202, created.content)
         remote.assert_called_once()
         job = ReleaseReviewJob.objects.get()

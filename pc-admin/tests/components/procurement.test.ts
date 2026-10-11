@@ -46,10 +46,10 @@ describe('procurement order actions',()=>{
   const call=vi.mocked(api).mock.calls.find(x=>x[0].endsWith('/review'))!;const body=JSON.parse(call[1]!.body as string)
   expect(body).toMatchObject({expectedRevision:1,freightFen:850});expect(call[1]!.headers).toMatchObject({'Idempotency-Key':body.requestKey});expect(w.find('[role=dialog]').exists()).toBe(false)
  })
- it('requires finance permission and password and verifies real payment',async()=>{
-  vi.mocked(api).mockImplementation(async(path)=>path==='/auth/confirm'?{confirmationToken:'ok',expiresAt:''}:path.endsWith('/confirm-payment')?order('PAID',2):order('PROOF'))
+ it('requires finance permission and verifies real payment without password',async()=>{
+  vi.mocked(api).mockImplementation(async(path)=>path.endsWith('/confirm-payment')?order('PAID',2):order('PROOF'))
   const{w,actor}=await setup(Detail);await click(w,'确认实际到账');await input(w,'到账凭证编号','BANK-01');await click(w,'确认提交');expect(vi.mocked(api).mock.calls.some(x=>x[0]==='/auth/confirm')).toBe(false)
-  await input(w,'管理员密码','secret');await click(w,'确认提交');expect(vi.mocked(api).mock.calls.find(x=>x[0]==='/auth/confirm')![1]!.body).toContain('stores.procurement.confirm-payment')
+  const payment = vi.mocked(api).mock.calls.find(x=>x[0].endsWith('/confirm-payment'))!;expect(JSON.parse(payment[1]!.body as string).paymentReference).toBe('BANK-01');expect(payment[1]!.headers).not.toHaveProperty('X-Action-Confirmation')
   actor.permissionCodes=['stores.procurement.read'];await flushPromises();expect(w.text()).not.toContain('确认实际到账')
  })
  it('preserves unknown requests and recovers then retries the same frozen body',async()=>{
@@ -79,15 +79,14 @@ describe('procurement order actions',()=>{
  })
 })
 describe('procurement settings',()=>{
- it('requires validation then saves through password confirmation',async()=>{
-  vi.mocked(api).mockImplementation(async path=>path==='/auth/confirm'?{confirmationToken:'token'}:{paymentInstructions:'银行转账',revision:2})
+ it('requires validation then saves without password',async()=>{
+  vi.mocked(api).mockResolvedValue({paymentInstructions:'银行转账',revision:2})
   const{w}=await setup(Settings,'/stores/procurement/settings');await w.find('textarea').setValue('');await w.find('form').trigger('submit');await flushPromises();expect(w.text()).toContain('请填写采购收款说明')
-  await w.find('textarea').setValue('收款银行卡');await w.find('form').trigger('submit');await flushPromises();expect(w.text()).toContain('请填写管理员密码')
-  await input(w,'管理员密码','secret');await w.find('form').trigger('submit');await flushPromises();expect(w.text()).toContain('已保存');expect(vi.mocked(api).mock.calls.find(x=>x[1]?.method==='PUT')![1]!.body).toContain('expectedRevision')
+  await w.find('textarea').setValue('收款银行卡');expect(w.find('input[autocomplete="current-password"]').exists()).toBe(false);await w.find('form').trigger('submit');await flushPromises();expect(w.text()).toContain('已保存');expect(vi.mocked(api).mock.calls.find(x=>x[1]?.method==='PUT')![1]!.body).toContain('expectedRevision')
  })
  it('preserves errors and drafts until explicit reload; read-only blocks writing',async()=>{
   vi.mocked(api).mockResolvedValueOnce({paymentInstructions:'原说明',revision:1}).mockRejectedValueOnce(new Error('未知')).mockResolvedValue({paymentInstructions:'新说明',revision:2})
-  const{w,actor}=await setup(Settings,'/stores/procurement/settings');await w.find('textarea').setValue('草稿');await input(w,'管理员密码','secret');await w.find('form').trigger('submit');await flushPromises();expect(w.text()).toContain('未知');expect(w.find('textarea').element).toHaveProperty('value','草稿')
+  const{w,actor}=await setup(Settings,'/stores/procurement/settings');await w.find('textarea').setValue('草稿');expect(w.find('input[autocomplete="current-password"]').exists()).toBe(false);await w.find('form').trigger('submit');await flushPromises();expect(w.text()).toContain('未知');expect(w.find('textarea').element).toHaveProperty('value','草稿')
   vi.mocked(confirmAction).mockResolvedValueOnce(false);await click(w,'重新读取');expect(w.find('textarea').element).toHaveProperty('value','草稿');await click(w,'重新读取');expect(w.find('textarea').element).toHaveProperty('value','新说明')
   actor.permissionCodes=['stores.procurement.read'];await flushPromises();expect(w.find('textarea').attributes('disabled')).toBeDefined();expect(w.text()).not.toContain('保存收款说明')
  })
@@ -98,8 +97,8 @@ it('settings handles read failure, blocked identity, unload and late confirmatio
  const{w,actor,router}=await setup(Settings,'/stores/procurement/settings');expect(w.text()).toContain('无法读取');await click(w,'重新读取')
  await w.find('textarea').setValue('未保存');const event=new Event('beforeunload',{cancelable:true});window.dispatchEvent(event);expect(event.defaultPrevented).toBe(true)
  vi.mocked(confirmAction).mockResolvedValueOnce(false);await router.push('/stores/procurement');expect(router.currentRoute.value.path).toContain('/settings')
- let resolve!:(x:unknown)=>void;vi.mocked(api).mockImplementationOnce(()=>new Promise(r=>{resolve=r}));await input(w,'管理员密码','secret');await w.find('form').trigger('submit');await flushPromises()
- actor.permissionCodes=[];await flushPromises();resolve({confirmationToken:'late'});await flushPromises();expect(vi.mocked(api).mock.calls.some(x=>x[1]?.method==='PUT')).toBe(false)
+ let resolve!:(x:unknown)=>void;vi.mocked(api).mockImplementationOnce(()=>new Promise(r=>{resolve=r}));expect(w.find('input[autocomplete="current-password"]').exists()).toBe(false);await w.find('form').trigger('submit');await flushPromises()
+ actor.permissionCodes=[];await flushPromises();resolve({paymentInstructions:'未保存',revision:2});await flushPromises();expect(w.text()).not.toContain('已保存');expect(vi.mocked(api).mock.calls.filter(x=>x[1]?.method==='PUT')).toHaveLength(1)
 })
 
 it('procurement domain validates every independent action and private cache read',async()=>{

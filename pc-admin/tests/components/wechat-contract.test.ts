@@ -33,7 +33,7 @@ describe('public integration DTO and credential validation', () => {
   it('uses only safe local errors and distinct platform result labels', () => {
     for (const code of ['REVISION_CONFLICT', 'APP_ID_LOCKED', 'CREDENTIALS_NOT_CONFIGURED', 'CREDENTIALS_UNAVAILABLE', 'VALIDATION_FAILED', 'RATE_LIMITED', 'UNKNOWN']) expect(safeFailure(new ApiError('private diagnostic', 400, code))).not.toContain('private diagnostic')
     expect(safeFailure(new ApiError('private diagnostic', 401, 'UNKNOWN'))).toContain('登录已失效')
-    expect(safeFailure(new ApiError('private diagnostic', 403, 'UNKNOWN'))).toContain('权限或密码')
+    expect(safeFailure(new ApiError('private diagnostic', 403, 'UNKNOWN'))).toContain('没有操作权限')
     expect(safeFailure(new Error('private diagnostic'))).toContain('无法确认')
     expect(checkMessages.ADMIN_REJECTED).toContain('管理员已拒绝')
   })

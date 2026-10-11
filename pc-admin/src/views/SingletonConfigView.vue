@@ -4,7 +4,7 @@ import { confirmAction } from '../shared/confirm'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { api, ApiError, type Account, type Confirmation } from '../api'
+import { api, ApiError, type Account } from '../api'
 import AssetPicker from '../shared/AssetPicker.vue'
 import PublicationHistory from '../shared/PublicationHistory.vue'
 import { keepRollbackIntent, type RollbackResult } from '../shared/publication-history'
@@ -32,7 +32,6 @@ const busy = ref('')
 const error = ref('')
 const notice = ref('')
 const publishOpen = ref(false)
-const password = ref('')
 const intent = ref<PublishIntent | null>(null)
 const recoveryBlocked = ref(false)
 const syncPending = ref(false)
@@ -88,7 +87,7 @@ function beforeUnload(event: BeforeUnloadEvent) {
   event.preventDefault(); event.returnValue = ''
 }
 onMounted(() => { void loadDraft(); window.addEventListener('beforeunload', beforeUnload) })
-onUnmounted(() => { generation++; window.removeEventListener('beforeunload', beforeUnload); password.value = '' })
+onUnmounted(() => { generation++; window.removeEventListener('beforeunload', beforeUnload); })
 onBeforeRouteLeave(async () => !dirty.value || await confirmAction(`${title.value}草稿还有未保存的修改，确定离开吗？`))
 watch(() => props.domain, () => { generation++; draft.value = null; config.value = null; intent.value = null; preview.value = null; void loadDraft() })
 function setNavIcon(item: NavigationItem, role: 'iconAssetId' | 'selectedIconAssetId', assetId: string | null) {
@@ -141,7 +140,7 @@ async function showPreview() {
 function openPublish() {
   if (busy.value || syncPending.value || recoveryBlocked.value || !draft.value) return
   if (!intent.value && (dirty.value || !previewReady.value || alreadyPublished.value)) { error.value = '请先保存并预览待发布的草稿修订。'; return }
-  error.value = ''; password.value = ''; publishOpen.value = true
+  error.value = '';  publishOpen.value = true
 }
 async function syncPublication() {
   if (!draft.value || busy.value) return
@@ -155,7 +154,7 @@ async function syncPublication() {
   finally { busy.value = '' }
 }
 async function publish() {
-  if (!draft.value || !password.value || busy.value || syncPending.value || recoveryBlocked.value) return
+  if (!draft.value  || busy.value || syncPending.value || recoveryBlocked.value) return
   if (!intent.value && (dirty.value || !previewReady.value || alreadyPublished.value)) return
   const recovering = !!intent.value
   const request = intent.value || publicationIntent(base.value, props.domain, draft.value, crypto.randomUUID())
@@ -164,17 +163,14 @@ async function publish() {
   busy.value = 'publish'; error.value = ''
   let submitted = false, accepted = false
   try {
-    const { confirmationToken } = await api<Confirmation>('/auth/confirm', {
-      method: 'POST', body: JSON.stringify({ action: `${props.domain}.publish`, password: password.value, objectId: request.objectId, revision: request.body.expectedRevision }),
-    })
+
     submitted = true
     const result = await api<Publication>(`${request.base}/publish`, {
-      method: 'POST', headers: { 'X-Action-Confirmation': confirmationToken, 'Idempotency-Key': request.key }, body: JSON.stringify(request.body),
+      method: 'POST', headers: {  'Idempotency-Key': request.key }, body: JSON.stringify(request.body),
     })
     if (!matchesPublishResult(result, request.body)) throw new Error('服务端发布结果尚未确认，请按原请求恢复。')
     accepted = true
-    intent.value = null; syncPending.value = true; publishOpen.value = false; password.value = ''
-    notice.value = '发布请求已记录，正在读取当前线上配置。'
+    intent.value = null; syncPending.value = true; publishOpen.value = false; notice.value = '发布请求已记录，正在读取当前线上配置。'
     await syncPublicationAfterWrite(request.base)
     ElMessage.success('发布请求已完成')
   } catch (reason) {
@@ -183,7 +179,7 @@ async function publish() {
       if (!recovering && (!submitted || !keepRollbackIntent(reason instanceof ApiError ? reason.status : undefined, false))) { intent.value = null; forgetIntent(request.base) }
       error.value = `${message(reason)}${intent.value ? ' 结果未确认，请使用原请求恢复。' : ''}`
     }
-  } finally { busy.value = ''; password.value = '' }
+  } finally { busy.value = ''; }
 }
 async function syncPublicationAfterWrite(targetBase: string) {
   const state = await currentPublication(api, targetBase)
@@ -229,6 +225,6 @@ function rolledBack(result: RollbackResult) {
       </section>
       <section v-if="preview" class="singleton-preview" aria-label="服务端预览"><h2>服务端预览 · 修订 {{ preview.revision }}</h2><p>发布前确认：{{ domain === 'navigation' ? '四个固定入口与图标素材' : '启用状态、联系方法及素材' }}。</p><p v-if="!previewReady" class="singleton-error">草稿已变化，请重新生成预览。</p><div v-else-if="domain === 'navigation'" class="singleton-preview-nav"><span v-for="item in (preview.config as NavigationConfig).items" :key="item.key">{{ item.label }}{{ item.iconAssetId ? ' · 自定义图标' : ' · 默认图标' }}</span></div><p v-else>{{ (preview.config as CustomerServiceConfig).enabled ? '线上将展示客服入口' : '线上将隐藏客服入口' }} · {{ (preview.config as CustomerServiceConfig).mode === 'PHONE' ? '电话' : (preview.config as CustomerServiceConfig).mode === 'QR' ? '二维码' : '未设置' }}</p></section>
     </template>
-    <el-dialog v-model="publishOpen" :title="intent ? `恢复原${title}发布请求` : `发布${title}`" width="min(460px, calc(100vw - 24px))" :close-on-click-modal="!busy"><p>{{ intent ? '按原请求编号和原修订号重新确认，不会生成新发布。' : '确认发布已保存并预览的草稿修订。' }}</p><label class="singleton-field">当前账号密码<el-input v-model="password" type="password" show-password autocomplete="current-password" :disabled="Boolean(busy)" /></label><p v-if="error" class="singleton-error" role="alert">{{ error }}</p><template #footer><el-button :disabled="Boolean(busy)" @click="publishOpen = false; password = ''">取消</el-button><el-button type="primary" :loading="busy === 'publish'" :disabled="!password || Boolean(busy)" @click="publish">{{ intent ? '按原请求恢复' : '确认发布' }}</el-button></template></el-dialog>
+    <el-dialog v-model="publishOpen" :title="intent ? `恢复原${title}发布请求` : `发布${title}`" width="min(460px, calc(100vw - 24px))" :close-on-click-modal="!busy"><p>{{ intent ? '按原请求编号和原修订号重新确认，不会生成新发布。' : '确认发布已保存并预览的草稿修订。' }}</p><p v-if="error" class="singleton-error" role="alert">{{ error }}</p><template #footer><el-button :disabled="Boolean(busy)" @click="publishOpen = false">取消</el-button><el-button type="primary" :loading="busy === 'publish'" :disabled="Boolean(busy)" @click="publish">{{ intent ? '按原请求恢复' : '确认发布' }}</el-button></template></el-dialog>
   </section>
 </template>

@@ -105,18 +105,16 @@ for (const domain of ['coupon', 'exchange'] as const) {
       expect(operation.busy.value).toBe(false)
     })
 
-    it('never sends after the actor changes during password confirmation', async () => {
+    it('ignores a write response after the actor changes', async () => {
       const { operation, account, success } = await setup(domain)
       let finish!: (value: unknown) => void
       vi.mocked(api).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
-      operation.password.value = 'temporary-test-value'
       const writing = operation.write(`${path}/${id}/publish`, 'POST', { expectedRevision: 1 }, `${domain}.publish`, `${domain}.publish`)
       account.value = { ...account.value, accountId: 'other' }
       await flushPromises()
-      finish({ confirmationToken: 'test-only-token' })
+      finish({ id, revision: 2, status: 'PUBLISHED' })
       await writing
       expect(api).toHaveBeenCalledTimes(1)
-      expect(operation.password.value).toBe('')
       expect(operation.pending.value).toBeNull()
       expect(success).not.toHaveBeenCalled()
     })
@@ -195,30 +193,26 @@ for (const domain of ['coupon', 'exchange'] as const) {
       expect(JSON.parse(storage.getItem(`mall:${domain}:actor:${id}`)!).key).toBe(key)
     })
 
-    it('does not submit a password-confirmed action without its password, then uses the confirmed token', async () => {
+    it('submits authorized publication without password or a confirmation request', async () => {
       const { operation, success } = await setup(domain)
       const writePath = `${path}/${id}/${domain === 'coupon' ? 'publish' : 'availability'}`
       const body = { expectedRevision: 1, status: 'ON_SALE' }
-      await operation.write(writePath, 'POST', body, `${domain}.publish`, `${domain}.publish`)
-      expect(api).not.toHaveBeenCalled()
-      operation.password.value = 'ephemeral'
       const result = { ...validResult, revision: 2, status: domain === 'coupon' ? 'PUBLISHED' : 'ON_SALE' }
-      vi.mocked(api).mockResolvedValueOnce({ confirmationToken: 'test-confirmation' }).mockResolvedValueOnce(result)
+      vi.mocked(api).mockResolvedValueOnce(result)
       await operation.write(writePath, 'POST', body, `${domain}.publish`, `${domain}.publish`)
-      expect(vi.mocked(api).mock.calls[1]![1]!.headers).toMatchObject({ 'X-Action-Confirmation': 'test-confirmation' })
+      expect(api).toHaveBeenCalledTimes(1)
+      expect(api).toHaveBeenCalledWith(writePath, expect.objectContaining({ method: 'POST' }))
+      expect(vi.mocked(api).mock.calls[0]![1]!.headers).not.toHaveProperty('X-Action-Confirmation')
       expect(success).toHaveBeenCalledExactlyOnceWith(result)
-      expect(operation.password.value).toBe('')
     })
 
-    it('does not clear the stored identity on a rejected password confirmation before sending', async () => {
+    it('clears a definitively rejected publication and preserves authorization feedback', async () => {
       const { operation } = await setup(domain)
-      operation.password.value = 'wrong'
-      vi.mocked(api).mockRejectedValueOnce(new ApiError('password rejected', 403, 'FORBIDDEN'))
+      vi.mocked(api).mockRejectedValueOnce(new ApiError('permission revoked', 403, 'FORBIDDEN'))
       await operation.write(`${path}/${id}/${domain === 'coupon' ? 'publish' : 'availability'}`, 'POST', { expectedRevision: 1 }, `${domain}.publish`, `${domain}.publish`)
       expect(api).toHaveBeenCalledTimes(1)
-      expect(operation.pending.value).not.toBeNull()
-      expect(operation.error.value).toBe('password rejected')
-      expect(operation.password.value).toBe('')
+      expect(operation.pending.value).toBeNull()
+      expect(operation.error.value).toBe('permission revoked')
     })
 
     it('does not let an old recovery response replace state for a new actor', async () => {

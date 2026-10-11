@@ -207,7 +207,8 @@ class StoreDelivery(models.Model):
 class StoreDeliveryEvent(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     order = models.ForeignKey('orders.Order', on_delete=models.PROTECT, related_name='store_delivery_events')
-    actor = models.ForeignKey('customers.Member', on_delete=models.PROTECT)
+    actor = models.ForeignKey('customers.Member', on_delete=models.PROTECT, null=True, blank=True)
+    admin_actor = models.ForeignKey('accounts.AdminAccount', on_delete=models.PROTECT, null=True, blank=True)
     action = models.CharField(max_length=12)
     request_key = models.UUIDField(unique=True)
     request_digest = models.CharField(max_length=64)
@@ -216,3 +217,4 @@ class StoreDeliveryEvent(models.Model):
 
     class Meta:
         db_table = 'fulfillment_store_delivery_event'
+        constraints = [models.CheckConstraint(condition=(Q(actor__isnull=False, admin_actor__isnull=True) | Q(actor__isnull=True, admin_actor__isnull=False)), name='store_delivery_event_actor_one')]

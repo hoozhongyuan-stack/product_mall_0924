@@ -30,7 +30,6 @@ const editing = ref<PermissionGroup | 'new' | null>(null)
 const code = ref('')
 const name = ref('')
 const selected = ref<string[]>([])
-const currentPassword = ref('')
 const canManage = computed(() => props.account.permissionCodes.includes('permission.manage'))
 
 async function load() {
@@ -51,7 +50,6 @@ function openCreate() {
   code.value = ''
   name.value = ''
   selected.value = []
-  currentPassword.value = ''
   error.value = ''
 }
 
@@ -60,7 +58,6 @@ function openEdit(group: PermissionGroup) {
   code.value = group.code
   name.value = group.name
   selected.value = [...group.permissionCodes]
-  currentPassword.value = ''
   error.value = ''
 }
 
@@ -72,23 +69,22 @@ function togglePermission(value: string) {
 
 function closeEditor() {
   editing.value = null
-  currentPassword.value = ''
-}
+  }
 
 async function save() {
   const target = editing.value
-  if (!target || !currentPassword.value || (target === 'new' && (!code.value.trim() || !name.value.trim()))) {
-    error.value = '请填写必填项和当前账号密码。'
+  if (!target  || (target === 'new' && (!code.value.trim() || !name.value.trim()))) {
+    error.value = '请填写必填项。'
     return
   }
   saving.value = true
   error.value = ''
   try {
     if (target === 'new') {
-      await confirmedWrite<PermissionGroup>('group.create', currentPassword.value,
+      await confirmedWrite<PermissionGroup>('group.create', '',
         '/permission-groups', 'POST', { code: code.value.trim(), name: name.value.trim(), permissionCodes: selected.value })
     } else {
-      await confirmedWrite<PermissionGroup>('group.update', currentPassword.value,
+      await confirmedWrite<PermissionGroup>('group.update', '',
         `/permission-groups/${target.groupId}`, 'PATCH',
         { permissionCodes: selected.value, expectedRevision: target.revision }, target.groupId, target.revision)
     }
@@ -104,7 +100,6 @@ async function save() {
       error.value = reason instanceof Error ? reason.message : '保存失败。'
     }
   } finally {
-    currentPassword.value = ''
     saving.value = false
   }
 }
@@ -141,7 +136,7 @@ async function save() {
           <span>{{ label }}<small>{{ value }}</small></span>
         </label>
       </div></fieldset>
-      <label class="confirm-field">当前账号密码（二次确认）<input v-model="currentPassword" type="password" autocomplete="current-password" required /></label>
+
       <button class="primary-button" type="submit" :disabled="saving">{{ saving ? '保存中…' : '确认保存' }}</button>
     </form>
   </section>

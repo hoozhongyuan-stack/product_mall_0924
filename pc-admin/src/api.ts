@@ -31,11 +31,6 @@ export interface AuditEntry {
   occurredAt: string
 }
 
-export interface Confirmation {
-  confirmationToken: string
-  expiresInSeconds: number
-}
-
 interface ApiEnvelope<T> {
   success: boolean
   data?: T
@@ -85,23 +80,21 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload.data
 }
 
+/** Compatibility wrapper for existing business confirmations; session and CSRF are enforced by api. */
 export async function confirmedWrite<T>(
-  action: string,
-  currentPassword: string,
+  _action: string,
+  _obsoletePassword: string,
   path: string,
   method: 'POST' | 'PATCH' | 'PUT',
   body: Record<string, unknown>,
-  objectId = '',
-  revision = 0,
+  _objectId = '',
+  _revision = 0,
   extraHeaders: Record<string, string> = {},
 ): Promise<T> {
-  const { confirmationToken } = await api<Confirmation>('/auth/confirm', {
-    method: 'POST',
-    body: JSON.stringify({ action, password: currentPassword, objectId, revision }),
-  })
+
   return api<T>(path, {
     method,
-    headers: { ...extraHeaders, 'X-Action-Confirmation': confirmationToken },
+    headers: extraHeaders,
     body: JSON.stringify(body),
   })
 }

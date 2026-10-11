@@ -111,9 +111,8 @@ class ReleaseUploadTests(TestCase):
         self.assertEqual(self.client.get(URL + '/' + body['taskId']).json()['data']['taskId'], body['taskId'])
         self.assertEqual(CodeVersion.objects.get(pk=self.version.pk).platform_status, 'NOT_CONFIGURED')
 
-    def test_requires_confirmation_and_blocks_parallel_or_rotated_key(self):
-        self.assertEqual(self.submit(confirmed=False).status_code, 403)
-        self.assertEqual(self.submit().status_code, 202)
+    def test_upload_without_password_blocks_parallel_or_rotated_key(self):
+        self.assertEqual(self.submit(confirmed=False).status_code, 202)
         self.assertEqual(self.submit().status_code, 409)
         CodeUploadKey.objects.filter(pk=1).update(revision=2)
         with patch('code_versions.upload_worker._invoke_adapter') as adapter:
@@ -139,19 +138,14 @@ class ReleaseUploadTests(TestCase):
             call_command('run_code_upload_jobs', limit=1)
         adapter.assert_not_called()
 
-    def test_unknown_upload_requires_confirmed_manual_closure_without_success_claim(self):
+    def test_unknown_upload_manual_closure_without_password_or_success_claim(self):
         self.assertEqual(self.submit().status_code, 202)
         with patch('code_versions.upload_worker._invoke_adapter', side_effect=TimeoutError):
             call_command('run_code_upload_jobs', limit=1)
         job = ReleaseUploadJob.objects.get()
         url = URL + '/' + str(job.pk) + '/resolve'
         note = '已在微信管理后台核查目标版本和上传记录，无法确认此任务成功。'
-        self.assertEqual(self.client.post(url, {'note': note}, content_type='application/json').status_code, 403)
-        token = self.client.post('/api/v1/admin/auth/confirm', {
-            'action': 'code.release.resolve_upload', 'objectId': str(job.pk),
-            'revision': 0, 'password': PASSWORD}, content_type='application/json').json()['data']['confirmationToken']
-        resolved = self.client.post(url, {'note': note}, content_type='application/json',
-                                    HTTP_X_ACTION_CONFIRMATION=token)
+        resolved = self.client.post(url, {'note': note}, content_type='application/json')
         self.assertEqual(resolved.status_code, 200, resolved.content)
         self.assertEqual((resolved.json()['data']['status'], resolved.json()['data']['reviewAvailable']),
                          ('RESOLVED', False))

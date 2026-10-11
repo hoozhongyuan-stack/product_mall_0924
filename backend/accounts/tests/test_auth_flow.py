@@ -143,32 +143,30 @@ class AccountFlowTests(TestCase):
         staff.refresh_from_db()
         self.assertEqual(staff.auth_version, 2)
 
-    def test_confirmation_is_bound_and_single_use(self):
+    def test_legacy_confirmation_is_optional_and_does_not_bind_new_mutations(self):
         self.login(self.client, "owner", OWNER_PASSWORD)
         group = PermissionGroup.objects.get(code="catalog_operator")
         token = self.confirm(self.client, "account.create")
         body = {"loginName": "staff", "displayName": "受限员工", "password": STAFF_PASSWORD,
                 "groupIds": [str(group.id)]}
+        self.assertEqual(self.send(self.client, "post", "/api/v1/admin/accounts", body).status_code, 201)
+        body = {**body, "loginName": "staff2"}
         self.assertEqual(self.send(self.client, "post", "/api/v1/admin/accounts", body, token).status_code, 201)
-        body["loginName"] = "staff2"
-        self.assertEqual(self.send(self.client, "post", "/api/v1/admin/accounts", body, token).status_code, 403)
 
-    def test_confirmation_is_bound_to_target_and_stored_as_hash(self):
-        from accounts.models import ActionConfirmation
+    def test_legacy_confirmation_target_is_not_required_but_revision_still_is(self):
         self.login(self.client, "owner", OWNER_PASSWORD)
         group = PermissionGroup.objects.get(code="catalog_operator")
         staff = self.create_staff(group)
         token = self.confirm(self.client, "account.disable", object_id=uuid.UUID(int=0),
                              revision=staff.revision)
-        confirmation = ActionConfirmation.objects.get(action="account.disable")
-        self.assertNotEqual(confirmation.token_hash, token)
+        result = self.send(self.client, "patch", f"/api/v1/admin/accounts/{staff.id}",
+            {"enabled": False, "expectedRevision": staff.revision + 1}, token)
+        self.assertEqual(result.status_code, 409)
         result = self.send(self.client, "patch", f"/api/v1/admin/accounts/{staff.id}",
             {"enabled": False, "expectedRevision": staff.revision}, token)
-        self.assertEqual(result.status_code, 403)
-        confirmation.refresh_from_db()
-        self.assertIsNotNone(confirmation.consumed_at)
+        self.assertEqual(result.status_code, 200)
         staff.refresh_from_db()
-        self.assertTrue(staff.enabled)
+        self.assertFalse(staff.enabled)
 
     def test_csrf_and_lockout_and_idle_expiry(self):
         without_csrf = self.client.post("/api/v1/admin/auth/login", data=json.dumps(
@@ -209,20 +207,15 @@ class AccountFlowTests(TestCase):
         self.assertEqual(result.status_code, 401)
         dummy.assert_called_once()
 
-    def test_confirmation_password_attempts_are_limited(self):
+    def test_legacy_confirmation_ignores_password_and_does_not_affect_login_limit(self):
         self.login(self.client, "owner", OWNER_PASSWORD)
-        for _ in range(5):
+        for _ in range(6):
             result = self.send(self.client, "post", "/api/v1/admin/auth/confirm",
                 {"action": "account.create", "password": "wrong password"})
-            self.assertEqual(result.status_code, 403)
-        result = self.send(self.client, "post", "/api/v1/admin/auth/confirm",
-            {"action": "account.create", "password": OWNER_PASSWORD})
-        self.assertEqual(result.status_code, 429)
+            self.assertEqual(result.status_code, 200)
         self.owner.refresh_from_db()
-        self.owner.locked_until = timezone.now() - timedelta(seconds=1)
-        self.owner.save(update_fields=["locked_until"])
-        token = self.confirm(self.client, "account.create")
-        self.assertTrue(token)
+        self.assertEqual(self.owner.failed_count, 0)
+        self.assertIsNone(self.owner.locked_until)
 
     def test_revision_boolean_is_rejected(self):
         self.login(self.client, "owner", OWNER_PASSWORD)

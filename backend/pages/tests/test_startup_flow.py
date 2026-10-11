@@ -124,8 +124,7 @@ class StartupFlowTests(TestCase):
         self.assertEqual(self.send(self.client, "post", PREVIEW, {"expectedRevision": 1}).status_code, 409)
         self.assertEqual(self.send(self.client, "post", PREVIEW, {"expectedRevision": revision}).status_code, 200)
         self.assertEqual(Client().get(f"/api/v1/app/assets/{gif.id}/file").status_code, 404)
-        self.assertEqual(self.publish(revision, confirmation=False).status_code, 403)
-        published = self.publish(revision)
+        published = self.publish(revision, confirmation=False)
         self.assertEqual(published.status_code, 200, published.content)
         version_id = published.json()["data"]["versionId"]
         public = Client().get(PUBLIC).json()["data"]

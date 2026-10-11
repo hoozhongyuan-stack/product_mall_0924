@@ -103,14 +103,14 @@ class ReadinessTests(TestCase):
         self.assertNotIn(self.private_key, json.dumps(list(AuditLog.objects.values('before', 'after'))))
         self.assertEqual(self.save(revision=0).status_code, 409)
 
-    def test_rejects_invalid_key_wrong_app_and_missing_confirmation(self):
+    def test_rejects_invalid_key_wrong_app_and_accepts_without_confirmation(self):
         self.assertEqual(self.save(key='not-a-key').status_code, 400)
         self.assertEqual(self.save(appId='wxfedcba9876543210').status_code, 409)
         response = self.client.put(BASE + '/upload-key', {'appId': APP,
             'key': self.private_key, 'expectedRevision': 0}, content_type='application/json')
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(CodeUploadKey.objects.get(pk=1).revision, 0)
-        self.assertFalse(CodeUploadKey.objects.get(pk=1).encrypted_payload)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(CodeUploadKey.objects.get(pk=1).revision, 1)
+        self.assertTrue(CodeUploadKey.objects.get(pk=1).encrypted_payload)
 
     def test_source_mismatch_and_corrupt_key_are_blocked(self):
         self.package(app_id='touristappid', api='http://127.0.0.1:8000')

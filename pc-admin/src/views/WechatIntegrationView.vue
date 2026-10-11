@@ -6,13 +6,13 @@ import 'element-plus/theme-chalk/el-radio-group.css'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElButton, ElInput, ElRadio, ElRadioGroup } from 'element-plus'
-import { api, type Account, type Confirmation } from '../api'
+import { api, type Account } from '../api'
 import { checkMessages, checkTitles, credentialIssue, integrationPath, readIntegration, safeFailure, type Integration } from './integrations/wechat'
 import './integrations/wechat.css'
 
 const props = defineProps<{ account: Account }>()
 const config = ref<Integration | null>(null)
-const appId = ref(''), secret = ref(''), password = ref('')
+const appId = ref(''), secret = ref('')
 const secretAction = ref<'KEEP' | 'REPLACE'>('KEEP')
 const loading = ref(false), busy = ref(false), needsRead = ref(false)
 const error = ref(''), notice = ref(''), confirmation = ref<'save' | 'test' | ''>('')
@@ -31,8 +31,7 @@ function adopt(value: Integration) {
 async function load() {
   if (!canRead.value || busy.value || loading.value) return
   const current = ++epoch, keepInput = dirty.value
-  loading.value = true; error.value = ''; notice.value = ''; confirmation.value = ''; password.value = ''
-  try {
+  loading.value = true; error.value = ''; notice.value = ''; confirmation.value = ''; try {
     const value = readIntegration(await api<unknown>(integrationPath))
     if (current !== epoch) return
     if (keepInput) { config.value = value; notice.value = '已读取最新配置，输入已保留。请核对后重新确认；读取本身不证明上次密钥替换成功。' }
@@ -44,13 +43,13 @@ async function load() {
 }
 function begin(action: 'save' | 'test') {
   if (action === 'save' ? !saveAllowed.value : !testAllowed.value) return
-  confirmation.value = action; password.value = ''; error.value = ''; notice.value = ''
+  confirmation.value = action;  error.value = ''; notice.value = ''
 }
-function cancel() { if (!busy.value) { confirmation.value = ''; password.value = '' } }
+function cancel() { if (!busy.value) { confirmation.value = ''; } }
 function changeSecretAction() { secret.value = ''; cancel() }
 async function submit() {
   const action = confirmation.value, previous = config.value
-  if (!action || !previous || !password.value || (action === 'save' ? !saveAllowed.value : !testAllowed.value)) return
+  if (!action || !previous  || (action === 'save' ? !saveAllowed.value : !testAllowed.value)) return
   const current = ++epoch, requestedAppId = appId.value
   // Sensitive input is kept only in this in-flight request and the current form.
   const body = action === 'test' ? { expectedRevision: previous.revision } : {
@@ -59,14 +58,10 @@ async function submit() {
   }
   busy.value = true; error.value = ''; notice.value = ''
   try {
-    const confirm = await api<Confirmation>('/auth/confirm', { method: 'POST', body: JSON.stringify({
-      action: action === 'save' ? 'wechat.integration.update' : 'wechat.integration.test', password: password.value,
-      objectId: 'wechat-mini-program', revision: previous.revision,
-    }) })
+
     if (current !== epoch || !canManage.value) return
-    if (typeof confirm.confirmationToken !== 'string' || !confirm.confirmationToken) throw new Error('Invalid confirmation')
     const result = readIntegration(await api<unknown>(integrationPath + (action === 'test' ? '/test' : ''), {
-      method: action === 'save' ? 'PUT' : 'POST', headers: { 'X-Action-Confirmation': confirm.confirmationToken }, body: JSON.stringify(body),
+      method: action === 'save' ? 'PUT' : 'POST', headers: { }, body: JSON.stringify(body),
     }))
     if (current !== epoch) return
     if (result.revision !== previous.revision + (action === 'save' ? 1 : 0)
@@ -77,19 +72,19 @@ async function submit() {
     notice.value = action === 'save' ? '配置已保存。下一步请校验已保存配置；保存不代表微信接入已验证。' : '已读取本次凭据校验结果，请查看下方状态。'
   } catch (reason) {
     if (current === epoch) { error.value = safeFailure(reason); needsRead.value = true; confirmation.value = '' }
-  } finally { if (current === epoch) { busy.value = false; password.value = '' } }
+  } finally { if (current === epoch) { busy.value = false; } }
 }
 function beforeUnload(event: BeforeUnloadEvent) {
   if (dirty.value || busy.value || needsRead.value) { event.preventDefault(); event.returnValue = '' }
 }
 onBeforeRouteLeave(async () => !busy.value && (!(dirty.value || needsRead.value) || await confirmAction('有未保存输入或未核对的操作结果，确定离开？密钥输入不会保留。')))
 watch(() => JSON.stringify([props.account.accountId, props.account.permissionCodes]), () => {
-  epoch++; config.value = null; appId.value = ''; secret.value = ''; password.value = ''; confirmation.value = ''
+  epoch++; config.value = null; appId.value = ''; secret.value = '';  confirmation.value = ''
   busy.value = false; loading.value = false; needsRead.value = false; error.value = ''; notice.value = ''
   void load()
 })
 onMounted(() => { window.addEventListener('beforeunload', beforeUnload); void load() })
-onUnmounted(() => { epoch++; secret.value = ''; password.value = ''; window.removeEventListener('beforeunload', beforeUnload) })
+onUnmounted(() => { epoch++; secret.value = '';  window.removeEventListener('beforeunload', beforeUnload) })
 </script>
 
 <template>
@@ -118,11 +113,11 @@ onUnmounted(() => { epoch++; secret.value = ''; password.value = ''; window.remo
             <p v-else class="wechat-note">当前账号仅可查看，保存和校验需要接入管理权限。</p>
           </form>
         </section>
-        <form v-if="confirmation" class="panel wechat-confirm" aria-label="二次确认" @submit.prevent="submit">
+        <form v-if="confirmation" class="panel wechat-confirm" aria-label="操作确认" @submit.prevent="submit">
           <h2>{{ confirmation === 'save' ? '确认保存应用凭据' : '确认校验已保存配置' }}</h2>
           <p>{{ confirmation === 'save' ? '本次修改影响后续微信身份登录。请核对 AppID 与密钥操作。' : '只校验已保存配置，不使用尚未保存的输入，也不会执行真实用户登录。' }}</p>
-          <label for="wechat-confirm-password">当前账号密码<ElInput id="wechat-confirm-password" v-model="password" type="password" autocomplete="current-password" :disabled="busy" /></label>
-          <div class="wechat-actions"><ElButton type="primary" native-type="submit" :loading="busy" :disabled="busy || !password">{{ confirmation === 'save' ? '确认保存' : '确认校验' }}</ElButton><ElButton :disabled="busy" @click="cancel">取消</ElButton></div>
+
+          <div class="wechat-actions"><ElButton type="primary" native-type="submit" :loading="busy" :disabled="busy ">{{ confirmation === 'save' ? '确认保存' : '确认校验' }}</ElButton><ElButton :disabled="busy" @click="cancel">取消</ElButton></div>
         </form>
         <section class="panel wechat-check" aria-labelledby="wechat-check-title">
           <div class="panel-heading"><div><h2 id="wechat-check-title">凭据校验</h2><p>校验仅证明应用凭据可调用微信平台，不代表登录、支付或消息已验收。</p></div><ElButton v-if="canManage" :disabled="!testAllowed || !!confirmation" @click="begin('test')">校验已保存配置</ElButton></div>

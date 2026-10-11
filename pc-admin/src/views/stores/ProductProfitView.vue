@@ -43,7 +43,6 @@ const loading = ref(false),
   busy = ref(false),
   needsRead = ref(false),
   confirming = ref(false),
-  password = ref(""),
   error = ref(""),
   notice = ref("");
 const readable = computed(() =>
@@ -91,7 +90,7 @@ const blocked = computed(
 function reset() {
   mode.value = null;
   editing.value = [];
-  password.value = "";
+
   confirming.value = false;
   costChecked.value = [];
   batchCost.value = "";
@@ -192,10 +191,10 @@ async function target(value: unknown) {
   ).join("");
 }
 async function save() {
-  if (!allowed.value || !confirming.value || !password.value) return;
+  if (!allowed.value || !confirming.value ) return;
   const token = ++epoch,
     kind = mode.value,
-    secret = password.value;
+    secret = '';
   busy.value = true;
   error.value = "";
   try {
@@ -269,7 +268,7 @@ async function save() {
   } finally {
     if (token === epoch) {
       busy.value = false;
-      password.value = "";
+
       confirming.value = false;
     }
   }
@@ -639,15 +638,8 @@ onUnmounted(() => {
       </form>
       <form v-if="confirming" aria-label="确认规则保存" @submit.prevent="save">
         <h3>确认保存</h3>
-        <p>已有订单保留原结算快照。请输入当前账号密码确认。</p>
-        <label for="profit-password"
-          >当前账号密码<input
-            id="profit-password"
-            v-model="password"
-            type="password"
-            autocomplete="current-password"
-            :disabled="busy" /></label
-        ><button class="primary-button" :disabled="busy || !password">
+        <p>已有订单保留原结算快照。请核对本次修改后确认保存。</p>
+        <button class="primary-button" :disabled="busy ">
           {{ busy ? "正在保存…" : "确认保存" }}</button
         ><button
           type="button"
@@ -655,7 +647,6 @@ onUnmounted(() => {
           :disabled="busy"
           @click="
             confirming = false;
-            password = '';
           "
         >
           取消确认

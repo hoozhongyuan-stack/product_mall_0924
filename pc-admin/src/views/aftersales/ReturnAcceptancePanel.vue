@@ -11,7 +11,7 @@ const props = defineProps<{ item:AfterSaleCase; account:Account }>()
 const emit = defineEmits<{ refresh:[]; busy:[value:boolean] }>()
 const form = ref<AcceptanceForm>({ mode:'RECEIVED', receivedQuantity:0, salableQuantity:0, refundQuantity:0, amount:'', reason:'' })
 const preview = ref<{ refundAmountFen:number; maxRefundAmountFen:number;refundPoints?:number } | null>(null)
-const error = ref(''); const busy = ref(false); const password = ref(''); const dialog = ref(false); const unknown = ref(false)
+const error = ref(''); const busy = ref(false); const dialog = ref(false); const unknown = ref(false)
 const frozen = ref<PendingAcceptance | null>(null)
 try { if(props.item.returnAcceptance || props.item.status !== 'WAITING_RETURN') pendingAcceptance(sessionStorage,props.account.accountId,props.item.caseId,null); else frozen.value=pendingAcceptance(sessionStorage,props.account.accountId,props.item.caseId) } catch { error.value='无法读取本机待核实记录，请查询处理状态后再操作。' }
 if(frozen.value) { const b=frozen.value.body;form.value={mode:String(b.mode),receivedQuantity:Number(b.receivedQuantity),salableQuantity:Number(b.salableQuantity),refundQuantity:Number(b.refundQuantity),amount:b.refundAmountFen == null?'':(Number(b.refundAmountFen)/100).toFixed(2),reason:String(b.reason)} }
@@ -31,21 +31,21 @@ async function calculate() {
  finally { if(active) setBusy(false) }
 }
 async function confirm() {
- if(busy.value || !validPreview.value || !password.value || unknown.value) return
+ if(busy.value || !validPreview.value  || unknown.value) return
  setBusy(true); error.value=''; requestKey.value ||= crypto.randomUUID()
 try { frozen.value=pendingAcceptance(sessionStorage,props.account.accountId,props.item.caseId,{key:requestKey.value,body:body.value}) } catch {error.value='无法保存本机防重复记录，请检查浏览器存储后重试。';setBusy(false);return}
  try {
-  await confirmedWrite('aftersale.return.accept',password.value,`/aftersales/${props.item.caseId}/return-acceptance`,'POST',body.value,props.item.caseId,props.item.revision,{'Idempotency-Key':requestKey.value})
+  await confirmedWrite('aftersale.return.accept','',`/aftersales/${props.item.caseId}/return-acceptance`,'POST',body.value,props.item.caseId,props.item.revision,{'Idempotency-Key':requestKey.value})
   if(active) { pendingAcceptance(sessionStorage,props.account.accountId,props.item.caseId,null);frozen.value=null;form.value={...form.value,reason:''}; preview.value=null; dialog.value=false; setBusy(false); emit('refresh') }
  } catch(reason) { if(active) { unknown.value=!(reason instanceof ApiError && reason.status<500); error.value=reason instanceof Error?reason.message:'处理结果未知。'; if(unknown.value)dialog.value=false;else { pendingAcceptance(sessionStorage,props.account.accountId,props.item.caseId,null);frozen.value=null;requestKey.value='' } } }
- finally { if(active) { password.value='';setBusy(false) } }
+ finally { if(active) { setBusy(false) } }
 }
 async function leave() { return !busy.value && (!dirty.value || await confirmAction('验收尚未提交或结果待核实，确定离开并稍后查询？')) }
 onBeforeRouteLeave(leave)
 onBeforeRouteUpdate(leave)
 function beforeUnload(event:BeforeUnloadEvent) {if(dirty.value || busy.value){event.preventDefault();event.returnValue=''}}
 window.addEventListener('beforeunload',beforeUnload)
-onUnmounted(()=>{active=false;password.value='';window.removeEventListener('beforeunload',beforeUnload)})
+onUnmounted(()=>{active=false;window.removeEventListener('beforeunload',beforeUnload)})
 </script>
 <template>
 <section class="panel order-section">
@@ -59,8 +59,8 @@ onUnmounted(()=>{active=false;password.value='';window.removeEventListener('befo
  <p v-if="preview && validPreview">{{isPointsOrder(item)?`待确认验收预览：${preview.refundPoints??'待核查'} 积分`:`服务端批准金额：${money(preview.refundAmountFen)}`}}<button class="primary-button" :disabled="busy || unknown" @click="dialog=true">核对验收结论，授权保存</button></p>
  </template><p v-else-if="item.status === 'WAITING_RETURN'">当前账号没有退货验收权限。</p>
  <p v-if="error" role="alert" class="error">{{ error }}</p><p v-if="unknown" class="order-warning">提交结果未知，请先刷新处理状态；不要重复登记验收。</p>
- <el-dialog v-model="dialog" title="授权保存退货验收" :close-on-click-modal="false" :close-on-press-escape="!busy" :show-close="!busy" @closed="password=''">
- <p>{{ item.orderNo }} · {{ item.title }}</p><p>收到 {{ form.receivedQuantity }} 件，可售 {{ form.salableQuantity }} 件；拟批准退款 {{ form.refundQuantity }} 件，{{isPointsOrder(item)?`${preview?.refundPoints??'待核查'} 积分`:money(preview?.refundAmountFen || 0)}}。</p><p>{{ form.reason }}</p><p>保存后可售数量立即回库，退款或零现金权益处理尚未完成。</p><label>当前账号密码<input v-model="password" type="password" autocomplete="current-password" :disabled="busy"></label><p v-if="error" role="alert">{{ error }}</p><template #footer><button class="secondary-button" :disabled="busy" @click="dialog=false">返回核对</button><button class="primary-button" :disabled="busy || !password || !validPreview" @click="confirm">{{ busy?'保存中…':'授权保存验收结论' }}</button></template>
+ <el-dialog v-model="dialog" title="授权保存退货验收" :close-on-click-modal="false" :close-on-press-escape="!busy" :show-close="!busy" >
+ <p>{{ item.orderNo }} · {{ item.title }}</p><p>收到 {{ form.receivedQuantity }} 件，可售 {{ form.salableQuantity }} 件；拟批准退款 {{ form.refundQuantity }} 件，{{isPointsOrder(item)?`${preview?.refundPoints??'待核查'} 积分`:money(preview?.refundAmountFen || 0)}}。</p><p>{{ form.reason }}</p><p>保存后可售数量立即回库，退款或零现金权益处理尚未完成。</p><p v-if="error" role="alert">{{ error }}</p><template #footer><button class="secondary-button" :disabled="busy" @click="dialog=false">返回核对</button><button class="primary-button" :disabled="busy  || !validPreview" @click="confirm">{{ busy?'保存中…':'授权保存验收结论' }}</button></template>
  </el-dialog>
 </section>
 </template>

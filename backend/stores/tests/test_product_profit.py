@@ -22,20 +22,22 @@ class ProductProfitTests(ProfitBatchTests):
         self.assertEqual(listing['items'][0]['shareRevision'], 1)
         self.assertEqual(listing['items'][0]['skus'][0]['purchaseCostFen'], 6000)
 
-    def test_product_share_batch_requires_confirmation(self):
+    def test_product_share_batch_requires_no_confirmation(self):
         result = self.post('/api/v1/admin/stores/platform-shares', {'items': [{'productId': str(self.skus[0].product_id), 'expectedRevision': 0}], 'platformShareBps': 2500})
-        self.assertEqual(result.status_code, 403)
+        self.assertEqual(result.status_code, 200)
 
-    def test_cost_batch_is_atomic_and_confirmation_payload_bound(self):
+    def test_cost_batch_is_atomic_and_ignores_obsolete_confirmation_header(self):
         costs = {'items': [{'skuId': str(sku.pk), 'expectedRevision': 0, 'purchaseCostFen': 6000, 'expectedUnitVersionId': str(sku.current_unit_id)} for sku in self.skus]}
         payload = sorted([[row['skuId'], row['expectedRevision'], row['purchaseCostFen'], row['expectedUnitVersionId']] for row in costs['items']])
         target = hashlib.sha256(json.dumps(payload, separators=(',', ':')).encode()).hexdigest()
         token = self.confirm('stores.cost.batch.configure', target, 0)
         changed = {'items': [{**costs['items'][0], 'purchaseCostFen': 6100}, *costs['items'][1:]]}
-        self.assertEqual(self.post('/api/v1/admin/stores/purchase-costs', changed, HTTP_X_ACTION_CONFIRMATION=token).status_code, 403)
-        stale = {'items': [{**costs['items'][0], 'expectedRevision': 1}, *costs['items'][1:]]}
+        self.assertEqual(self.post('/api/v1/admin/stores/purchase-costs', changed, HTTP_X_ACTION_CONFIRMATION=token).status_code, 200)
+        self.assertEqual(StoreSkuProfitRule.objects.get(pk=self.skus[0].pk).purchase_cost_fen, 6100)
+        stale = {'items': [{**costs['items'][0], 'expectedRevision': 2}, *costs['items'][1:]]}
         self.assertEqual(self.post('/api/v1/admin/stores/purchase-costs', stale).status_code, 409)
-        self.assertEqual(StoreSkuProfitRule.objects.count(), 0)
+        self.assertEqual(StoreSkuProfitRule.objects.count(), len(self.skus))
+        self.assertEqual(StoreSkuProfitRule.objects.get(pk=self.skus[0].pk).purchase_cost_fen, 6100)
 
     def test_conflicting_legacy_share_requires_product_confirmation(self):
         from stores.profit_access import effective_share

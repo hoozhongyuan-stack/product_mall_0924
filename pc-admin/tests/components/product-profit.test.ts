@@ -63,7 +63,7 @@ describe("separate product share and SKU cost", () => {
     await w.get('[data-action="cost"]').trigger("click");
     await w.get('[data-cost="s1"]').setValue("61.20");
     await w.get('form[aria-label="规则编辑"]').trigger("submit");
-    await w.get("#profit-password").setValue("demo");
+    expect(w.find("#profit-password").exists()).toBe(false);
     vi.mocked(confirmedWrite).mockResolvedValue({});
     await w.get('form[aria-label="确认规则保存"]').trigger("submit");
     await flushPromises();
@@ -73,7 +73,7 @@ describe("separate product share and SKU cost", () => {
       .digest("hex");
     expect(confirmedWrite).toHaveBeenCalledWith(
       "stores.cost.batch.configure",
-      "demo",
+      "",
       "/stores/purchase-costs",
       "POST",
       {
@@ -95,14 +95,14 @@ describe("separate product share and SKU cost", () => {
     await w.get('[data-action="share"]').trigger("click");
     await w.get("#product-share").setValue("25");
     await w.get('form[aria-label="规则编辑"]').trigger("submit");
-    await w.get("#profit-password").setValue("demo");
+    expect(w.find("#profit-password").exists()).toBe(false);
     vi.mocked(confirmedWrite).mockResolvedValue({});
     await w.get('form[aria-label="确认规则保存"]').trigger("submit");
     await flushPromises();
     await vi.waitFor(() => expect(confirmedWrite).toHaveBeenCalled());
     expect(confirmedWrite).toHaveBeenCalledWith(
       "stores.share.batch.configure",
-      "demo",
+      "",
       "/stores/platform-shares",
       "POST",
       {
@@ -166,7 +166,7 @@ describe("profit rule recovery and boundaries", () => {
     const w = await setup();
     await w.get('[data-action="share"]').trigger("click");
     await w.get('form[aria-label="规则编辑"]').trigger("submit");
-    await w.get("#profit-password").setValue("secret");
+    expect(w.find("#profit-password").exists()).toBe(false);
     vi.mocked(confirmedWrite).mockRejectedValue(new Error("secret"));
     await w.get('form[aria-label="确认规则保存"]').trigger("submit");
     await flushPromises();
@@ -247,7 +247,7 @@ it("requires fresh unit version after a rejected cost update before another conf
   await w.get('[data-action="cost"]').trigger("click");
   await w.get('[data-cost="s1"]').setValue("60");
   await w.get('form[aria-label="规则编辑"]').trigger("submit");
-  await w.get("#profit-password").setValue("secret");
+  expect(w.find("#profit-password").exists()).toBe(false);
   vi.mocked(confirmedWrite).mockRejectedValue(
     new ApiError("销售单位已变化", 409, "UNIT_REVISION_CONFLICT"),
   );
@@ -274,7 +274,7 @@ it("requires fresh unit version after a rejected cost update before another conf
   await flushPromises();
   await w.get('[data-action="cost"]').trigger("click");
   await w.get('form[aria-label="规则编辑"]').trigger("submit");
-  await w.get("#profit-password").setValue("secret");
+  expect(w.find("#profit-password").exists()).toBe(false);
   vi.mocked(confirmedWrite).mockResolvedValue({});
   await w.get('form[aria-label="确认规则保存"]').trigger("submit");
   await vi.waitFor(() => expect(confirmedWrite).toHaveBeenCalledTimes(2));
