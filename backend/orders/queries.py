@@ -3,6 +3,7 @@ from django.db.models import Exists, OuterRef
 from payments.models import OfflinePaymentReport
 from payments.offline import reconciliation_data
 from payments.service import PaymentError
+from .attribution import attribution_data, filter_attribution
 from .models import Order
 from .service import order_data
 from fulfillment.read import page_fulfillment_summaries
@@ -35,6 +36,7 @@ def list_orders(params, member=None):
             rows = rows.filter(store_id=UUID(store_id))
         except (ValueError, TypeError):
             raise PaymentError('前置仓编号不正确。')
+    rows = filter_attribution(rows, params)
     order_kind=params.get('orderKind')
     if order_kind:
         if order_kind not in {'CASH','POINTS'}:raise PaymentError('订单类型不正确。')
@@ -63,7 +65,7 @@ def list_orders(params, member=None):
     total = rows.count()
     page_rows = list(rows.order_by('-created_at', '-id')[(page-1)*size:page*size])
     summaries = page_fulfillment_summaries(page_rows)
-    items = [{'orderId': str(o.id), 'orderNo': o.order_no, 'status': o.status, 'paymentMethod': o.payment_method,
+    items = [{**attribution_data(o), 'orderId': str(o.id), 'orderNo': o.order_no, 'status': o.status, 'paymentMethod': o.payment_method,
               'storeId': str(o.store_id) if o.store_id else None,
               'storeName': o.store_snapshot.get('name') if o.store_id else None, 'deliveryMode': o.delivery_mode or None,
               'dining': {key: o.store_snapshot['dining'][key] for key in ('restaurantId', 'name', 'address', 'tableNumber')} if o.store_snapshot.get('dining') else None,

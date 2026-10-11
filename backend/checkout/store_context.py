@@ -80,6 +80,7 @@ def store_shipping_fee(store, mode, express_fee):
 
 def _store_snapshot(store):
     return {'id': str(store.id), 'name': store.name, 'address': store.address,
+                'fulfillmentWarehouse': {'id': str(store.warehouse_id), 'name': store.warehouse.name},
                 'contactPhone': store.contact_phone, 'revision': store.revision,
                 'latitude': str(store.latitude) if store.latitude is not None else None,
                 'longitude': str(store.longitude) if store.longitude is not None else None,

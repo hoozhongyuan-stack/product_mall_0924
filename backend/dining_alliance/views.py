@@ -2,6 +2,7 @@
 from functools import wraps
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import cache_control
@@ -12,7 +13,7 @@ from customers.store_access import resolve_staff_member, search_staff_members
 from catalog.models import Product
 from stores.access import StoreError
 from .access import DiningError, get_restaurant, require_staff, get_session, checkout_context
-from .models import Restaurant, RestaurantStaff, DiningTable, DiningSession, DiningOrderSnapshot, ProductCommissionRule, StoreSkuPurchaseCost
+from .models import Restaurant, RestaurantStaff, DiningTable, DiningSession, DiningOrderSnapshot, ProductCommissionRule
 from .service import restaurant_data, save_restaurant, table_data, save_table, products_data, product_queryset, update_product, scan
 from .finance import account_data, withdrawal_data, request_withdrawal, change_withdrawal
 
@@ -55,6 +56,14 @@ def admin_restaurants(request,restaurant_id=None):
         rows=Restaurant.objects.select_related('assigned_store').all()
         query=request.GET.get('search','').strip()[:120]
         if query:rows=rows.filter(name__icontains=query)
+        if 'enabled' in request.GET:
+            value=request.GET['enabled']
+            if len(request.GET.getlist('enabled'))!=1 or value not in ('true','false'):raise DiningError('启停筛选参数无效。')
+            rows=rows.filter(enabled=value=='true')
+        if 'storeId' in request.GET:
+            from uuid import UUID
+            if len(request.GET.getlist('storeId'))!=1:raise DiningError('前置仓筛选参数不可重复。')
+            rows=rows.filter(assigned_store_id=UUID(request.GET['storeId']))
         return offset_response(request,page_data(request,rows,restaurant_data))
     with transaction.atomic():
         actor,bad=require_live(request,'dining.manage')
@@ -117,7 +126,7 @@ def admin_staff(request,restaurant_id):
 
 def ratio_data(product):
     row=ProductCommissionRule.objects.filter(product=product).first()
-    return {'id':str(product.id),'productId':str(product.id),'name':product.name,'commissionBps':row.commission_bps if row else None,'revision':row.revision if row else 0}
+    return {'id':str(product.id),'productId':str(product.id),'name':product.name,'productNo':product.product_no,'categoryId':str(product.category_id),'commissionBps':row.commission_bps if row else None,'revision':row.revision if row else 0}
 
 
 @guarded
@@ -129,7 +138,18 @@ def admin_ratios(request):
     if request.method=='GET':
         rows=Product.objects.filter(fulfillment_kind='SHIP').exclude(status='DRAFT').order_by('name','id')
         query=request.GET.get('search','').strip()[:120]
-        if query:rows=rows.filter(name__icontains=query)
+        if query:rows=rows.filter(Q(name__icontains=query)|Q(product_no__icontains=query))
+        if 'configured' in request.GET:
+            value=request.GET['configured']
+            if len(request.GET.getlist('configured'))!=1 or value not in ('true','false'):raise DiningError('佣金配置筛选参数无效。')
+            rows=rows.filter(productcommissionrule__isnull=value=='false')
+        if 'categoryId' in request.GET:
+            from uuid import UUID
+            from catalog.models import Category
+            if len(request.GET.getlist('categoryId'))!=1:raise DiningError('分类参数不可重复。')
+            category=UUID(request.GET['categoryId'])
+            if not Category.objects.filter(pk=category).exists():raise DiningError('分类不存在。','DINING_NOT_FOUND',404)
+            rows=rows.filter(Q(category_id=category)|Q(category__parent_id=category))
         return offset_response(request,page_data(request,rows,ratio_data))
     body=parse_json_object(request)
     if set(body)!={'productId','commissionBps','revision'} or type(body['commissionBps']) is not int or not 0<=body['commissionBps']<=10000 or type(body['revision']) is not int:
@@ -214,7 +234,7 @@ def order_data(snapshot):
     from .finance import income_data
     from fulfillment.store_service import delivery_data
     order=snapshot.order
-    return {'id':str(order.id),'orderNo':order.order_no,'status':order.status,'payableFen':order.payable_fen,'createdAt':order.created_at.isoformat(),'restaurantId':str(snapshot.restaurant_id),'restaurantName':snapshot.restaurant_name,'tableNumber':snapshot.table_number,'address':snapshot.address,'fulfillmentStore':{'id':str(snapshot.store_id),'name':snapshot.store.name},'commission':income_data(snapshot),'commissionLines':[{'lineId':str(row.line_id),'quantity':row.quantity,'paidFen':row.paid_fen,'purchaseCostFen':row.purchase_cost_fen,'costSource':row.cost_source,'commissionBps':row.commission_bps,'commissionFen':row.commission_fen,'configured':row.configured} for row in snapshot.lines.all()],'delivery':delivery_data(order),'lines':[{'id':str(line.id),'productName':line.product_name,'skuCode':line.sku_code,'quantity':line.quantity,'saleUnit':line.sale_unit,'payableFen':line.payable_fen} for line in order.lines.all()]}
+    return {'id':str(order.id),'orderNo':order.order_no,'status':order.status,'payableFen':order.payable_fen,'createdAt':order.created_at.isoformat(),'restaurantId':str(snapshot.restaurant_id),'restaurantName':snapshot.restaurant_name,'tableNumber':snapshot.table_number,'address':snapshot.address,'fulfillmentStore':{'id':str(snapshot.store_id),'name':order.store_snapshot.get('name') or '历史仓名未记录'},'fulfillmentWarehouse':order.store_snapshot.get('fulfillmentWarehouse'),'commission':income_data(snapshot),'commissionLines':[{'lineId':str(row.line_id),'quantity':row.quantity,'paidFen':row.paid_fen,'purchaseCostFen':row.purchase_cost_fen,'costSource':row.cost_source,'commissionBps':row.commission_bps,'commissionFen':row.commission_fen,'configured':row.configured} for row in snapshot.lines.all()],'delivery':delivery_data(order),'lines':[{'id':str(line.id),'productName':line.product_name,'skuCode':line.sku_code,'quantity':line.quantity,'saleUnit':line.sale_unit,'payableFen':line.payable_fen} for line in order.lines.all()]}
 
 
 @guarded
@@ -240,6 +260,10 @@ def member_orders(request,restaurant_id,order_id=None):
 def orders_response(request,order_id=None,restaurant_id=None):
     rows=DiningOrderSnapshot.objects.select_related('order','store').order_by('-created_at','order_id')
     if restaurant_id:rows=rows.filter(restaurant_id=restaurant_id)
+    if request.GET.get('storeId'):rows=rows.filter(store_id=request.GET['storeId'])
+    search=request.GET.get('search','').strip()
+    if len(search)>40:raise DiningError('订单号搜索不超过 40 字。')
+    if search:rows=rows.filter(order__order_no__icontains=search)
     if order_id:
         row=rows.filter(order_id=order_id).first()
         if not row:raise DiningError('订单不存在。','DINING_NOT_FOUND',404)
@@ -278,3 +302,17 @@ def member_finance(request,restaurant_id,withdrawals=False):
         return response(request,withdrawal_data(row),201 if created else 200)
     data=account_data(restaurant)
     return response(request,{'items':data['withdrawals']} if withdrawals else data)
+
+
+@guarded
+def admin_order_stores(request):
+    bad=method(request,'GET')
+    if bad:return bad
+    _,bad=require(request,'dining.read')
+    if bad:return bad
+    from stores.models import Store
+    rows=Store.objects.filter(
+        Q(id__in=Restaurant.objects.values('assigned_store_id')) |
+        Q(id__in=DiningOrderSnapshot.objects.values('store_id'))
+    ).order_by('name','id')
+    return offset_response(request,page_data(request,rows,lambda row:{'id':str(row.pk),'name':row.name}))

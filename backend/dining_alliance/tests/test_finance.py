@@ -47,14 +47,22 @@ class DiningFinanceTests(TestCase):
         with patch('payments.access.applied_receipt',return_value=True),patch('payments.store_settlement.applied_receipt',return_value=True):
             settle_order(order.id)
 
-    def test_snapshot_uses_warehouse_override_and_frozen_versions(self):
+    def test_new_snapshot_ignores_retired_override_and_preserves_frozen_versions(self):
         order,restaurant,session=self.order(override=500)
         snap=DiningOrderSnapshot.objects.get(order=order)
         row=DiningOrderLineSnapshot.objects.get(snapshot=snap)
-        self.assertEqual(snap.commission_fen,200)
-        self.assertEqual(row.cost_source,'STORE_OVERRIDE')
+        self.assertEqual(snap.commission_fen,160)
+        self.assertEqual(row.purchase_cost_fen,600)
+        self.assertEqual(row.cost_source,'GLOBAL_DEFAULT')
         StoreSkuPurchaseCost.objects.update(purchase_cost_fen=900)
-        snap.refresh_from_db();self.assertEqual(snap.commission_fen,200)
+        StoreSkuProfitRule.objects.update(purchase_cost_fen=800)
+        snap.refresh_from_db();self.assertEqual(snap.commission_fen,160)
+        from payments.models import StoreOrderLineFinance
+        row.refresh_from_db();self.assertEqual(row.purchase_cost_fen,600)
+        source=StoreOrderLineFinance.objects.get(line__order=order)
+        self.assertEqual((source.purchase_cost_fen,source.cost_source),(600,'GLOBAL_DEFAULT'))
+        with self.assertRaises(DatabaseError),transaction.atomic():
+            StoreOrderLineFinance.objects.filter(pk=source.pk).update(purchase_cost_fen=1)
         with self.assertRaises(DiningError):snapshot_order(order,session,self.member,list(order.lines.all()))
         for model in [DiningOrderSnapshot,DiningOrderLineSnapshot]:
             with self.assertRaises(DatabaseError),transaction.atomic():model.objects.update(commission_fen=1)

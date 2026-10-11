@@ -21,6 +21,7 @@ from inventory.reservations import (ReservationError, assert_order_reservations,
 from payments.availability import payment_method_enabled
 from shipping.service import ShippingUnavailable, current_shipping_policy, shipping_fee_for_lines
 
+from .attribution import attribution_data
 from .models import Order, OrderIdempotency, OrderLine
 
 
@@ -87,6 +88,7 @@ def order_data(order, *, include_voucher_code=False):
     from benefits.lifecycle import order_benefit_data
     return {
         **payment_status(order),
+        **attribution_data(order),
         "orderBenefits": order_benefit_data(order.id),
         "fulfillmentStatus": fulfillment["fulfillmentStatus"],
         "afterSaleSummary": fulfillment["afterSaleSummary"],

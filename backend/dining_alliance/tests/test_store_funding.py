@@ -23,8 +23,8 @@ class WarehouseFundingTests(TestCase):
     order=fixture.DiningFinanceTests.order
     complete=fixture.DiningFinanceTests.complete
 
-    def test_override_cost_shared_and_money_conserved(self):
-        order,restaurant,session=self.order(override=500)
+    def test_shared_store_cost_and_money_conserved(self):
+        order,restaurant,session=self.order(override=900,cost=500)
         line=order.lines.get()
         self.assertEqual(StoreOrderLineFinance.objects.get(line=line).purchase_cost_fen,500)
         self.assertEqual(DiningOrderLineSnapshot.objects.get(line=line).purchase_cost_fen,500)
@@ -163,7 +163,7 @@ class ActualDiningSettlementTests(TransactionTestCase):
         from stores.models import StoreStaff
         from fulfillment.store_service import operate, physical_handoff_fact
         from aftersales.models import OrderAfterSaleSnapshot
-        order,restaurant,session=self.order(override=500)
+        order,restaurant,session=self.order(override=900,cost=500)
         evidence=payment.PaymentFlowTests._evidence(self,order,trade_no=uuid4().hex,event_id=uuid4().hex)
         self.assertEqual(record_verified_payment(evidence)['outcome'],'PAID')
         StoreStaff.objects.create(store=order.store,member=self.member,permissions=['orders'])

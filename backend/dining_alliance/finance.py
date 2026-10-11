@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 from .access import DiningError, require_staff, checkout_context
-from .models import DiningOrderSnapshot, DiningOrderLineSnapshot, ProductCommissionRule, StoreSkuPurchaseCost, Restaurant, Withdrawal
+from .models import DiningOrderSnapshot, DiningOrderLineSnapshot, ProductCommissionRule, Restaurant, Withdrawal
 
 
 FUNDING_SOURCE = 'FULFILLMENT_STORE_PROFIT'

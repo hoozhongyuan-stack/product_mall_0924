@@ -24,20 +24,16 @@ def snapshot_lines(order,lines):
     shares = {row.product_id: row for row in StoreProductProfitRule.objects.select_for_update().filter(pk__in=product_ids)}
     all_legacy = list(StoreSkuProfitRule.objects.filter(sku__product_id__in=product_ids).select_related('sku'))
     policies = {product_id: effective_share(product_id, [rule for rule in all_legacy if rule.sku.product_id == product_id], shares.get(product_id)) for product_id in product_ids}
-    overrides = {}
-    if order.store_snapshot.get('dining'):
-        from dining_alliance.models import StoreSkuPurchaseCost
-        overrides = {row.sku_id:row for row in StoreSkuPurchaseCost.objects.select_for_update().filter(store_id=order.store_id,sku_id__in=[line.sku_id for line in lines])}
     snapshots = []
     for line in lines:
-        rule = overrides.get(line.sku_id) or rules.get(line.sku_id)
+        rule = rules.get(line.sku_id)
         ratio, share_revision, _ = policies[line.product_id]
         configured = bool(rule and rule.unit_version_id == line.unit_version_id and ratio is not None)
         snapshots.append(StoreOrderLineFinance(line=line, configured=configured,
             purchase_cost_fen=rule.purchase_cost_fen if configured else None,
             platform_share_bps=ratio if configured else None,
             policy_revision=rule.revision if configured else None,
-            cost_source=('STORE_OVERRIDE' if line.sku_id in overrides else 'GLOBAL_DEFAULT') if configured else 'UNCONFIGURED'))
+            cost_source='GLOBAL_DEFAULT' if configured else 'UNCONFIGURED'))
     StoreOrderLineFinance.objects.bulk_create(snapshots)
 
 

@@ -2,7 +2,7 @@ export interface Restaurant {id:string;name:string;address:string;contactName:st
 export interface DiningTable {id:string;number:string;enabled:boolean;revision:number}
 export interface DiningStaff {id:string;memberId:string;memberNo:string;name:string;enabled:boolean;permissions:string[];revision:number}
 export interface MemberChoice {id:string;name:string;memberNo:string}
-export interface ProductRatio {id?:string;productId:string;name:string;commissionBps:number|null;revision:number}
+export interface ProductRatio {id?:string;productId:string;name:string;productNo?:string;categoryId?:string|null;commissionBps:number|null;revision:number}
 export interface PageResult<T> {items:T[];total:number}
 export const base='/dining-alliance'
 export const money=(fen:number)=>`¥${(fen/100).toFixed(2)}`
@@ -13,4 +13,4 @@ export interface DiningWithdrawal {id:string;amountFen:number;status:'PENDING'|'
 export interface DiningAccount {fundingSource?:'FULFILLMENT_STORE_PROFIT';fundingLabel?:string;availableFen:number;pendingFen:number;heldFen:number;totalCommissionFen:number;frozenFen:number;incomes:DiningIncome[];withdrawals:DiningWithdrawal[];payoutEnabled:boolean}
 export const incomeLabel=(status:string)=>({ESTIMATED:'预计佣金',PENDING:'已入账，待过售后期',HELD:'待核对',AVAILABLE:'已满足提现条件'}[status]||status)
 export const withdrawalLabel=(status:string)=>({PENDING:'待审核',APPROVED:'审核通过，待打款',REJECTED:'已驳回'}[status]||status)
-export interface DiningOrder {id:string;orderNo:string;status:string;payableFen:number;createdAt:string;restaurantId:string;restaurantName:string;tableNumber:string;address:string;fulfillmentStore:{id:string;name:string};commission:DiningIncome;delivery:{status?:string;mode?:string}|null;lines:{id:string;productName:string;skuCode:string;quantity:number;saleUnit:string;payableFen:number}[]}
+export interface DiningOrder {fulfillmentWarehouse?:{id:string;name:string}|null;id:string;orderNo:string;status:string;payableFen:number;createdAt:string;restaurantId:string;restaurantName:string;tableNumber:string;address:string;fulfillmentStore:{id:string;name:string};commission:DiningIncome;delivery:{status?:string;mode?:string}|null;lines:{id:string;productName:string;skuCode:string;quantity:number;saleUnit:string;payableFen:number}[]}

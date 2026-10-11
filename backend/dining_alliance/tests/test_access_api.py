@@ -146,11 +146,9 @@ class DiningAccessTests(TestCase):
         self.assertEqual(self.write(client,'put',root+'/product-ratios',ratio).status_code,200)
         self.assertEqual(self.write(client,'put',root+'/product-ratios',ratio).status_code,409)
         cost={'storeId':str(store.id),'skuId':str(self.skus[0].id),'unitVersionId':str(self.skus[0].current_unit_id),'purchaseCostFen':600,'revision':0}
-        result=self.write(client,'put',root+'/purchase-costs',cost);self.assertEqual(result.status_code,200,result.content)
-        self.assertEqual(self.write(client,'patch',root+'/purchase-costs',{**cost,'purchaseCostFen':500,'revision':1}).status_code,200)
-        self.assertEqual(self.write(client,'put',root+'/purchase-costs',cost).status_code,409)
-        self.assertEqual(self.write(client,'put',root+'/purchase-costs',{**cost,'unitVersionId':'bad','revision':2}).status_code,409)
-        for path,body in [(root+'/product-ratios',{'commissionBps':True}),(root+'/purchase-costs',{'purchaseCostFen':-1}),(base+'/staff',{'memberId':str(self.member.id),'permissions':['inventory'],'enabled':True,'revision':0})]:
+        self.assertEqual(self.write(client,'put',root+'/purchase-costs',cost).status_code,410)
+        self.assertEqual(self.write(client,'patch',root+'/purchase-costs',cost).status_code,410)
+        for path,body in [(root+'/product-ratios',{'commissionBps':True}),(base+'/staff',{'memberId':str(self.member.id),'permissions':['inventory'],'enabled':True,'revision':0})]:
             self.assertEqual(self.write(client,'post' if path.endswith('staff') else 'put',path,body).status_code,400)
         self.assertEqual(client.get(root+'/restaurants?page=0').status_code,400)
         self.assertEqual(client.get(root+'/restaurants?pageSize=101').status_code,400)

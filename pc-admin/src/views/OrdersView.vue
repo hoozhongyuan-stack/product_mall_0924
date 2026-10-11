@@ -17,6 +17,11 @@ const review = ref('')
 const fulfillment = ref('')
 const search = ref('')
 const storeId = ref('')
+const source = ref('')
+const restaurantId = ref('')
+const restaurants = ref<{id:string;name:string}[]>([])
+const restaurantError = ref('')
+async function loadRestaurants(){if(!props.account.permissionCodes.includes('dining.read'))return;try{restaurants.value=(await api<{items:{id:string;name:string}[]}>('/dining-alliance/restaurants?pageSize=100')).items;restaurantError.value=''}catch(e){restaurantError.value=e instanceof Error?e.message:'餐饮店筛选读取失败。'}}
 const stores = ref<{id:string;name:string}[]>([])
 const storeError = ref('')
 async function loadStores(){if(!props.account.permissionCodes.includes('stores.read'))return;try{stores.value=(await api<{items:{id:string;name:string}[]}>('/stores?pageSize=100')).items;storeError.value=''}catch(e){storeError.value=e instanceof Error?e.message:'前置仓筛选读取失败。'}}
@@ -46,6 +51,8 @@ async function load(reset = false) {
   loading.value = true; error.value = ''
   try {
     const query = new URLSearchParams({ page: String(page.value), pageSize: '20' })
+    if (source.value) query.set('source',source.value)
+    if (restaurantId.value) query.set('restaurantId',restaurantId.value)
     if (storeId.value) query.set('storeId',storeId.value)
     if (status.value) query.set('status', status.value)
     if (method.value) query.set('paymentMethod', method.value)
@@ -57,7 +64,7 @@ async function load(reset = false) {
   } catch (reason) { if (request === generation) { data.value = null; error.value = reason instanceof Error ? reason.message : '订单读取失败，请重试。' } }
   finally { if (request === generation) loading.value = false }
 }
-function resetFilters() { storeId.value = ''; status.value = ''; method.value = ''; review.value = ''; fulfillment.value = ''; search.value = ''; void load(true) }
+function resetFilters() { source.value='';restaurantId.value='';storeId.value = ''; status.value = ''; method.value = ''; review.value = ''; fulfillment.value = ''; search.value = ''; void load(true) }
 function changePage(delta: number) { page.value += delta; void load() }
 function selectOrder(id: string, checked: boolean) { selected.value = checked ? [...selected.value, id] : selected.value.filter(value => value !== id) }
 function selectCurrentPage(checked: boolean) { selected.value = checked ? eligible.value.map(order => order.orderId) : [] }
@@ -87,13 +94,15 @@ async function submitBatch() {
   } catch (failure) { bulkError.value = `${failure instanceof Error ? failure.message : '批量发货结果未知。'} 请刷新列表或逐单查看详情，避免重复发货。` }
   finally { bulkBusy.value = false }
 }
-onMounted(() => { void load(); void loadCarriers(); void loadStores() })
+onMounted(() => { void load(); void loadCarriers(); void loadStores(); void loadRestaurants() })
 </script>
 <template>
   <section class="page-content orders-page">
     <header class="page-heading"><div><h1>订单管理</h1><p>查看收款与履约进度；批量发货仅处理当前页已选订单，逐单显示结果。</p></div><div class="fulfillment-actions"><RouterLink v-if="account.permissionCodes.includes('aftersale.read')" to="/aftersales" class="secondary-button">售后管理</RouterLink><RouterLink v-if="account.permissionCodes.includes('fulfillment.redeem')" to="/redemptions" class="secondary-button">到店核销</RouterLink><RouterLink v-if="account.permissionCodes.includes('fulfillment.settings.manage')" to="/fulfillment/settings" class="secondary-button">履约设置</RouterLink><button class="secondary-button" :disabled="loading" @click="load()">刷新订单</button></div></header>
     <form class="order-filters" aria-label="筛选订单" @submit.prevent="load(true)">
-      <label v-if="account.permissionCodes.includes('stores.read')">所属前置仓<select v-model="storeId"><option value="">全部前置仓</option><option v-for="store in stores" :key="store.id" :value="store.id">{{store.name}}</option></select></label>
+      <label v-if="account.permissionCodes.includes('stores.read')">履约前置仓<select v-model="storeId"><option value="">全部前置仓</option><option v-for="store in stores" :key="store.id" :value="store.id">{{store.name}}</option></select></label>
+      <label>订单来源<select v-model="source" aria-label="订单来源" @change="restaurantId='' "><option value="">全部来源</option><option value="REGULAR">普通商城</option><option value="DINING">餐饮联盟</option></select></label>
+      <label v-if="account.permissionCodes.includes('dining.read') && source !== 'REGULAR'">归属餐饮店<select v-model="restaurantId" aria-label="归属餐饮店"><option value="">全部餐饮店</option><option v-for="restaurant in restaurants" :key="restaurant.id" :value="restaurant.id">{{restaurant.name}}</option></select></label>
       <label>订单号<input v-model="search" type="search" placeholder="搜索订单号" /></label>
       <label>履约待办<select v-model="fulfillment" aria-label="履约待办"><option value="">全部待办</option><option value="WAITING_PREPARATION">待备货</option><option value="WAITING_PICKUP">待自提</option><option value="WAITING_DELIVERY">待配送</option><option value="DELIVERING">配送中</option><option value="WAITING_SHIPMENT">待发货</option><option value="IN_TRANSIT">待收货</option><option value="WAITING_REDEMPTION">待核销</option><option value="AFTER_SALE">售后中</option></select></label>
       <label>订单状态<select v-model="status"><option value="">全部状态</option><option value="PENDING_PAYMENT">待付款</option><option value="PAID">已结算（付款 / 扣积分）</option><option value="CLOSED">已关闭</option></select></label>
@@ -102,6 +111,7 @@ onMounted(() => { void load(); void loadCarriers(); void loadStores() })
       <button class="primary-button" type="submit" :disabled="loading">查询订单</button>
       <button class="secondary-button" type="button" :disabled="loading" @click="resetFilters">重置</button>
     </form>
+    <p v-if="restaurantError" role="alert">{{restaurantError}} <button class="text-button" @click="loadRestaurants">重新读取餐饮店</button></p>
     <p v-if="storeError" role="alert">{{storeError}} <button class="text-button" @click="loadStores">重新读取前置仓</button></p>
     <p v-if="loading" role="status" class="loading-inline">正在读取订单…</p>
     <div v-else-if="error" class="notice" role="alert">{{ error }} <button class="text-button" @click="load()">重新加载</button></div>
@@ -109,8 +119,8 @@ onMounted(() => { void load(); void loadCarriers(); void loadStores() })
       <div v-if="canShip && eligible.length" class="order-bulk-toolbar"><label class="check-row"><input type="checkbox" :checked="currentPageSelected" :disabled="loading" @change="selectCurrentPage(($event.target as HTMLInputElement).checked)">选择当前页待发货订单（{{ eligible.length }} 单）</label><button class="primary-button" :disabled="!selected.length || carriersLoading || !activeCarriers.length" @click="openBatch">批量发货（{{ selected.length }}）</button><p v-if="carriersError" role="alert">{{ carriersError }} <button class="text-button" @click="loadCarriers">重试</button></p><p v-else-if="!carriersLoading && !activeCarriers.length">暂无可用快递公司，请先在履约设置中维护。</p></div>
       <p v-if="!data.items.length" class="empty-state">当前条件下暂无订单。可调整筛选条件后查询。</p>
       <div v-else class="panel table-wrap" tabindex="0" aria-label="订单列表，可横向滚动">
-        <table><thead><tr><th v-if="canShip">选择</th><th>订单</th><th>所属前置仓 / 交付方式</th><th>付款截止</th><th>支付方式</th><th>结算状态</th><th>履约状态</th><th>结算金额 / 积分</th><th>操作</th></tr></thead>
-          <tbody><tr v-for="order in data.items" :key="order.orderId"><td v-if="canShip"><input v-if="shipmentEligible(order)" type="checkbox" :checked="selected.includes(order.orderId)" :aria-label="`选择订单 ${order.orderNo}`" @change="selectOrder(order.orderId, ($event.target as HTMLInputElement).checked)"><span v-else>—</span></td><td><strong class="order-number">{{ order.orderNo }}</strong><small class="order-muted">{{ time(order.createdAt) }}</small></td><td>{{order.storeName||'平台订单'}}<small v-if="order.dining" class="order-muted">餐饮店：{{order.dining.name}} · 桌号 {{order.dining.tableNumber}}</small><small class="order-muted">{{({PICKUP:'到店自提',DELIVERY:'配送到家',EXPRESS:'快递发货'} as Record<string,string>)[order.deliveryMode||'']||'按商品履约'}}</small></td><td>{{ isPointsOrder(order) ? '无需付款' : time(order.expiresAt) }}</td><td>{{paymentMethodLabel(order)}}</td><td><span class="badge" :class="order.status === 'PAID' ? 'badge-good' : 'badge-muted'">{{ paymentStatus(order) }}</span></td><td>{{ order.status === 'PAID' ? fulfillmentLabel(order.fulfillmentStatus) : '—' }}</td><td class="order-money">{{orderSettlementValue(order)}}</td><td><RouterLink :to="`/orders/${order.orderId}`" class="text-link">查看详情</RouterLink></td></tr></tbody>
+        <table><thead><tr><th v-if="canShip">选择</th><th>订单</th><th>订单归属</th><th>履约前置仓 / 仓库</th><th>付款截止</th><th>支付方式</th><th>结算状态</th><th>履约状态</th><th>结算金额 / 积分</th><th>操作</th></tr></thead>
+          <tbody><tr v-for="order in data.items" :key="order.orderId"><td v-if="canShip"><input v-if="shipmentEligible(order)" type="checkbox" :checked="selected.includes(order.orderId)" :aria-label="`选择订单 ${order.orderNo}`" @change="selectOrder(order.orderId, ($event.target as HTMLInputElement).checked)"><span v-else>—</span></td><td><strong class="order-number">{{ order.orderNo }}</strong><small class="order-muted">{{ time(order.createdAt) }}</small></td><td>{{order.source==='DINING'||order.dining?'餐饮联盟':'普通商城'}}<small v-if="order.dining" class="order-muted">餐饮店：{{order.dining.name}} · 桌号 {{order.dining.tableNumber}}</small></td><td>{{order.storeName||'平台订单'}}<small v-if="order.fulfillmentWarehouse" class="order-muted">仓库：{{order.fulfillmentWarehouse.name}}</small><small class="order-muted">{{({PICKUP:'到店自提',DELIVERY:'配送到家',EXPRESS:'快递发货'} as Record<string,string>)[order.deliveryMode||'']||'按商品履约'}}</small></td><td>{{ isPointsOrder(order) ? '无需付款' : time(order.expiresAt) }}</td><td>{{paymentMethodLabel(order)}}</td><td><span class="badge" :class="order.status === 'PAID' ? 'badge-good' : 'badge-muted'">{{ paymentStatus(order) }}</span></td><td>{{ order.status === 'PAID' ? fulfillmentLabel(order.fulfillmentStatus) : '—' }}</td><td class="order-money">{{orderSettlementValue(order)}}</td><td><RouterLink :to="`/orders/${order.orderId}`" class="text-link">查看详情</RouterLink></td></tr></tbody>
         </table>
       </div>
       <div class="order-pagination"><span>共 {{ data.total }} 单 · 第 {{ page }} 页</span><div><button class="secondary-button" :disabled="page <= 1" @click="changePage(-1)">上一页</button><button class="secondary-button" :disabled="page * data.pageSize >= data.total" @click="changePage(1)">下一页</button></div></div>

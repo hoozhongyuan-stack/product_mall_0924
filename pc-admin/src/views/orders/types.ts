@@ -45,6 +45,7 @@ export interface Reconciliation {
   actorId: string; actorName?: string; createdAt?: string; authorizedAt?: string | null; receiptId?: string | null; outcome?: string
 }
 export interface Order {
+  source?:'DINING'|'REGULAR';fulfillmentWarehouse?:{id:string;name:string}|null
   dining?:{restaurantId:string;name:string;address:string;tableNumber:string}|null
   storeId?:string|null;storeName?:string;deliveryMode?:string
   orderKind?:'CASH'|'POINTS';exchangePoints?:number
