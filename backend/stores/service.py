@@ -3,10 +3,12 @@ import math
 import re
 from decimal import Decimal, InvalidOperation
 from django.db import transaction
-from catalog.models import Product
+from django.db.models import Prefetch
+from catalog.models import Product, Sku
+from catalog.spec_read import specification_label, specification_prefetch
 from inventory.models import Warehouse, InventoryBalance
 from inventory.pool_access import resolve_anchor_ids
-from inventory.store_access import available_base_units, set_available_stock
+from inventory.store_access import available_base_units, set_available_stock, shortage_product_ids
 from .access import StoreError
 from .models import Store, StoreProduct
 
@@ -15,6 +17,8 @@ FIELD_MAP = {'name':'name','contactName':'contact_name','contactPhone':'contact_
 
 def store_data(store,admin=False,latitude=None,longitude=None):
     result = {'id':str(store.id),**{key:getattr(store,value) for key,value in FIELD_MAP.items()},'revision':store.revision}
+    result['logoAssetId'] = str(store.logo_id) if store.logo_id else None
+    result['logoUrl'] = f'/api/v1/{"admin" if admin else "app"}/assets/{store.logo_id}/file' if store.logo_id else None
     for key in ('latitude','longitude'):
         result[key] = float(result[key]) if result[key] is not None else None
     if admin:
@@ -32,13 +36,13 @@ def distance_meters(lat1,lng1,lat2,lng2):
 
 
 def validated_fields(body,update=False):
-    if set(body)-set(FIELD_MAP)-({'revision'} if update else set()):
+    if set(body)-set(FIELD_MAP)-{'logoAssetId'}-({'revision'} if update else set()):
         raise StoreError('包含未支持的前置仓字段。')
     if not update and not {'name','contactName','contactPhone','address'}.issubset(body):
         raise StoreError('请填写前置仓名称、联系人、联系电话和地址。')
     result = {}
     for key,value in body.items():
-        if key == 'revision':
+        if key in ('revision', 'logoAssetId'):
             continue
         if key in ('enabled','acceptingOrders'):
             if type(value) is not bool:
@@ -69,7 +73,7 @@ def validated_fields(body,update=False):
     return result
 
 
-def save_store(body,store=None):
+def save_store(body,store=None,actor=None):
     fields = validated_fields(body,store is not None)
     with transaction.atomic():
         if store is None:
@@ -84,18 +88,37 @@ def save_store(body,store=None):
             for field,value in fields.items():
                 setattr(store,field,value)
             store.revision += 1
+        if 'logoAssetId' in body:
+            from .logo import resolve_logo
+            store.logo = resolve_logo(body['logoAssetId'], actor, store.logo_id)
         if (store.latitude is None)!=(store.longitude is None):
             raise StoreError('经纬度须同时填写。')
         store.save()
         return store
 
 
-def products_data(store,product_id=None,offset=0,limit=100,query=''):
-    queryset=Product.objects.filter(fulfillment_kind='SHIP').exclude(status='DRAFT')
-    if product_id is not None:queryset=queryset.filter(pk=product_id)
-    if query:queryset=queryset.filter(name__icontains=query[:120])
-    products=list(queryset.prefetch_related('skus__current_unit').order_by('name','id')[offset:offset+limit])
-    listings = {row.product_id:row for row in StoreProduct.objects.filter(store=store)}
+def product_queryset(store, query='', sale_filter='ALL'):
+    queryset = Product.objects.filter(fulfillment_kind='SHIP').exclude(status='DRAFT')
+    if query:
+        queryset = queryset.filter(name__icontains=query[:120])
+    selling = StoreProduct.objects.filter(store=store, on_sale=True).values('product_id')
+    if sale_filter == 'ON_SALE':
+        queryset = queryset.filter(status='ON_SALE', id__in=selling)
+    elif sale_filter == 'OFF_SALE':
+        queryset = queryset.exclude(status='ON_SALE', id__in=selling)
+    elif sale_filter == 'SHORTAGE':
+        queryset = queryset.filter(id__in=shortage_product_ids(store))
+    return queryset
+
+
+def products_data(store,product_id=None,offset=0,limit=100,query='',sale_filter='ALL'):
+    queryset = product_queryset(store, query, sale_filter)
+    if product_id is not None:
+        queryset = queryset.filter(pk=product_id)
+    sku_rows = Sku.objects.select_related('current_unit').prefetch_related(specification_prefetch())
+    products = list(queryset.select_related('category__parent').prefetch_related(
+        Prefetch('skus', queryset=sku_rows)).order_by('name','id')[offset:offset+limit])
+    listings = {row.product_id:row for row in StoreProduct.objects.filter(store=store, product_id__in=[product.id for product in products])}
     skus = [sku for product in products for sku in product.skus.all()]
     anchors = resolve_anchor_ids([sku.id for sku in skus])
     balances = {row.sku_id:row for row in InventoryBalance.objects.filter(warehouse_id=store.warehouse_id,sku_id__in=set(anchors.values()))}
@@ -106,8 +129,11 @@ def products_data(store,product_id=None,offset=0,limit=100,query=''):
         for sku in product.skus.all():
             unit,anchor = sku.current_unit,anchors[sku.id]
             balance = balances.get(anchor)
-            rows.append({'id':str(sku.id),'skuCode':sku.sku_code,'specKey':sku.spec_key,'platformStatus':sku.sale_status,'anchorSkuId':str(anchor),'baseUnit':unit.base_unit if unit else '', 'saleUnit':unit.sale_unit if unit else '', 'ratio':unit.ratio if unit else None,'availableBaseUnits':balance.on_hand_base_units-balance.reserved_base_units if balance else 0,'reservedBaseUnits':balance.reserved_base_units if balance else 0})
-        result.append({'id':str(product.id),'name':product.name,'platformStatus':product.status,'onSale':bool(listing and listing.on_sale),'revision':listing.revision if listing else 0,'skus':rows})
+            rows.append({'id':str(sku.id),'skuCode':sku.sku_code,'specKey':sku.spec_key,'specLabel':specification_label(sku),'platformStatus':sku.sale_status,'anchorSkuId':str(anchor),'baseUnit':unit.base_unit if unit else '', 'saleUnit':unit.sale_unit if unit else '', 'ratio':unit.ratio if unit else None,'availableBaseUnits':balance.on_hand_base_units-balance.reserved_base_units if balance else 0,'reservedBaseUnits':balance.reserved_base_units if balance else 0})
+        public_image = bool(product.main_image_id and product.status == 'ON_SALE' and
+            product.category.status == 'ACTIVE' and product.category.parent_id and
+            product.category.parent.status == 'ACTIVE' and any(s.sale_status == 'ON_SALE' for s in product.skus.all()))
+        result.append({'id':str(product.id),'mainImageUrl':f'/api/v1/app/assets/{product.main_image_id}/file' if public_image else None,'name':product.name,'platformStatus':product.status,'onSale':bool(listing and listing.on_sale),'revision':listing.revision if listing else 0,'skus':rows})
     return result
 
 
@@ -124,6 +150,8 @@ def update_product(store,product_id,body,member):
         product = Product.objects.filter(pk=product_id,fulfillment_kind='SHIP').exclude(status='DRAFT').first()
         if not product:
             raise StoreError('商品不存在。','PRODUCT_NOT_FOUND',404)
+        if body.get('onSale') is True and product.status != 'ON_SALE':
+            raise StoreError('平台已下架该商品，暂不能在前置仓上架。','PLATFORM_OFF_SALE',409)
         listing,created = StoreProduct.objects.get_or_create(store=store,product=product)
         if body['revision']!=(0 if created else listing.revision):
             raise StoreError('商品已被修改，请刷新后重试。','REVISION_CONFLICT',409)

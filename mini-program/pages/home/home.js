@@ -1,3 +1,4 @@
+const storeLogo = require('../../lib/store-logo')
 const stores = require('../../lib/stores')
 const api = require('../../lib/api')
 const home = require('../../lib/home')
@@ -12,7 +13,7 @@ Page({
     share: { title: '商城首页', imageUrl: '' }, state: 'loading', error: '', components: [], versionId: '',
     theme: { pageBackgroundColor: '#FFF5E8', headerBackgroundColor: '#B63F32',
       brandTextColor: '#FFF8EF' },
-    keyword: '', failedAssets: {}, store: null, storeError: '', capsuleTop: 30, capsuleRight: 190, headerPadding: 52,
+    keyword: '', failedAssets: {}, store: null, storeLogoUrl: '', storeError: '', capsuleTop: 30, capsuleRight: 190, headerPadding: 52,
   },
 
   onLoad() {
@@ -38,9 +39,10 @@ Page({
       } else { selected = await api.get(`/api/v1/app/stores/${encodeURIComponent(selected.id)}`); if (!valid()) return; stores.select(selected) }
       const rect = wx.getMenuButtonBoundingClientRect ? wx.getMenuButtonBoundingClientRect() : null
       const info = wx.getWindowInfo ? wx.getWindowInfo() : null
-      this.setData({ store: selected, ...(selected ? { storeError: '' } : {}), ...(rect ? { capsuleTop: rect.top, headerPadding: rect.top, capsuleRight: info ? info.windowWidth - rect.left + 12 : 190 } : {}) })
-    } catch (e) { if (valid()) this.setData({ store: null, storeError: e.message }) }
+      this.setData({ store: selected, storeLogoUrl: storeLogo.url(selected, selected && selected.logoUrl ? api.baseUrl() : ''), ...(selected ? { storeError: '' } : {}), ...(rect ? { capsuleTop: rect.top, headerPadding: rect.top, capsuleRight: info ? info.windowWidth - rect.left + 12 : 190 } : {}) })
+    } catch (e) { if (valid()) this.setData({ store: null, storeLogoUrl: '', storeError: e.message }) }
   },
+  onStoreLogoError(event) { if (event.currentTarget.dataset.url === this.data.storeLogoUrl) this.setData({ storeLogoUrl: '' }) },
   chooseStore() { wx.navigateTo({ url: '/pages/stores/list' }) },
   onShow() {
     if (startup.redirectIfPending()) return

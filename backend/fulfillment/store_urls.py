@@ -13,3 +13,8 @@ urlpatterns += [
     path('api/v1/app/store-center/stores/<uuid:store_id>/aftersales/<uuid:case_id>',aftersales_view),
     path('api/v1/app/store-center/stores/<uuid:store_id>/aftersales/<uuid:case_id>/notes',aftersales_view),
 ]
+
+from .pickup_preview import pickup_preview_view
+urlpatterns += [
+    path('api/v1/app/store-center/stores/<uuid:store_id>/orders/<uuid:order_id>/pickup-preview', pickup_preview_view),
+]

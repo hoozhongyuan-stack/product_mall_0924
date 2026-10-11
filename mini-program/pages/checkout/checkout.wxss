@@ -28,3 +28,5 @@
 .stock-detail { margin: 20rpx 0; padding: 16rpx; background: var(--mall-canvas); border-radius: 8rpx; font-size: 24rpx; }
 .stock-detail .row { padding: 8rpx 0; }
 .pilot-dialog { max-height: 80vh; overflow-y: auto; }
+
+.address-destination{font-size:30rpx;font-weight:600;line-height:1.6;margin:12rpx 0;overflow-wrap:anywhere}.delivery-verified{font-size:12px;color:#24765b;margin-top:12rpx}

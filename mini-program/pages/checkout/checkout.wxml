@@ -1,8 +1,8 @@
 <view class="pilot-page checkout-page">
     <view wx:if="{{store}}" class="card"><view class="heading">{{store.name}}</view><view class="muted">{{store.address}}</view><radio-group bindchange="selectDelivery"><label wx:for="{{deliveryModes}}" wx:key="value" class="payment-choice"><radio value="{{item.value}}" checked="{{deliveryMode === item.value}}" color="#A3202B" disabled="{{submitting || submissionPending}}"/>{{item.label}}</label></radio-group></view>
     <view wx:if="{{(store && (deliveryMode === 'DELIVERY' || deliveryMode === 'EXPRESS')) || (!store && quote.addressRequired)}}" class="card address" bindtap="chooseAddress" role="button" aria-label="查看或更换收货地址">
-      <view wx:if="{{address}}"><view class="strong">{{address.recipientName}}　{{address.phone}}</view><view>{{address.province}}{{address.city}}{{address.district}}{{address.detail}}</view></view>
-      <view wx:else class="strong">选择或新增收货地址 ›</view>
+      <view wx:if="{{address}}"><view class="strong">{{address.recipientName}}　{{address.phone}}</view><view class="address-destination">{{address.mainAddress || address.detail}}</view><view class="muted">{{address.regionLabel || address.province + address.city + address.district}}</view><view wx:if="{{deliveryMode === 'DELIVERY'}}" class="delivery-verified">当前仓可配送 · 请核对楼栋门牌</view></view>
+      <view wx:else><view class="strong">请选择收货地址</view><view class="muted">{{deliveryMode === 'DELIVERY' ? '选择已定位且在当前仓配送范围内的地址' : '选择后核对地址、门牌和收货人'}}</view></view>
     </view>
 
   <view wx:if="{{state === 'loading'}}" class="state" role="status">正在重新核对商品、运费和优惠…</view>

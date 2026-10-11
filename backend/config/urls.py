@@ -1,3 +1,4 @@
+from customers.location_views import location_view
 from django.urls import path, re_path, include
 
 from accounts import views
@@ -165,6 +166,7 @@ urlpatterns = [
     path("api/v1/app/auth/wechat", customer_views.wechat_login_view),
     path("api/v1/app/auth/logout", customer_views.logout_view),
     path("api/v1/app/me", customer_views.me_view),
+    path("api/v1/app/address-locations/<str:action>", location_view),
     path("api/v1/app/addresses", customer_views.addresses_view),
     path("api/v1/app/addresses/<uuid:address_id>", customer_views.address_detail_view),
     path("api/v1/app/checkout/quotes", checkout_views.quotes_view),

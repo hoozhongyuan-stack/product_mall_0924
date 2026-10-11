@@ -15,7 +15,7 @@ describe('store editor',()=>{
   vi.mocked(api).mockImplementation(async(path,init)=>{if(path.includes('map-search'))throw new Error('高德地图密钥未配置');if(path.includes('memberSearch'))return {members:[{id:'member-1',memberNo:'m20260930203055li3',name:'张小仓'}]};if(path.endsWith('/staff'))return init?.method==='POST'?{}:{items:[]};return store})
   const w=await setup('/stores/s1')
   await w.find('input[maxlength="100"]').setValue('新店名');await w.find('form').trigger('submit');await flushPromises();const call=vi.mocked(api).mock.calls.find(c=>c[1]?.method==='PATCH');expect(JSON.parse(String(call?.[1]?.body))).not.toHaveProperty('warehouseId');expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({name:'新店名',revision:1});expect(w.text()).toContain('前置仓资料已保存')
-  await w.find('input[placeholder="输入前置仓名称或地址"]').setValue('长沙');await w.findAll('button').find(b=>b.text()==='搜索高德位置')!.trigger('click');await flushPromises();expect(w.text()).toContain('高德地图密钥未配置')
+  await w.find('input[placeholder="搜索小区、楼宇或详细地址"]').setValue('长沙');await w.findAll('button').find(b=>b.text()==='搜索地图')!.trigger('click');await flushPromises();expect(w.text()).toContain('高德地图密钥未配置')
   await w.find('input[placeholder="输入会员编号或昵称"]').setValue('m20260930203055li3');await w.findAll('button').find(b=>b.text()==='查找会员')!.trigger('click');await flushPromises();await w.findAll('button').find(b=>b.text().includes('选择 张小仓'))!.trigger('click');await w.findAll('form')[1]!.trigger('submit');await flushPromises();const staffCall=vi.mocked(api).mock.calls.find(c=>c[0]==='/stores/s1/staff'&&c[1]?.method==='POST');expect(JSON.parse(String(staffCall?.[1]?.body))).toMatchObject({memberId:'member-1'})
  })
  it('requires member selection and clears selection after search changes',async()=>{
@@ -52,4 +52,13 @@ describe('store editor',()=>{
  it('locks fields for an account without manage permission',async()=>{vi.mocked(api).mockResolvedValue(store);const w=await setup('/stores/s1',StoreDetailView,{permissionCodes:['stores.read']} as Account);expect(w.find('fieldset').attributes('disabled')).toBeDefined();expect(w.text()).not.toContain('保存前置仓');expect(w.text()).not.toContain('保存人员授权')})
  it('reports a load failure with retry',async()=>{vi.mocked(api).mockRejectedValue(new Error('服务暂不可用'));const w=await setup('/stores/s1');expect(w.text()).toContain('服务暂不可用');vi.mocked(api).mockImplementation(async path=>path.endsWith('/staff')?{items:[]}:store);await w.findAll('button').find(b=>b.text()==='重新读取')!.trigger('click');await flushPromises();expect(w.find('input').element.value).toBe('湘江路店')})
  it('shows unknown balances and disabled withdrawal on account detail',async()=>{vi.mocked(api).mockResolvedValue({storeId:'s1',storeName:'湘江路店',settlementReady:false,withdrawalReady:false,reason:'结算规则尚未配置',balance:{pendingFen:null,availableFen:null,frozenFen:null,paidFen:null},income:[],withdrawals:[]});const w=await setup('/stores/accounts/s1',StoreAccountDetailView);expect(w.text()).toContain('结算规则尚未配置');expect(w.text()).not.toContain('¥0.00');expect(w.find('button[disabled]').text()).toBe('提现待配置')})
+ it('ignores late save after changing warehouse including its logo',async()=>{
+ let finish!:(value:unknown)=>void
+ vi.mocked(api).mockImplementation(async(path,init)=>{if(init?.method==='PATCH')return new Promise(resolve=>finish=resolve);if(path.endsWith('/staff'))return {items:[]};return path==='/stores/s2'?{...store,id:'s2',name:'乙仓',logoAssetId:'b',logoUrl:'/b.png'}:store})
+ const w=await setup('/stores/s1');await w.find('form').trigger('submit');await w.vm.$router.push('/stores/s2');await flushPromises()
+ finish({...store,name:'甲仓保存结果',logoAssetId:'a',logoUrl:'/a.png'});await flushPromises()
+ expect(w.text()).toContain('乙仓');expect(w.text()).not.toContain('甲仓保存结果');expect(w.text()).not.toContain('前置仓资料已保存')
+ expect(w.find('img[alt="当前前置仓 Logo"]').attributes('src')).toBe('/b.png')
+ })
+
 })

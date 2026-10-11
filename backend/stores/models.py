@@ -6,6 +6,7 @@ from django.db import models
 class Store(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     warehouse = models.OneToOneField('inventory.Warehouse', on_delete=models.PROTECT, related_name='store')
+    logo = models.ForeignKey('catalog.Asset', null=True, blank=True, on_delete=models.PROTECT, related_name='store_logos')
     name = models.CharField(max_length=120)
     contact_name = models.CharField(max_length=60)
     contact_phone = models.CharField(max_length=30)

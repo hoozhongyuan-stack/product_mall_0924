@@ -14,3 +14,19 @@
 .voucher-code { font-size: 28rpx; letter-spacing: 1rpx; }
 .tracking-event, .redeem-record { position: relative; padding: 20rpx 0 20rpx 26rpx; border-top: 0; border-left: 2rpx solid var(--mall-border); }
 .tracking-event::before, .redeem-record::before { content: ''; position: absolute; top: 30rpx; left: -8rpx; width: 14rpx; height: 14rpx; border-radius: 50%; background: var(--mall-muted); }
+
+.pickup-card { text-align:center; }
+.pickup-card-heading { display:flex; justify-content:space-between; align-items:center; gap:16rpx; margin-bottom:12rpx; }
+.pickup-card-heading .section-title { margin:0; text-align:left; font-size:32rpx; }
+.pickup-badge { flex:none; font-size:24rpx; color:var(--mall-success); background:#EEF6F2; padding:6rpx 12rpx; border-radius:6rpx; }
+.pickup-qr { display:block; width:400rpx; height:400rpx; max-width:100%; margin:20rpx auto; background:#fff; }
+.pickup-qr-state { margin:20rpx auto; padding:50rpx 20rpx; min-height:180rpx; display:flex; align-items:center; justify-content:center; background:var(--mall-canvas); font-size:26rpx; color:var(--mall-muted); }
+.pickup-code-label { font-size:24rpx; color:var(--mall-muted); margin-top:12rpx; }
+.pickup-code { display:block; margin:8rpx 0; font-size:27rpx; font-weight:700; letter-spacing:1rpx; overflow-wrap:anywhere; }
+.orders-page .pickup-copy { width:100%; min-height:88rpx; margin-top:14rpx; }
+.pickup-help { margin-top:14rpx; }
+.pickup-result { text-align:left; padding:20rpx 0; }
+.pickup-result .muted { margin-top:12rpx; }
+.pickup-store .muted { margin-top:8rpx; }
+.pickup-store-actions { display:flex; gap:16rpx; }
+.orders-page .pickup-store-actions button { flex:1; min-width:0; min-height:88rpx; }

@@ -40,11 +40,24 @@ def delivery_data(order, *, include_code=False):
         'preparedAt': row.prepared_at.isoformat() if row else None,
         'dispatchedAt': row.dispatched_at.isoformat() if row and row.dispatched_at else None,
         'completedAt': row.completed_at.isoformat() if row and row.completed_at else None}
-    if include_code and row and row.mode == 'PICKUP' and row.status == 'READY' and order.status == 'PAID':
+    if include_code and row and row.mode == 'PICKUP' and row.status == 'READY' and order.status == 'PAID' and pickup_available(order):
         result['pickupCode'] = pickup_code(order.id, row.nonce)
         from .qr import voucher_qr_data_url
         result['pickupQrDataUrl'] = voucher_qr_data_url(result['pickupCode'])
     return result
+
+
+def pickup_available(order):
+    """Suppress customer bearer when the physical lines cannot be handed over."""
+    from aftersales.models import AfterSaleCase
+    from aftersales.service import ACTIVE
+    from aftersales.read import line_summaries
+    lines = list(order.lines.filter(fulfillment_kind='SHIP'))
+    ids = [line.id for line in lines]
+    if AfterSaleCase.objects.filter(order_line_id__in=ids, status__in=ACTIVE).exists():
+        return False
+    facts = line_summaries(ids)
+    return any(line.quantity > facts.get(line.id, {}).get('refundedQuantity', 0) for line in lines)
 
 
 def operate(member, store_id, order_id, body, request_key):

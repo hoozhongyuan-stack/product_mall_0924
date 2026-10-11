@@ -179,6 +179,8 @@ def orphan_assets():
         .exclude(id__in=Product.objects.filter(video__isnull=False).values("video_id"))\
         .exclude(id__in=ProductGalleryImage.objects.values("asset_id"))\
         .exclude(id__in=ProductDescriptionImage.objects.values("asset_id"))
+    from stores.models import Store
+    unbound = unbound.exclude(id__in=Store.objects.filter(logo__isnull=False).values('logo_id'))
     for query in retained_asset_id_queries():
         unbound = unbound.exclude(id__in=query)
     return unbound

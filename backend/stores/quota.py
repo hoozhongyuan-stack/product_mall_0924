@@ -17,7 +17,7 @@ def allowed(request,scope):
         if row.window_start<=now-timedelta(minutes=1):
             row.count=0
             row.window_start=now
-        limit=20 if scope=='map_search' else 120
+        limit=20 if scope in ('map_search', 'map_reverse', 'amap_proxy', 'pickup_preview_view') else 120
         if row.count>=limit:return False
         row.count+=1
         row.save(update_fields=['count','window_start'])

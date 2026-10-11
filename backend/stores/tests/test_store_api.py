@@ -147,6 +147,104 @@ class StoreApiTests(StoreAccessTests):
             self.assertEqual(self.client.get(f'/api/v1/app/store-center/stores/{self.other.id}/products').status_code,403)
         self.assertEqual(Client().get('/api/v1/app/store-center/stores').status_code,401)
 
+    def test_product_summary_has_readable_specs_and_safe_thumbnail(self):
+        from catalog.models import SpecAxis, SpecOption, SkuSpecSelection
+        axis = SpecAxis.objects.create(product=self.product, name='容量', sort_order=0)
+        option = SpecOption.objects.create(axis=axis, value='500ml', sort_order=0)
+        SkuSpecSelection.objects.create(sku=self.sku, axis=axis, option=option)
+        with patch('stores.views.require_member', return_value=(self.member, None)):
+            result = self.client.get(f'/api/v1/app/store-center/stores/{self.store.id}/products')
+        row = result.json()['data']['items'][0]
+        self.assertEqual(row['skus'][0]['specLabel'], '容量：500ml')
+        self.assertIsNone(row['mainImageUrl'])
+        from catalog.models import Asset, Category
+        parent = Category.objects.create(name='食品')
+        self.product.category.parent = parent
+        self.product.category.save()
+        image = Asset.objects.create(kind='IMAGE', content_type='image/png', byte_size=1,
+            width=1, height=1, sha256='1'*64, original_name='test.png', stored_name='product/test.png',
+            created_by=self.owner)
+        self.product.main_image = image
+        self.product.save()
+        with patch('stores.views.require_member', return_value=(self.member, None)):
+            result = self.client.get(f'/api/v1/app/store-center/stores/{self.store.id}/products')
+        self.assertEqual(result.json()['data']['items'][0]['mainImageUrl'],
+            f'/api/v1/app/assets/{image.id}/file')
+        self.product.manually_off_sale = True
+        self.product.status = 'OFF_SALE'
+        self.product.save()
+        with patch('stores.views.require_member', return_value=(self.member, None)):
+            result = self.client.get(f'/api/v1/app/store-center/stores/{self.store.id}/products')
+        self.assertIsNone(result.json()['data']['items'][0]['mainImageUrl'])
+
+    def test_product_spec_projection_queries_do_not_grow_per_sku(self):
+        from catalog.models import Sku, SkuSpecSelection, SpecAxis, SpecOption
+        from stores.service import products_data
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        axis = SpecAxis.objects.create(product=self.product, name='容量', sort_order=0)
+        option = SpecOption.objects.create(axis=axis, value='500ml', sort_order=0)
+        SkuSpecSelection.objects.create(sku=self.sku, axis=axis, option=option)
+        with CaptureQueriesContext(connection) as first:
+            products_data(self.store)
+        for index in range(10):
+            sku = Sku.objects.create(product=self.product, sku_code=f'NEW-{index}',
+                spec_key=f'NEW-{index}', list_price_fen=100, sale_status='OFF_SALE')
+            SkuSpecSelection.objects.create(sku=sku, axis=axis, option=option)
+        with CaptureQueriesContext(connection) as larger:
+            data = products_data(self.store)
+        self.assertEqual(len(first), len(larger))
+        self.assertTrue(all(row['specLabel'] == '容量：500ml' for row in data[0]['skus']))
+
+    def test_product_filters_apply_before_pagination_and_respect_shared_units(self):
+        from catalog.models import Product, Sku, SkuUnitVersion
+        from inventory.models import InventoryBalance, StockPool, StockPoolSku
+        from stores.models import StoreProduct
+        InventoryBalance.objects.create(warehouse=self.store.warehouse, sku=self.sku,
+            on_hand_base_units=5, reserved_base_units=0)
+        pool = StockPool.objects.create(anchor_sku=self.sku, base_unit='瓶')
+        StockPoolSku.objects.create(sku=self.sku, pool=pool)
+        box = Sku.objects.create(product=self.product, sku_code='BOX', spec_key='箱',
+            list_price_fen=600, sale_status='ON_SALE')
+        box.current_unit = SkuUnitVersion.objects.create(sku=box, base_unit='瓶', sale_unit='箱', ratio=6)
+        box.save()
+        StockPoolSku.objects.create(sku=box, pool=pool)
+        product = Product.objects.create(name='A缺货', product_no='OUT', category=self.product.category,
+            fulfillment_kind='SHIP', status='ON_SALE', ever_on_sale=True)
+        sku = Sku.objects.create(product=product, sku_code='OUT', spec_key='默认', list_price_fen=1,
+            sale_status='ON_SALE')
+        sku.current_unit = SkuUnitVersion.objects.create(sku=sku, base_unit='件', sale_unit='件', ratio=1)
+        sku.save()
+        StoreProduct.objects.create(store=self.store, product=product, on_sale=True)
+        path = f'/api/v1/app/store-center/stores/{self.store.id}/products'
+        with patch('stores.views.require_member', return_value=(self.member, None)):
+            data = self.client.get(path, {'saleFilter':'SHORTAGE', 'pageSize':1}).json()['data']
+            self.assertEqual(data['total'], 2)
+            self.assertEqual(data['items'][0]['id'], str(product.id))
+            InventoryBalance.objects.filter(warehouse=self.store.warehouse, sku=self.sku).update(on_hand_base_units=12)
+            self.assertEqual(self.client.get(path, {'saleFilter':'SHORTAGE'}).json()['data']['total'], 1)
+            InventoryBalance.objects.filter(warehouse=self.store.warehouse, sku=self.sku).update(on_hand_base_units=5)
+            self.sku.sale_status = 'OFF_SALE'
+            self.sku.save()
+            self.assertEqual(self.client.get(path, {'saleFilter':'SHORTAGE'}).json()['data']['total'], 2)
+            self.product.manually_off_sale = True
+            self.product.status = 'OFF_SALE'
+            self.product.save()
+            self.assertEqual(self.client.get(path, {'saleFilter':'ON_SALE'}).json()['data']['total'], 1)
+            self.assertEqual(self.client.get(path, {'saleFilter':'OFF_SALE'}).json()['data']['total'], 1)
+            self.assertEqual(self.client.get(path, {'saleFilter':'bad'}).status_code, 400)
+            self.assertEqual(self.client.get(path + '?saleFilter=ALL&saleFilter=SHORTAGE').status_code, 400)
+
+    def test_platform_down_cannot_be_overridden_by_store(self):
+        self.product.manually_off_sale = True
+        self.product.status = 'OFF_SALE'
+        self.product.save()
+        with patch('stores.views.require_member', return_value=(self.member, None)):
+            result = self.send('patch', f'/api/v1/app/store-center/stores/{self.store.id}/products/{self.product.id}',
+                {'revision':1, 'onSale':True})
+        self.assertEqual(result.status_code, 409)
+        self.assertEqual(result.json()['error']['code'], 'PLATFORM_OFF_SALE')
+
     @override_settings(AMAP_WEB_SERVICE_KEY='')
     def test_map_unconfigured_is_explicit(self):
         self.assertEqual(self.client.get('/api/v1/admin/stores/map-search?q=人民路').status_code,503)

@@ -1,0 +1,17 @@
+<view class="location-page">
+  <view class="search-panel">
+    <view class="search-row"><input class="city" value="{{city}}" bindinput="changeCity" placeholder="收货城市" maxlength="40" aria-label="收货城市" /><input class="query" value="{{query}}" bindinput="changeQuery" bindconfirm="search" confirm-type="search" placeholder="小区、大厦或街道" maxlength="100" aria-label="搜索收货位置" /></view>
+    <button class="primary" bindtap="search" loading="{{busy}}" disabled="{{busy}}">搜索收货位置</button>
+    <view class="location-actions"><button bindtap="currentLocation" disabled="{{busy}}">使用当前位置</button><button bindtap="nativeLocation" disabled="{{busy}}">在地图中选择</button></view>
+  </view>
+  <view class="hint">请核对城市、区县与地点，避免选中同名小区。当前位置不会自动作为收货地址。</view>
+  <view wx:if="{{error}}" class="message" role="alert">{{error}}</view>
+  <view wx:if="{{state === 'loading'}}" class="state" role="status">正在搜索位置…</view>
+  <view wx:elif="{{state === 'empty'}}" class="state">没有匹配位置，试试完整小区名称或更换城市。</view>
+  <view wx:elif="{{!items.length && state === 'ready'}}" class="state">填写城市与小区名称，搜索具体收货位置。</view>
+  <button wx:for="{{items}}" wx:key="index" class="poi {{candidate && candidate.latitude === item.latitude && candidate.longitude === item.longitude && candidate.poiName === item.poiName ? 'selected' : ''}}" data-index="{{index}}" bindtap="select">
+    <view class="poi-title">{{item.poiName}}</view><view class="poi-region">{{item.province}} · {{item.city}} · {{item.district}}</view><view class="poi-address">{{item.locationAddress}}</view>
+  </button>
+  <view wx:if="{{candidate && eligibility}}" class="message {{eligibility.code === 'ELIGIBLE' ? 'good' : ''}}">{{eligibility.message}}</view>
+  <view class="footer"><view class="footer-copy">{{candidate ? candidate.city + ' · ' + candidate.district + ' · ' + candidate.poiName : '请选择具体收货位置后确认'}}</view><button class="primary" bindtap="confirm" disabled="{{!candidate || busy}}">确认收货位置</button></view>
+</view>

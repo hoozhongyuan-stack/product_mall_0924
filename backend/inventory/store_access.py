@@ -13,6 +13,21 @@ def available_base_units(store,sku_ids):
     return {sku_id:values.get(anchor,0) for sku_id,anchor in anchors.items()}
 
 
+def shortage_product_ids(store):
+    """SQL read projection: any active sale SKU cannot supply one sale unit."""
+    from django.db.models import F, OuterRef, Subquery, Value, BigIntegerField
+    from django.db.models.functions import Coalesce
+    from .models import StockPoolSku
+    anchor = StockPoolSku.objects.filter(sku_id=OuterRef('pk')).values('pool__anchor_sku_id')[:1]
+    skus = Sku.objects.filter(sale_status='ON_SALE', current_unit__isnull=False).annotate(
+        stock_anchor=Coalesce(Subquery(anchor), F('id')))
+    balance = InventoryBalance.objects.filter(warehouse_id=store.warehouse_id,
+        sku_id=OuterRef('stock_anchor')).annotate(
+            available=F('on_hand_base_units')-F('reserved_base_units')).values('available')[:1]
+    return skus.annotate(available=Coalesce(Subquery(balance), Value(0),
+        output_field=BigIntegerField())).filter(available__lt=F('current_unit__ratio')).values('product_id')
+
+
 def set_available_stock(store,sku_id,available,expected,member):
     if type(available) is not int or not 0 <= available <= 1000000000 or type(expected) is not int or expected < 0:
         raise StoreError('库存须为非负整数，且必须携带读取时的库存值。')

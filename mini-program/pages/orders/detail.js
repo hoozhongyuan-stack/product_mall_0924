@@ -5,14 +5,27 @@ const wechat = require('../../lib/wechat-payment')
 const voucherImages = require('../../lib/voucher-image')
 const { navigateInternal } = require('../../lib/page-links')
 
+function pickupDisplay(order) {
+  const delivery = order.deliveryMode === 'PICKUP' && order.storeDelivery
+  const ready = order.status === 'PAID' && delivery && delivery.status === 'WAITING_PICKUP'
+  const labels = { WAITING_PREPARATION: '待备货', WAITING_PICKUP: '待自提', COMPLETED: '已完成自提',
+    AFTER_SALE: '售后处理中', REFUNDED: '已退款' }
+  return { isPickup: order.deliveryMode === 'PICKUP', pickupCode: ready && typeof delivery.pickupCode === 'string' ? delivery.pickupCode : '',
+    pickupStatusLabel: order.status !== 'PAID' ? '付款确认后可自提' : labels[delivery && delivery.status] || '自提状态待核实',
+    pickupCompletedLabel: delivery && delivery.completedAt ? orders.dateLabel(delivery.completedAt) : '',
+    pickupReady: !!ready }
+}
+
 Page({
   data: { state: 'loading', error: '', order: null, items: [], reports: [], statusLabel: '',
     isPaid: false, canReport: false, canCancel: false, isResult: false, resultTitle: '',
     note: '', actionError: '', actionMessage: '', reporting: false, cancelling: false,
     paying: false, querying: false, canPayWechat: false, showWechatPayment: false, paymentUncertain: false,
     confirmingReceipt: false, shipment: null, canConfirmReceipt: false, failedVoucherImages: {},
+    pickupCode: '', pickupQrPath: '', pickupQrLoading: false, pickupQrFailed: false, isPickup: false,
     voucherQrPaths: {}, voucherQrLoading: {}, trackingState: 'idle', trackingEvents: [] },
   onLoad(options) {
+    this.hidden = false
     this.orderId = options.id || ''
     this.paymentIntent = wechat.load(this.orderId)
     this.setData({ paymentUncertain: !!this.paymentIntent && this.paymentIntent.phase === 'PAYMENT_UNKNOWN' })
@@ -21,15 +34,23 @@ Page({
     return this.refresh()
   },
   onShow() {
+    this.hidden = false
     if (!this.shown) { this.shown = true; return }
     return this.refresh()
   },
-  onUnload() { this.trackingToken = (this.trackingToken || 0) + 1; this.resetVoucherImages() },
+  onHide() {
+    this.hidden = true
+    this.refreshToken = (this.refreshToken || 0) + 1
+    this.trackingToken = (this.trackingToken || 0) + 1
+    this.resetVoucherImages()
+  },
+  onUnload() { this.hidden = true; this.refreshToken = (this.refreshToken || 0) + 1; this.trackingToken = (this.trackingToken || 0) + 1; this.resetVoucherImages() },
   onPullDownRefresh() { return this.refresh().finally(() => wx.stopPullDownRefresh()) },
   resetVoucherImages() {
     this.voucherImageToken = (this.voucherImageToken || 0) + 1
     voucherImages.cleanup()
-    this.setData({ voucherQrPaths: {}, voucherQrLoading: {}, failedVoucherImages: {} })
+    this.setData({ voucherQrPaths: {}, voucherQrLoading: {}, failedVoucherImages: {},
+      pickupCode: '', pickupQrPath: '', pickupQrLoading: false, pickupQrFailed: false })
   },
   async refresh() {
     if (this.data.reporting || this.data.cancelling || this.data.paying || this.data.querying || this.data.confirmingReceipt) return
@@ -123,15 +144,20 @@ Page({
     this.setData({ paymentUncertain: false, canPayWechat: false, showWechatPayment: false })
   },
   acceptOrder(order) {
+    if (this.hidden) return
     this.resetVoucherImages()
     const display = orders.present(order)
+    const pickup = pickupDisplay(order)
+    const safeDelivery = order.storeDelivery ? { ...order.storeDelivery, pickupCode: undefined, pickupQrDataUrl: undefined } : null
+    const safeDisplay = { ...display, order: { ...display.order, storeDelivery: safeDelivery }, storeDelivery: safeDelivery }
     if (order.status !== 'PENDING_PAYMENT') this.clearPayment()
     const qrRows = order.status === 'PAID' ? order.items.filter((item) => item.fulfillmentKind === 'REDEEM' &&
       item.fulfillment && typeof item.fulfillment.voucherQrDataUrl === 'string' && item.fulfillment.voucherQrDataUrl) : []
     const token = this.voucherImageToken
     const memberSession = wx.getStorageSync('mall.memberToken')
     this.displayMemberToken = memberSession
-    this.setData({ ...display, state: 'ready', voucherQrLoading: Object.fromEntries(qrRows.map((item) => [item.orderLineId, true])) })
+    this.setData({ ...safeDisplay, ...pickup, state: 'ready', voucherQrLoading: Object.fromEntries(qrRows.map((item) => [item.orderLineId, true])) })
+    if (pickup.pickupCode) this.preparePickupQr(order.storeDelivery.pickupQrDataUrl, token, memberSession)
     qrRows.forEach((item) => voucherImages.write(item.fulfillment.voucherQrDataUrl).then((path) => {
       if (token !== this.voucherImageToken || memberSession !== wx.getStorageSync('mall.memberToken')) {
         voucherImages.release(path); return
@@ -143,6 +169,64 @@ Page({
       this.setData({ failedVoucherImages: { ...this.data.failedVoucherImages, [item.orderLineId]: true },
         voucherQrLoading: { ...this.data.voucherQrLoading, [item.orderLineId]: false } })
     }))
+  },
+  async preparePickupQr(dataUrl, token, identity) {
+    if (!dataUrl) { this.setData({ pickupQrFailed: true }); return }
+    this.setData({ pickupQrLoading: true })
+    try {
+      const path = await voucherImages.write(dataUrl)
+      if (this.hidden || token !== this.voucherImageToken || identity !== wx.getStorageSync('mall.memberToken')) {
+        voucherImages.release(path)
+        if (!this.hidden && identity !== wx.getStorageSync('mall.memberToken')) this.paymentError({ statusCode: 401, message: '登录状态已改变，请重新查看自提凭证。' })
+        return
+      }
+      this.setData({ pickupQrPath: path, pickupQrLoading: false })
+    } catch (_) {
+      if (this.hidden || token !== this.voucherImageToken) return
+      if (identity !== wx.getStorageSync('mall.memberToken')) {
+        this.paymentError({ statusCode: 401, message: '登录状态已改变，请重新查看自提凭证。' }); return
+      }
+      this.setData({ pickupQrFailed: true, pickupQrLoading: false })
+    }
+  },
+  onPickupImageError() {
+    if (this.data.pickupQrPath) voucherImages.release(this.data.pickupQrPath)
+    this.setData({ pickupQrPath: '', pickupQrLoading: false, pickupQrFailed: true })
+  },
+  pickupIdentity() {
+    if (this.hidden || !session.loggedIn() || this.displayMemberToken !== wx.getStorageSync('mall.memberToken')) {
+      this.paymentError({ statusCode: 401, message: '请重新登录查看自己的自提订单。' }); return false
+    }
+    return true
+  },
+  copyPickup() {
+    if (!this.pickupIdentity() || !this.data.pickupReady || !this.data.pickupCode) return
+    const identity = this.displayMemberToken
+    wx.setClipboardData({ data: this.data.pickupCode,
+      success: () => { if (!this.hidden && identity === wx.getStorageSync('mall.memberToken')) this.setData({ actionMessage: '完整自提凭证已复制，请交给工作人员查验。', actionError: '' }) },
+      fail: () => { if (!this.hidden && identity === wx.getStorageSync('mall.memberToken')) this.setData({ actionError: '复制失败，请长按备用凭证复制。' }) } })
+  },
+  navigatePickup() {
+    if (!this.pickupIdentity()) return
+    const store = this.data.order && this.data.order.store
+    if (!store) return
+    const latitude = Number(store.latitude), longitude = Number(store.longitude)
+    if (store.latitude == null || store.longitude == null || !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+        Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+      this.setData({ actionError: '前置仓暂未提供导航位置，请联系前置仓。' }); return
+    }
+    const identity = this.displayMemberToken
+    wx.openLocation({ latitude, longitude, name: this.data.order.storeName, address: store.address || '',
+      fail: () => { if (!this.hidden && identity === wx.getStorageSync('mall.memberToken')) this.setData({ actionError: '导航暂不可用，请按前置仓地址前往。' }) } })
+  },
+  contactPickup() {
+    if (!this.pickupIdentity()) return
+    const phone = this.data.order && this.data.order.store && this.data.order.store.contactPhone
+    if (typeof phone !== 'string' || !/^[+0-9 -]{5,20}$/.test(phone)) {
+      this.setData({ actionError: '暂无前置仓联系电话，请通过订单售后联系平台。' }); return
+    }
+    const identity = this.displayMemberToken
+    wx.makePhoneCall({ phoneNumber: phone, fail: () => { if (!this.hidden && identity === wx.getStorageSync('mall.memberToken')) this.setData({ actionError: '未能拨打电话，请稍后重试。' }) } })
   },
   async loadTracking() {
     if (!this.data.shipment || !session.loggedIn()) return

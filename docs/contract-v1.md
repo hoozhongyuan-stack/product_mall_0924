@@ -779,3 +779,27 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 - 人员授权：`POST /api/v1/admin/stores/{storeId}/staff` 接受 `{memberId,permissions,enabled}` 或 `{memberNo,permissions,enabled}`，两种身份字段互斥；保存时重新校验管理权限和会员启用状态，页面先查找并选择会员。
 - 批量分润：`POST /api/v1/admin/stores/profit-rules` 接受 `{items:[{skuId,expectedRevision}],purchaseCostFen,platformShareBps}`，最多 100 个不同规格，整体事务保存；任一规格不存在、单位缺失或修订冲突时整批不保存。使用 `stores.manage`、CSRF 和密码确认动作 `stores.profit.batch.configure`，修订号 `0`，对象 ID 为 canonical JSON `[purchaseCostFen,platformShareBps,[[skuId,expectedRevision],...]]` 的 SHA-256；规格 UUID 转小写并排序。单项 PUT 保留。PC 当前页选择、单项与批量设置均使用弹窗。
 - 系统展示名称统一为“前置仓”；已有接口路径、权限代码及数据库标识保留，历史成交快照不重写。预置权限组展示名称通过 `accounts.0013_front_warehouse_labels` 更新，保留用户自定义名称。
+
+### 配送地址位置与门牌分离（本地实现，待 UAT／真机验收）
+
+- 地址 DTO 新增 `poiName`（地点名，1—120 字）、`locationAddress`（地图地址，1—200 字）、`doorDetail`（楼栋／单元／门牌，1—120 字）。新客户端保存时成组提供这三项、完整省市区及经纬度；服务端将地图地址、地点名（地图地址未包含时补入）及门牌组成兼容的 `detail`（最多 200 字）。门牌独立编辑不清除定位。旧客户端仍可使用原字段；旧地址不自动拆分或推测地点。旧格式修改详细地址／地区时清除定位及结构化位置，避免旧坐标对应新文字。
+- 经纬度必须同时提供、有限且分别在 ±90／±180 内；有效的原生地图高精度值统一四舍五入到 6 位小数，不再仅因小数位数多而报错。地图坐标统一为 GCJ-02；历史地址有有效坐标时继续支持现有配送规则，缺失定位时提示补全。
+- `GET /api/v1/app/address-locations/search?q=&city=` 返回 `{items:[{poiName,locationAddress,province,city,district,latitude,longitude}]}`。地点词为 2—120 字，城市最多 80 字；选择城市时高德查询限制在该城市。仅返回有完整地区和有效坐标的候选。
+- `GET /api/v1/app/address-locations/reverse?latitude=&longitude=` 返回同形单个地点。坐标保留用户选择的地图点；未获得用户明确选定名称时以逆地理编码地址作为名称，不猜测相邻 POI。客户端可保留用户原生选点时明确选择的名称，不替换选点坐标。
+- `GET /api/v1/app/address-locations/eligibility?storeId=&latitude=&longitude=` 返回 `{code,message,distanceMeters?}`。`code` 为 `ELIGIBLE / UNLOCATED / OUT_OF_RANGE / UNAVAILABLE`；距离以当前前置仓现有配送半径和共享距离函数计算。此接口仅提供当前资格提示，提交订单仍须重新核对政策、地址修订与范围。
+- `GET /api/v1/app/addresses?storeId=` 保持原数组响应，为本人每个地址增加 `deliveryEligibility` 同形对象；不传 `storeId` 时保留原行为。该资格仅用于配送到家，不限制自提或快递地址选择。
+- 三个新接口均要求当前有效会员令牌，共用数据库分钟配额（每会员 60 次／分钟），超限返回 `429/RATE_LIMITED` 及 `Retry-After`。地图服务凭据由服务端读取后台加密配置；不下发高德 key，不在业务事务内进行外部网络调用。未配置／凭据不可用返回可操作的 503 提示，高德超时或异常返回脱敏的 502 提示，客户端保留地址草稿供重试。
+
+### 到店自提二维码与前置仓扫码预核对（2026-10-11）
+
+- 买家本人订单详情的 `storeDelivery` 仅在 PAID、PICKUP、READY 且没有阻止物理交付的售后、仍有未退款实物数量时返回既有 26 位 `pickupCode` 和 `pickupQrDataUrl`（PNG data URL，内容为该完整凭证）。未备货、未付款、完成或受售后限制时不返回凭证；前置仓订单读响应不返回凭证。`completedAt` 为核销完成的 ISO 时间或 null。
+- POST `/api/v1/app/store-center/stores/{storeId}/orders/{orderId}/pickup-preview` 仅接受 `{pickupCode}`；使用会员 Bearer 与当前启用的 `orders` 员工授权。只核对指定前置仓当前订单，不搜索其他订单、不产生交付事件，也不回传明文凭证。输入支持既有大小写／空格分组归一化，长度上限64；每来源地址每分钟限20次，数据库跨 worker 配额。响应均 `private,no-store`、`Vary: Authorization,Cookie`。
+- 成功返回 `{verified:true,orderId,revision,deliveryStatus:"WAITING_PICKUP",items:[{orderLineId,deliverableQuantity}]}`。`items` 仅为仍可交付的实物项，数量为原数量减已完成退款数量；全部退款项省略。前端根据 `orderLineId` 关联订单成交规格，不得沿用原数量交付已退款商品。
+- 订单非本仓／不存在统一404 `ORDER_NOT_FOUND`；未付款 `ORDER_NOT_PAID`，非自提 `DELIVERY_MODE_MISMATCH`，未备好 `INVALID_TRANSITION`，已完成 `ALREADY_PICKED_UP`，不匹配／无效凭证 `PICKUP_CODE_INVALID`，售后阻止 `AFTERSALE_BLOCKS_SHIPMENT` 或已全部退款 `NO_SHIPPING_LINES`。预核对不会查找或泄露凭证对应的另一订单。
+- 最终交付沿用 `/fulfillment` 的 COMPLETE、`expectedRevision`、完整 `pickupCode` 和 UUID 防重复键，服务端重新校验收款、授权、修订、凭证与售后，不以预核对成功替代。结果未知时保留同一防重复键查询／重试；不得换键重复交付。无新增数据库迁移。
+
+### 前置仓地图与 Logo（增量）
+- 前置仓 POST/PATCH 可选 `logoAssetId`（UUID/null，省略保留原图）；读取新增 `logoAssetId` 与 `logoUrl`。Logo 复用素材库 IMAGE：正方形、PNG/JPEG、≤5MB、文件可用，新增绑定须有素材使用权限；前端支持 WebP 来源裁切并输出 PNG。建议 400×400，不强制最小尺寸。绑定素材被引用保护，停用仓 Logo 不成为新的公开素材入口。
+- `GET /api/v1/admin/stores/map-runtime`（stores.manage）：`{jsApiKey,securityProxyUrl}`，JS Key 属浏览器运行参数；Web 服务 Key、安全码不下发。响应 private/no-store。
+- `GET /api/v1/admin/stores/map-search?q=&city=` 保持 `{configured,items:[{name,address,city,latitude,longitude}]}`；`GET /api/v1/admin/stores/map-reverse?latitude=&longitude=` 返回同样地点对象。坐标 GCJ-02；鉴权、限流、超时、响应大小限制及错误脱敏。
+- 高德 JS SDK serviceHost 指向同源 `/api/v1/admin/stores/amap-proxy/_AMapService`。代理仅允许固定地图样式/搜索/逆地理路径、GET，禁用重定向；服务器注入安全码并覆盖客户端 Key，不支持任意 URL。加载失败保留原前置仓地址、坐标。

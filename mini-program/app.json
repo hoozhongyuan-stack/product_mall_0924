@@ -10,6 +10,7 @@
     "pages/login/login",
     "pages/addresses/addresses",
     "pages/addresses/edit",
+    "pages/addresses/location",
     "pages/orders/list",
     "pages/orders/detail",
     "pages/aftersales/index",

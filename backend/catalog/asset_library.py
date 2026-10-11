@@ -78,11 +78,13 @@ def references_page(request, asset_id, granted):
     queries.append(reference_query(ProductDescriptionImage.objects.filter(asset_id=asset_id), domain="CATALOG",
         object_id="product_id", label="product__name", role="DESCRIPTION_IMAGE",
         version="product__revision", state="BOUND"))
+    from stores.models import Store
+    queries.append(reference_query(Store.objects.filter(logo_id=asset_id), domain='STORE', object_id='id', label='name', role='LOGO', version='revision', state='BOUND'))
     query = queries[0].union(*queries[1:], all=True).order_by("domain", "object_id", "ref_version", "role")
     total = query.count()
     items = []
     for row in query[(page - 1) * size:page * size]:
-        permission = {"CATALOG": "catalog.read", "PAGE": "page.read", "STARTUP": "startup.read",
+        permission = {"STORE": "stores.read", "CATALOG": "catalog.read", "PAGE": "page.read", "STARTUP": "startup.read",
                       "NAVIGATION": "navigation.read", "CUSTOMER_SERVICE": "customer_service.read"}[row["domain"]]
         allowed = permission in granted
         items.append({"domain": row["domain"], "objectId": row["object_id"] if allowed else None,

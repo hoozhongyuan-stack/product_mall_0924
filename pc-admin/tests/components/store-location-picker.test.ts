@@ -1,0 +1,26 @@
+import {afterEach,describe,it,expect,vi} from 'vitest'
+import {mount,flushPromises} from '@vue/test-utils'
+import Picker from '../../src/views/stores/StoreLocationPicker.vue'
+import {api} from '../../src/api'
+import {loadAMap} from '../../src/views/stores/amap-runtime'
+vi.mock('../../src/api',()=>({api:vi.fn()}))
+vi.mock('../../src/views/stores/amap-runtime',()=>({loadAMap:vi.fn()}))
+const events:Record<string,(e:unknown)=>void>={}
+const destroyed=vi.fn(),position=vi.fn()
+const Map=vi.fn(function(){return {on:vi.fn((name,fn)=>{events[name]=fn}),destroy:destroyed,setCenter:vi.fn(),add:vi.fn()}})
+const Marker=vi.fn(function(){return {on:vi.fn((name,fn)=>{events[name]=fn}),setPosition:position,setMap:vi.fn()}})
+const item={name:'盐田花园',city:'深圳市',address:'广东省深圳市盐田区花园路',latitude:22.59,longitude:114.25}
+let w:ReturnType<typeof mount>
+afterEach(()=>{w?.unmount();vi.clearAllMocks()})
+async function setup(failed=false){vi.mocked(api).mockResolvedValue({jsApiKey:'test',securityProxyUrl:'/api/v1/admin/stores/amap-proxy/_AMapService'} as never);if(failed)vi.mocked(loadAMap).mockRejectedValue(new Error('secret'));else vi.mocked(loadAMap).mockResolvedValue({Map,Marker} as never);w=mount(Picker,{global:{stubs:{RouterLink:true}},props:{city:'深圳',latitude:22.6,longitude:114.2,contextKey:'one',disabled:false}});await flushPromises()}
+describe('warehouse map draft',()=>{
+ it('searches but only applies explicitly confirmed point',async()=>{await setup();vi.mocked(api).mockResolvedValue({items:[item]} as never);await w.get('input[type=search]').setValue('花园');await w.get('[data-test=search]').trigger('click');await flushPromises();await w.get('[data-test=map-result]').trigger('click');expect(w.emitted('select')).toBeUndefined();await w.get('[data-test=apply-location]').trigger('click');expect(w.emitted('select')?.[0]).toEqual([item])})
+ it('reverses map clicks and clears stale draft before confirmation',async()=>{await setup();vi.mocked(api).mockResolvedValue(item as never);events.click({lnglat:{getLat:()=>22.59,getLng:()=>114.25}});await flushPromises();expect(w.text()).toContain('盐田花园');await w.get('[data-test=apply-location]').trigger('click');expect(w.emitted('select')).toHaveLength(1);expect(position).toHaveBeenCalledWith([114.25,22.59])})
+ it('keeps saved coordinate and offers retry when map unavailable',async()=>{await setup(true);expect(w.text()).toContain('地图未能加载');expect(w.text()).not.toContain('secret');expect(w.emitted('select')).toBeUndefined()})
+ it('ignores stale search after identity change and destroys map',async()=>{await setup();let resolve!:(v:unknown)=>void;vi.mocked(api).mockImplementation(()=>new Promise(r=>{resolve=r}) as never);await w.get('input[type=search]').setValue('花园');await w.get('[data-test=search]').trigger('click');await w.setProps({contextKey:'two'});resolve({items:[item]});await flushPromises();expect(w.find('[data-test=map-result]').exists()).toBe(false);expect(destroyed).toHaveBeenCalled()})
+ it('clears marker after address edits and blocks changes without permission',async()=>{await setup();await w.setProps({latitude:null,longitude:null});await w.setProps({disabled:true});events.click({lnglat:{getLat:()=>22.59,getLng:()=>114.25}});expect(w.emitted('select')).toBeUndefined();expect(w.get('[data-test=search]').attributes('disabled')).toBeDefined()})
+ it('handles empty results, rejected search and invalid points',async()=>{await setup();vi.mocked(api).mockResolvedValue({items:[{...item,latitude:Infinity}]} as never);await w.get('input[type=search]').setValue('不存在');await w.get('[data-test=search]').trigger('click');await flushPromises();expect(w.text()).toContain('未找到位置');vi.mocked(api).mockRejectedValue(new Error('查询失败'));await w.get('[data-test=search]').trigger('click');await flushPromises();expect(w.text()).toContain('查询失败');events.click({});events.click({lnglat:{getLat:()=>100,getLng:()=>114}});expect(w.find('[data-test=apply-location]').exists()).toBe(false)})
+ it('reverses dragged marker, handles reverse failure and query changes',async()=>{await setup();vi.mocked(api).mockRejectedValue(new Error('解析失败'));events.dragend({target:{getPosition:()=>({getLat:()=>22.59,getLng:()=>114.25})}});await flushPromises();expect(w.text()).toContain('解析失败');vi.mocked(api).mockResolvedValue({...item,address:''} as never);events.click({lnglat:{getLat:()=>22.59,getLng:()=>114.25}});await flushPromises();expect(w.text()).toContain('未识别该位置');vi.mocked(api).mockResolvedValue(item as never);events.click({lnglat:{getLat:()=>22.59,getLng:()=>114.25}});await flushPromises();await w.get('input[type=search]').setValue('新地址');expect(w.find('[data-test=apply-location]').exists()).toBe(false)})
+ it('allows search while SDK unavailable and retries runtime failure',async()=>{await setup(true);vi.mocked(api).mockResolvedValue({items:[item]} as never);await w.get('input[type=search]').setValue('花园');await w.get('[data-test=search]').trigger('click');await flushPromises();await w.get('[data-test=map-result]').trigger('click');expect(w.find('[data-test=apply-location]').exists()).toBe(true);vi.mocked(api).mockRejectedValue('network');await w.findAll('button').find(b=>b.text()==='重新加载地图')!.trigger('click');await flushPromises();expect(w.text()).toContain('地图未能加载')})
+
+})

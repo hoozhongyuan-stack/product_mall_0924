@@ -13,7 +13,7 @@ from customers.models import Member
 from customers.store_access import search_staff_members, resolve_staff_member
 from .models import Store,StoreStaff
 from .access import StoreError,get_store,require_staff
-from .service import store_data,save_store,products_data,update_product,account_data,account_summaries
+from .service import store_data,save_store,products_data,product_queryset,update_product,account_data,account_summaries
 
 
 def guarded(function):
@@ -50,7 +50,7 @@ def admin_stores(request,store_id=None):
                 raise StoreError('前置仓不存在。','STORE_NOT_FOUND',404)
         actor,bad=require_live(request,'stores.manage')
         if bad:return bad
-        store = save_store(parse_json_object(request),get_store(store_id) if store_id else None)
+        store = save_store(parse_json_object(request),get_store(store_id) if store_id else None, actor=actor)
         audit(request,'stores.save','store',store.id,actor=actor,after=store_data(store,True))
     return response(request,store_data(store,True),200 if store_id else 201)
 
@@ -181,12 +181,13 @@ def member_products(request,store_id,product_id=None):
             raise StoreError('前置仓不存在。','STORE_NOT_FOUND',404)
         store=require_staff(member,store_id,'products')
         if request.method=='GET':
-            from catalog.models import Product
             page,size,start=page_bounds(request)
             query=request.GET.get('search','').strip()[:120]
-            queryset=Product.objects.filter(fulfillment_kind='SHIP').exclude(status='DRAFT')
-            if query:queryset=queryset.filter(name__icontains=query)
-            return response(request,{'items':products_data(store,offset=start,limit=size,query=query),'page':page,'pageSize':size,'total':queryset.count()})
+            sale_filter = request.GET.get('saleFilter', 'ALL')
+            if len(request.GET.getlist('saleFilter')) > 1 or sale_filter not in ('ALL','ON_SALE','OFF_SALE','SHORTAGE'):
+                raise StoreError('商品筛选条件无效。')
+            queryset = product_queryset(store, query, sale_filter)
+            return response(request,{'items':products_data(store,offset=start,limit=size,query=query,sale_filter=sale_filter),'page':page,'pageSize':size,'total':queryset.count()})
         return response(request,update_product(store,product_id,parse_json_object(request),member))
 
 

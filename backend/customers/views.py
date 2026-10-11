@@ -1,11 +1,12 @@
 import hashlib
 import re
-from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import cache_control
+from django.views.decorators.vary import vary_on_headers
 
 from common.http import response as success, error as failure, method as prepare, parse_json_object
 from catalog.models import MemberGrade
@@ -32,6 +33,7 @@ def member_data(member):
 def address_data(item):
     return {"id": str(item.id), "recipientName": item.recipient_name, "phone": item.phone,
             "province": item.province, "city": item.city, "district": item.district,
+            "poiName": item.poi_name, "locationAddress": item.location_address, "doorDetail": item.door_detail,
             "detail": item.detail, "isDefault": item.is_default, "revision": item.revision,
             'latitude': str(item.latitude) if item.latitude is not None else None,
             'longitude': str(item.longitude) if item.longitude is not None else None}
@@ -40,7 +42,7 @@ def address_data(item):
 def address_fields(body, *, update=False):
     expected = {"recipientName", "phone", "province", "city", "district", "detail", "isDefault"}
     allowed = expected | ({"expectedRevision"} if update else set())
-    if not allowed.issubset(body) or set(body) - allowed - {'latitude', 'longitude'}:
+    if not allowed.issubset(body) or set(body) - allowed - {'latitude', 'longitude', 'poiName', 'locationAddress', 'doorDetail'}:
         raise ValueError("请填写完整的收货地址，且不要添加未支持的字段。")
     limits = {"recipientName": 40, "phone": 20, "province": 40, "city": 40,
               "district": 40, "detail": 200}
@@ -55,17 +57,23 @@ def address_fields(body, *, update=False):
     if type(body["isDefault"]) is not bool:
         raise ValueError("isDefault 必须为布尔值。")
     result["isDefault"] = body["isDefault"]
-    latitude, longitude = body.get('latitude'), body.get('longitude')
-    if (latitude is None) != (longitude is None):
-        raise ValueError('请填写完整的地址定位。')
-    for key, value, limit in [('latitude', latitude, 90), ('longitude', longitude, 180)]:
-        try:
-            coordinate = Decimal(str(value)) if value is not None else None
-            if coordinate is not None and (not coordinate.is_finite() or abs(coordinate) > limit or coordinate.as_tuple().exponent < -6):
-                raise ValueError('地址经纬度不正确。')
-        except InvalidOperation as exc:
-            raise ValueError('地址经纬度不正确。') from exc
-        result[key] = coordinate
+    from .location_service import coordinates
+    result['latitude'], result['longitude'] = coordinates(body.get('latitude'), body.get('longitude'))
+    structured = {'poiName': 120, 'locationAddress': 200, 'doorDetail': 120}
+    if any(key in body for key in structured):
+        for key, limit in structured.items():
+            value = body.get(key)
+            if not isinstance(value, str) or not 1 <= len(value.strip()) <= limit:
+                raise ValueError('请选择完整的收货位置并补充楼栋门牌。')
+            result[key] = value.strip()
+        if result['latitude'] is None:
+            raise ValueError('请重新选择地图位置。')
+        location = result['locationAddress']
+        if result['poiName'] not in location:
+            location += ' ' + result['poiName']
+        result['detail'] = location + ' ' + result['doorDetail']
+        if len(result['detail']) > 200:
+            raise ValueError('地址过长，请缩短楼栋门牌信息。')
     return result
 
 
@@ -77,6 +85,9 @@ def expected_revision(body):
 
 
 def assign_address(item, fields):
+    legacy_changed = ('poiName' not in fields and
+                      (item.detail != fields['detail'] or item.province != fields['province'] or
+                       item.city != fields['city'] or item.district != fields['district']))
     item.recipient_name = fields["recipientName"]
     item.phone = fields["phone"]
     item.province = fields["province"]
@@ -85,6 +96,13 @@ def assign_address(item, fields):
     item.detail = fields["detail"]
     item.latitude = fields['latitude']
     item.longitude = fields['longitude']
+    if 'poiName' in fields:
+        item.poi_name = fields['poiName']
+        item.location_address = fields['locationAddress']
+        item.door_detail = fields['doorDetail']
+    elif legacy_changed and not item._state.adding:
+        item.poi_name = item.location_address = item.door_detail = ''
+        item.latitude = item.longitude = None
 
 
 @csrf_exempt
@@ -162,6 +180,8 @@ def logout_view(request):
     return success(request, {"loggedOut": True})
 
 
+@cache_control(private=True, no_store=True)
+@vary_on_headers('Authorization', 'Cookie')
 @csrf_exempt
 def addresses_view(request):
     bad = prepare(request, "GET", "POST")
@@ -172,7 +192,17 @@ def addresses_view(request):
         return bad
     if request.method == "GET":
         items = CustomerAddress.objects.filter(member=member, active=True).order_by("-is_default", "-updated_at")
-        return success(request, [address_data(item) for item in items])
+        data = [address_data(item) for item in items]
+        if request.GET.get('storeId'):
+            from .location_views import eligibility
+            try:
+                if not data:
+                    eligibility(request.GET['storeId'], None, None)
+                for item, entry in zip(items, data):
+                    entry['deliveryEligibility'] = eligibility(request.GET['storeId'], item.latitude, item.longitude)
+            except ValueError as exc:
+                return failure(request, 400, 'VALIDATION_FAILED', str(exc))
+        return success(request, data)
     try:
         fields = address_fields(parse_body(request))
     except ValueError as exc:
@@ -193,6 +223,8 @@ def addresses_view(request):
     return success(request, address_data(item), 201)
 
 
+@cache_control(private=True, no_store=True)
+@vary_on_headers('Authorization', 'Cookie')
 @csrf_exempt
 def address_detail_view(request, address_id):
     bad = prepare(request, "PUT", "DELETE")

@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from .finance_rules import profit_rules
 from .finance_views import withdrawal_action
-from .map_views import map_search
+from .map_views import map_search, map_reverse, map_runtime, amap_proxy
 from .map_configuration import map_settings
 from .settlement_settings import settlement_settings
 
@@ -13,6 +13,9 @@ urlpatterns=[
     path('api/v1/admin/stores/<uuid:store_id>/withdrawals/<uuid:withdrawal_id>/<str:action>',withdrawal_action),
     path('api/v1/admin/stores/accounts',views.admin_accounts),
     path('api/v1/admin/stores/map-search',map_search),
+    path('api/v1/admin/stores/map-reverse',map_reverse),
+    path('api/v1/admin/stores/map-runtime',map_runtime),
+    path('api/v1/admin/stores/amap-proxy/_AMapService/<path:service_path>',amap_proxy),
     path('api/v1/admin/stores/map-settings',map_settings),
     path('api/v1/admin/stores/settlement-settings',settlement_settings),
     path('api/v1/admin/stores/<uuid:store_id>',views.admin_stores),

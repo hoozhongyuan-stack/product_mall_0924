@@ -1,4 +1,5 @@
 const stores = require('../../lib/stores')
+const deliveryAddress = require('../../lib/delivery-address')
 const api = require('../../lib/api')
 const cart = require('../../lib/cart')
 const session = require('../../lib/session')
@@ -46,6 +47,7 @@ Page({
     pointsInput: '0', benefitError: '', paymentMethod: 'OFFLINE', paymentChoices: [], offlinePolicy: null,
     submissionPending: false, submitting: false, submitError: '', loginPromptOpen: false, stockPromptOpen: false, stockAdjustable: false, stockLines: [] },
   onLoad() {
+    this.hidden=false;this.disposed=false
     this.checkoutStoreId = (stores.selected() || {}).id || null
     const modes = stores.modes(stores.selected())
     this.setData({ store: stores.selected(), deliveryModes: modes, deliveryMode: modes[0] ? modes[0].value : '', deliveryLabel: modes[0] ? modes[0].label : '' })
@@ -60,7 +62,10 @@ Page({
     }
     return this.refresh()
   },
+  onHide() { this.hidden=true;this.quoteToken=(this.quoteToken||0)+1;this.setData({address:null,quote:null,canSubmit:false}) },
+  onUnload() { this.disposed=true;this.onHide() },
   onShow() {
+    this.hidden=false
     if (!this.shown) { this.shown = true; return }
     if (this.pendingSubmission && session.loggedIn()) {
       this.setData({ submissionPending: true, state: 'uncertain', error: '上次提交的结果尚未确认。请重试确认订单结果。' })
@@ -74,6 +79,8 @@ Page({
     if (this.pendingSubmission || this.data.submitting) return
     if (((stores.selected() || {}).id || null) !== (this.checkoutStoreId || null)) { this.setData({ state: 'error', error: '前置仓已切换，请返回对应前置仓购物车重新结算。', canSubmit: false }); return }
     const token = this.quoteToken = (this.quoteToken || 0) + 1
+    const identity=wx.getStorageSync('mall.memberToken')
+    const current=()=>!this.hidden&&!this.disposed&&token===this.quoteToken&&identity===wx.getStorageSync('mall.memberToken')&&((stores.selected()||{}).id||null)===(this.checkoutStoreId||null)
     if (!Array.isArray(this.items) || !this.items.length) {
       this.setData({ state: 'empty', error: '未选择商品。', canSubmit: false }); return
     }
@@ -83,18 +90,18 @@ Page({
     try {
       let address = null
       if (session.loggedIn()) {
-        const addresses = await api.get('/api/v1/app/addresses')
+        const addresses = await api.get('/api/v1/app/addresses',this.checkoutStoreId&&this.data.deliveryMode==='DELIVERY'?{storeId:this.checkoutStoreId}:{})
         const chosen = wx.getStorageSync('mall.selectedAddressId')
-        address = addresses.find((item) => item.id === chosen) || addresses.find((item) => item.isDefault) || null
+        address = deliveryAddress.choose(addresses,chosen,this.data.deliveryMode)
       }
-      if (token !== this.quoteToken) return
+      if (!current()) return
       this.setData({ address })
       const quote = await api.post('/api/v1/app/checkout/quotes', {
         items: cart.quoteItems(this.items), ...(this.checkoutStoreId ? { storeId: this.checkoutStoreId, deliveryMode: this.data.deliveryMode } : {}), ...(address ? { addressId: address.id } : {}),
         ...(this.couponId ? { couponId: this.couponId } : {}),
         ...(this.pointsToUse ? { pointsToUse: this.pointsToUse } : {}),
       })
-      if (token !== this.quoteToken) return
+      if (!current()) return
       if (!Array.isArray(quote.lines)) throw new Error('报价内容不完整，请重新获取。')
       const amounts = settlementAmounts(quote)
       const options = couponOptions(quote)
@@ -104,7 +111,7 @@ Page({
       const pointsToUse = Number.isSafeInteger(quote.pointsToUse) ? quote.pointsToUse : this.pointsToUse
       const supportsOffline = Array.isArray(quote.availablePaymentMethods) && quote.availablePaymentMethods.includes('OFFLINE')
       const offlinePolicy = supportsOffline ? await api.get('/api/v1/app/payments/offline-policy') : null
-      if (token !== this.quoteToken) return
+      if (!current()) return
       const paymentChoices = []
       if (supportsOffline && offlinePolicy && offlinePolicy.configured === true &&
           typeof offlinePolicy.instructions === 'string' && offlinePolicy.instructions.trim()) paymentChoices.push({ value: 'OFFLINE', label: '线下支付' })
@@ -121,7 +128,7 @@ Page({
       ...amounts, offlinePolicy, paymentChoices, paymentMethod, canSubmit: !!paymentMethod && session.loggedIn() &&
         quote.orderSubmissionAvailable === true && quote.deliveryEligibilityPending !== true && amounts.settlementReady &&
         quote.ready === true && quote.confirmRequired !== true &&
-        (!quote.addressRequired || !!address),
+        (!quote.addressRequired || !!address) && (this.data.deliveryMode!=='DELIVERY'||deliveryAddress.allowed(address,'DELIVERY')),
       expiresLabel: expiryLabel(quote.expiresAt), address,
       couponOptions: options, couponIndex,
       couponLabel: selectedId ? (couponIndex ? options[couponIndex].title : '已选优惠券') :
@@ -134,7 +141,7 @@ Page({
         quote.confirmRequired ? '适用价格已变化，请确认后继续。' :
           !amounts.settlementReady ? '结算金额尚未核算完整，请稍后重试。' : '' })
     } catch (error) {
-      if (token === this.quoteToken) this.setData({ state: error.statusCode === 401 ? 'auth' : 'error',
+      if (!this.hidden&&!this.disposed&&token===this.quoteToken&&(current()||(!wx.getStorageSync('mall.memberToken')&&error.statusCode===401))) this.setData({ address:null,state: error.statusCode === 401 ? 'auth' : 'error',
         error: error.message, quote: null, canSubmit: false, total: '待核算' })
     }
   },
@@ -212,7 +219,7 @@ Page({
     if (this.data.submitting || !this.data.paymentChoices.some((choice) => choice.value === method)) return
     const quote = this.data.quote
     this.setData({ paymentMethod: method, canSubmit: session.loggedIn() && quote.orderSubmissionAvailable === true &&
-      this.data.settlementReady && quote.deliveryEligibilityPending !== true && quote.ready === true && quote.confirmRequired !== true && (!quote.addressRequired || !!this.data.address) })
+      this.data.settlementReady && quote.deliveryEligibilityPending !== true && quote.ready === true && quote.confirmRequired !== true && (!quote.addressRequired || !!this.data.address) && (this.data.deliveryMode!=='DELIVERY'||deliveryAddress.allowed(this.data.address,'DELIVERY')) })
   },
   openOrders() { wx.navigateTo({ url: '/pages/orders/list' }) },
   selectCoupon(event) {
@@ -252,7 +259,7 @@ Page({
       this.loginToContinue()
       return
     }
-    wx.navigateTo({ url: '/pages/addresses/addresses?select=1' })
+    wx.navigateTo({url:'/pages/addresses/addresses?select=1'+deliveryAddress.context(this.checkoutStoreId,this.data.deliveryMode)})
   },
   confirmChanges() {
     const current = new Map(this.data.quote.lines.map((line) => [line.skuId, line.unitPriceFen]))

@@ -16,7 +16,7 @@ function present(overview,permissions){const stats=overview.stats||{};return {
  shortcuts:SHORTCUTS.filter(x=>permissions.includes(x.permission)).map(x=>({...x,icon:`/assets/ui/${x.icon}.svg`})),
 }}
 function query(section,page,data){
- if(section==='products')return {page,pageSize:20,search:data.keyword||''}
+ if(section==='products')return {page,pageSize:20,search:data.keyword||'',...(data.productFilter?{saleFilter:data.productFilter}:{})}
  if(section==='account')return {}
  return {page,...(section==='orders'&&data.orderFilter?{fulfillment:data.orderFilter}:{}),...(section==='aftersales'&&data.activeAftersales?{status:'ACTIVE'}:{})}
 }
