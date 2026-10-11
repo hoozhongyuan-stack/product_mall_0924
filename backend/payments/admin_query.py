@@ -30,4 +30,3 @@ def query_admin_payment(order_id, actor):
         attempt.refresh_from_db()
     return {'paymentState': attempt.trade_state if attempt else ('NOTPAY' if order.status == 'PENDING_PAYMENT' else 'CLOSED'),
             'order': admin_order_data(order)}
-
