@@ -17,10 +17,15 @@ def public_asset_url(asset):
     return f"/api/v1/app/assets/{asset.id}/file" if asset else None
 
 
-def category_data(item, stats=None):
+def category_data(item, stats=None, *, public=False):
     data = {"id": str(item.id), "parentId": str(item.parent_id) if item.parent_id else None,
             "name": item.name, "sortOrder": item.sort_order, "status": item.status,
-            "revision": item.revision}
+            "revision": item.revision, "image": asset_data(item.image) if item.image else None,
+            "banner": asset_data(item.banner) if item.banner else None,
+            "imageUrl": public_asset_url(item.image), "bannerImageUrl": public_asset_url(item.banner)}
+    if public:
+        data.pop("image", None)
+        data.pop("banner", None)
     if stats is not None:
         data.update({"productCount": stats.get(item.id, (0, 0))[0],
                      "onSaleProductCount": stats.get(item.id, (0, 0))[1]})

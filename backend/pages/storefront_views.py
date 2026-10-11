@@ -362,5 +362,6 @@ def public_view(request):
     bad = method(request, "GET")
     if bad:
         return bad
-    return response(request, {"navigation": _public_domain("navigation"),
+    from .filing_views import public_filing
+    return response(request, {"filing": public_filing(), "navigation": _public_domain("navigation"),
                               "customerService": _public_domain("customer_service")})

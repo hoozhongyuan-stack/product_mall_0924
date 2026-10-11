@@ -47,3 +47,12 @@
 .leaf-item { min-height: 88rpx; }
 .product-open { color: var(--mall-brand); border: 1rpx solid var(--mall-brand); border-radius: 6rpx; padding: 4rpx 8rpx; }
 @media(max-width:320px) { .leaf-rail { width: 140rpx; } .product-pane { padding-left: 12rpx; padding-right: 12rpx; } .product-image { width: 120rpx; height: 130rpx; } .product-name { font-size: 25rpx; } }
+
+.root-items { padding:16rpx 14rpx; gap:8rpx; }
+.root-item { display:flex; flex-direction:column; align-items:center; gap:12rpx; width:136rpx; height:auto; padding:10rpx 8rpx 16rpx; line-height:1.4; font-size:25rpx; white-space:normal; }
+.root-image { width:100rpx; height:100rpx; border-radius:16rpx; background:var(--mall-brand-soft); }
+.root-fallback { display:flex; align-items:center; justify-content:center; font-size:22rpx; padding:8rpx; box-sizing:border-box; overflow:hidden; }
+.root-item.selected .root-image { outline:3rpx solid var(--mall-brand); outline-offset:4rpx; }
+.category-banner { display:block; width:100%; height:auto; margin-bottom:20rpx; border-radius:12rpx; }
+.catalog-body { min-height:calc(100vh - 380rpx); }
+.leaf-rail { height:calc(100vh - 380rpx); }

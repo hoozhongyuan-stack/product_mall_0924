@@ -113,6 +113,7 @@ def admin_asset_file_view(request, asset_id):
         catalog_reference = "catalog.read" in granted and Product.objects.filter(
             Q(main_image_id=asset_id) | Q(video_id=asset_id) | Q(gallery_images__asset_id=asset_id) |
             Q(description_images__asset_id=asset_id)).exists()
+        catalog_reference = catalog_reference or ("catalog.read" in granted and Category.objects.filter(Q(image_id=asset_id) | Q(banner_id=asset_id)).exists())
         from inventory.catalog_media import asset_is_available_to_inventory_reader
         inventory_reference = "inventory.read" in granted and asset_is_available_to_inventory_reader(asset_id)
         own_unbound_upload = "asset.upload" in granted and (
@@ -147,7 +148,8 @@ def public_asset_file_view(request, asset_id):
     exchange=asset_visible_for_exchange(asset_id)
     from stores.models import Store
     store_logo = Store.objects.filter(logo_id=asset_id, enabled=True, warehouse__enabled=True).exists()
-    if not store_logo and not product and not published_page and not published_startup and not published_storefront and not exchange:
+    category_image = Category.objects.filter(status=Category.Status.ACTIVE).filter(Q(parent__isnull=True) | Q(parent__status=Category.Status.ACTIVE)).filter(Q(image_id=asset_id) | Q(banner_id=asset_id)).exists()
+    if not category_image and not store_logo and not product and not published_page and not published_startup and not published_storefront and not exchange:
         return error(request, 404, "NOT_FOUND", "素材不可用。")
     asset = Asset.objects.filter(id=asset_id).first()
     return file_response(request, asset, public=True) if asset else error(request, 404, "NOT_FOUND", "素材不可用。")

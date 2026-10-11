@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FilingSettingsPanel from './FilingSettingsPanel.vue'
 import { confirmAction } from '../shared/confirm'
 
 import { computed, onMounted, onUnmounted, ref } from 'vue'
@@ -408,6 +409,7 @@ function rolledBack(result: RollbackResult) {
         <p v-if="shippingNotice" class="startup-success shipping-policy-notice" role="status">{{ shippingNotice }}</p>
       </template>
     </section>
+    <FilingSettingsPanel :account="account" />
     <el-dialog v-model="publishOpen" title="确认发布启动页" width="min(480px, 92vw)" @closed="publishPassword = ''">
       <p>将草稿修订 {{ draft?.revision }} 发布到小程序。下一次冷启动将读取这个版本。</p>
       <label class="startup-password">当前账号密码<el-input v-model="publishPassword" type="password" autocomplete="current-password" show-password placeholder="输入密码确认发布" @keyup.enter="publish" /></label>

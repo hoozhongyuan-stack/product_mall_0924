@@ -173,7 +173,7 @@ def verify_decodable(path, kind):
 
 
 def orphan_assets():
-    from .models import Product
+    from .models import Product, Category
     from pages.asset_references import retained_asset_id_queries
     unbound = Asset.objects.exclude(id__in=Product.objects.filter(main_image__isnull=False).values("main_image_id"))\
         .exclude(id__in=Product.objects.filter(video__isnull=False).values("video_id"))\
@@ -181,6 +181,7 @@ def orphan_assets():
         .exclude(id__in=ProductDescriptionImage.objects.values("asset_id"))
     from stores.models import Store
     unbound = unbound.exclude(id__in=Store.objects.filter(logo__isnull=False).values('logo_id'))
+    unbound = unbound.exclude(id__in=Category.objects.filter(image__isnull=False).values('image_id')).exclude(id__in=Category.objects.filter(banner__isnull=False).values('banner_id'))
     for query in retained_asset_id_queries():
         unbound = unbound.exclude(id__in=query)
     return unbound

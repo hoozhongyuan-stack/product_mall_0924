@@ -24,6 +24,7 @@ export const router = createRouter({
     { path: '/exchange-offers/new', component: () => import('./views/PointsExchangeDetailView.vue'), meta: { title: '添加兑换商品', permission: 'exchange.read' } },
     { path: '/exchange-offers/:offerId', component: () => import('./views/PointsExchangeDetailView.vue'), meta: { title: '兑换商品配置', permission: 'exchange.read' } },
     { path: '/stores', component: () => import('./views/stores/StoresView.vue'), meta: { title: '前置仓管理', permission: 'stores.read' } },
+    { path: '/stores/profit-rules', component: () => import('./views/stores/ProductProfitView.vue'), meta: { title: '商品进货价与分润', permission: 'stores.read' } },
     { path: '/stores/map-settings', component: () => import('./views/stores/StoreMapSettingsView.vue'), meta: { title: '前置仓设置', permission: 'stores.manage' } },
     { path: '/stores/accounts', component: () => import('./views/stores/StoreAccountsView.vue'), meta: { title: '前置仓账户', permission: 'stores.accounts.read' } },
     { path: '/stores/accounts/:storeId', component: () => import('./views/stores/StoreAccountDetailView.vue'), meta: { title: '账户详情', permission: 'stores.accounts.read' } },

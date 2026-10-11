@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from .finance_rules import profit_rules
+from .product_profit import product_rules, configure
 from .finance_views import withdrawal_action
 from .map_views import map_search, map_reverse, map_runtime, amap_proxy
 from .map_configuration import map_settings
@@ -8,6 +9,9 @@ from .settlement_settings import settlement_settings
 
 urlpatterns=[
     path('api/v1/admin/stores',views.admin_stores),
+    path('api/v1/admin/stores/product-profit-rules', product_rules),
+    path('api/v1/admin/stores/purchase-costs', configure, {'kind': 'cost'}),
+    path('api/v1/admin/stores/platform-shares', configure, {'kind': 'share'}),
     path('api/v1/admin/stores/profit-rules',profit_rules),
     path('api/v1/admin/stores/profit-rules/<uuid:sku_id>',profit_rules),
     path('api/v1/admin/stores/<uuid:store_id>/withdrawals/<uuid:withdrawal_id>/<str:action>',withdrawal_action),

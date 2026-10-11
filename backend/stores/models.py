@@ -75,4 +75,4 @@ class StoreMapConfiguration(models.Model):
     class Meta:
         constraints = [models.CheckConstraint(condition=models.Q(id=1), name='store_map_singleton')]
 
-from .finance_models import StoreSkuProfitRule
+from .finance_models import StoreSkuProfitRule, StoreProductProfitRule

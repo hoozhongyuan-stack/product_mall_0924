@@ -13,6 +13,8 @@ function count(value){return Number.isSafeInteger(value)&&value>=0?value:null}
 function present(overview,permissions){const stats=overview.stats||{};return {
  todos:TODOS.map(([key,label,fulfillment])=>({key,label,fulfillment,count:count(stats[key])})),
  totalOrders:count(stats.totalOrders),activeAfterSales:count(stats.activeAfterSales),
+ businessShortcuts:SHORTCUTS.filter(x=>x.permission!=='accounts'&&permissions.includes(x.permission)).map(x=>({...x,icon:`/assets/ui/${x.icon}.svg`})),
+ financeShortcuts:SHORTCUTS.filter(x=>x.permission==='accounts').map(x=>({...x,icon:`/assets/ui/${x.icon}.svg`,description:({summary:'余额与结算状态',income:'逐笔核对收入',withdraw:'平台审核 · 线下发放',history:'查看处理进度'})[x.accountPanel]})),
  shortcuts:SHORTCUTS.filter(x=>permissions.includes(x.permission)).map(x=>({...x,icon:`/assets/ui/${x.icon}.svg`})),
 }}
 function query(section,page,data){

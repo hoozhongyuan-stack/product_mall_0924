@@ -19,7 +19,7 @@
   <block wx:else>
     <scroll-view wx:if="{{!keyword}}" class="root-strip" scroll-x enhanced show-scrollbar="false" aria-label="一级分类">
       <view class="root-items">
-        <button wx:for="{{roots}}" wx:key="id" class="root-item {{activeRootId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="selectRoot">{{item.name}}</button>
+        <button wx:for="{{roots}}" wx:key="id" class="root-item {{activeRootId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="selectRoot"><image wx:if="{{item.imageUrl && !failedCategoryImages[item.id]}}" class="root-image" src="{{item.imageUrl}}" mode="aspectFill" data-id="{{item.id}}" binderror="categoryImageError" /><view wx:else class="root-image root-fallback">{{item.name}}</view><text>{{item.name}}</text></button>
       </view>
     </scroll-view>
     <view wx:if="{{keyword}}" class="result-heading">“{{keyword}}”的搜索结果 <text>{{total}} 件</text></view>
@@ -29,6 +29,7 @@
         <view wx:if="{{!leaves.length}}" class="leaf-empty">暂无二级分类</view>
       </scroll-view>
       <view class="product-pane {{keyword ? 'full-width' : ''}}">
+        <image wx:if="{{!keyword && activeBannerUrl && !failedBannerImages[activeLeafId]}}" class="category-banner" src="{{activeBannerUrl}}" mode="widthFix" data-id="{{activeLeafId}}" binderror="bannerImageError" />
         <view wx:if="{{listState === 'loading'}}" class="list-state" role="status">正在加载商品…</view>
         <view wx:elif="{{listState === 'error'}}" class="list-state" role="alert">
           <view class="state-title">商品加载失败</view><view class="state-copy">{{listError}}</view>

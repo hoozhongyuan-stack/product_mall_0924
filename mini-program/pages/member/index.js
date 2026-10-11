@@ -39,6 +39,7 @@ Page({ ...base, ...profileControls,
       wx.navigateTo({ url: `/pages/login/login?returnTo=member&next=${next}${query}` })
     }
   },
+  openMemberCenter() { this.openPrivate('center') },
   openPoints() { this.openPrivate('points') },
   openConsumption() { this.openPrivate('consumption') },
   openExchange() { wx.navigateTo({ url: '/pages/exchange/index' }) },

@@ -22,8 +22,8 @@ function descriptionMedia(value, baseUrl) {
   ))
 }
 
-function categoryTree(items) {
-  const active = (Array.isArray(items) ? items : []).filter((item) => item.status === 'ACTIVE')
+function categoryTree(items, baseUrl = '') {
+  const active = (Array.isArray(items) ? items : []).filter((item) => item.status === 'ACTIVE').map((item) => ({ ...item, imageUrl: mediaUrl(baseUrl, item.imageUrl), bannerImageUrl: mediaUrl(baseUrl, item.bannerImageUrl) }))
   return active.filter((item) => !item.parentId).map((parent) => ({
     ...parent,
     children: active.filter((item) => item.parentId === parent.id)

@@ -1,6 +1,7 @@
 """Integer-fen calculations and order financial snapshots."""
 from stores.access import StoreError
-from stores.models import StoreSkuProfitRule
+from stores.models import StoreSkuProfitRule, StoreProductProfitRule
+from stores.profit_access import effective_share
 from payments.models import StoreOrderLineFinance
 
 
@@ -18,9 +19,21 @@ def calculate_split(paid_fen,cost_fen,share_bps,freight_fen):
 
 def snapshot_lines(order,lines):
     if not order.store_id:return
-    rules={row.sku_id:row for row in StoreSkuProfitRule.objects.select_for_update().filter(sku_id__in=[line.sku_id for line in lines])}
-    rules={line.sku_id:rules[line.sku_id] for line in lines if line.sku_id in rules and rules[line.sku_id].unit_version_id==line.unit_version_id}
-    StoreOrderLineFinance.objects.bulk_create([StoreOrderLineFinance(line=line,configured=line.sku_id in rules,purchase_cost_fen=rules[line.sku_id].purchase_cost_fen if line.sku_id in rules else None,platform_share_bps=rules[line.sku_id].platform_share_bps if line.sku_id in rules else None,policy_revision=rules[line.sku_id].revision if line.sku_id in rules else None) for line in lines])
+    rules = {row.sku_id: row for row in StoreSkuProfitRule.objects.select_for_update().filter(sku_id__in=[line.sku_id for line in lines])}
+    product_ids = {line.product_id for line in lines}
+    shares = {row.product_id: row for row in StoreProductProfitRule.objects.select_for_update().filter(pk__in=product_ids)}
+    all_legacy = list(StoreSkuProfitRule.objects.filter(sku__product_id__in=product_ids).select_related('sku'))
+    policies = {product_id: effective_share(product_id, [rule for rule in all_legacy if rule.sku.product_id == product_id], shares.get(product_id)) for product_id in product_ids}
+    snapshots = []
+    for line in lines:
+        rule = rules.get(line.sku_id)
+        ratio, share_revision, _ = policies[line.product_id]
+        configured = bool(rule and rule.unit_version_id == line.unit_version_id and ratio is not None)
+        snapshots.append(StoreOrderLineFinance(line=line, configured=configured,
+            purchase_cost_fen=rule.purchase_cost_fen if configured else None,
+            platform_share_bps=ratio if configured else None,
+            policy_revision=rule.revision if configured else None))
+    StoreOrderLineFinance.objects.bulk_create(snapshots)
 
 
 def order_split(order):

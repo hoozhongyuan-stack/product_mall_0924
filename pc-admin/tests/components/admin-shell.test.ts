@@ -90,7 +90,7 @@ describe('pilot shell and login', () => {
   })
   it('places map settings in the horizontal store subnavigation and guards direct access', async () => {
     const { wrapper, router } = await setup(['stores.read', 'stores.accounts.read', 'stores.manage'], '/stores/map-settings')
-    expect(wrapper.get('nav[aria-label="前置仓功能"]').findAll('a').map(a => a.text())).toEqual(['前置仓管理', '前置仓账户', '前置仓设置'])
+    expect(wrapper.get('nav[aria-label="前置仓功能"]').findAll('a').map(a => a.text())).toEqual(['前置仓管理', '前置仓账户', '商品进货价与分润', '前置仓设置'])
     expect(wrapper.get('nav[aria-label="后台主导航"] a[aria-current="true"]').text()).toBe('前置仓')
     await router.push('/stores/accounts/one'); await flushPromises()
     expect(wrapper.get('nav[aria-label="页面位置"]').text()).toContain('账户详情')

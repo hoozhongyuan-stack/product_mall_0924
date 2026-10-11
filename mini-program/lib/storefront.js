@@ -48,7 +48,8 @@ function customerService(source, base) {
 
 function presentStorefront(payload, base) {
   const data = payload && typeof payload === 'object' ? payload : {}
-  return { navigation: navigationItems(data.navigation, base),
+  return { recordNo: data.filing && typeof data.filing.recordNo === 'string' ? data.filing.recordNo.trim().slice(0, 100) : '',
+    navigation: navigationItems(data.navigation, base),
     service: customerService(data.customerService, base) }
 }
 

@@ -235,3 +235,14 @@ class PageCopyRequest(models.Model):
     class Meta:
         db_table = 'page_copy_request'
         constraints = [models.UniqueConstraint(fields=['actor', 'source_page', 'key'], name='unique_page_copy_key')]
+
+
+class StorefrontFiling(models.Model):
+    """Platform filing displayed on the member landing footer."""
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    record_no = models.CharField(max_length=100, blank=True)
+    revision = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=Q(id=1), name='one_storefront_filing')]

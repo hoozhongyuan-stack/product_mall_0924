@@ -49,3 +49,43 @@ test('bank and payee boundaries match server contract and unload removes pending
  assert.throws(()=>finance.amountFen('99000000.01'),/范围/)
  const p=ready();p.pendingWithdrawal={body:fields};p.onUnload();assert.equal(p.pendingWithdrawal,null);assert.equal(p.data.withdrawalForm.bankAccount,'')
 })
+test('income display uses actual server amounts and never invents held profit',()=>{
+ const a=finance.present({income:[{id:'a',paidFen:10000,costFen:6000,platformFen:800,freightFen:500,storeFen:8700,status:'PENDING',availableAt:'2026-10-11T01:30:00Z'},{id:'h',paidFen:10000,costFen:null,platformFen:null,storeFen:null,status:'HELD'}]})
+ assert.equal(a.income[0].profitAmount,'¥40.00');assert.equal(a.income[0].storeProfitAmount,'¥32.00');assert.equal(a.income[0].storeAmount,'¥87.00');assert.equal(a.income[0].availableAtLabel,'2026-10-11 09:30');assert.equal(a.income[1].profitAmount,'暂不可用')
+ assert.equal(finance.maskBank('6222000000001234'),'****1234')
+})
+test('withdrawal confirmation cancels without posting, masks bank and binds identity',async()=>{
+ const p=ready(),old=api.post;let writes=0;api.post=async()=>writes++
+ p.prepareWithdrawal();assert.equal(writes,0);assert.equal(p.data.withdrawalConfirm.bankAccount,'****0000');p.cancelWithdrawal();assert.equal(p.data.withdrawalConfirm,null)
+ p.prepareWithdrawal();storage.set('mall.memberToken','other');await p.confirmWithdrawal();assert.equal(writes,0);assert.equal(p.data.withdrawalConfirm,null);assert.equal(p.data.account,null);api.post=old
+})
+test('confirmed submission uses frozen form snapshot and all withdrawal respects balance',async()=>{
+ const p=ready(),old=api.post;let body;api.post=async(path,b)=>{body=b;return {id:'w'}};p.loadSection=async()=>{};wx.showToast=()=>{}
+ p.allWithdrawal();assert.equal(p.data.withdrawalForm.amount,'100.00');p.data.withdrawalForm.amount='20';p.prepareWithdrawal();p.withdrawalInput({currentTarget:{dataset:{key:'amount'}},detail:{value:'90'}});await p.confirmWithdrawal();assert.equal(body.amountFen,2000);assert.equal(p.data.accountPanel,'history');api.post=old
+})
+test('income filtering and selected details are cleared on hide and permission revocation',()=>{
+ const p=ready();p.applyAccount({income:[{id:'p',status:'PENDING'},{id:'s',status:'SETTLED'}]});p.filterIncome({currentTarget:{dataset:{value:'SETTLED'}}});assert.equal(p.data.incomeRows.length,1)
+ p.openIncome({currentTarget:{dataset:{id:'s'}}});assert.equal(p.data.financeDetail.id,'s');assert.equal(p.data.accountPanel,'incomeDetail');p.onHide();assert.equal(p.data.financeDetail,null);assert.deepEqual(p.data.incomeRows,[])
+ const q=ready();q.applyAccount({income:[{id:'p',status:'PENDING'}]});q.openIncome({currentTarget:{dataset:{id:'p'}}});q.choose({id:'s',permissions:['orders']});assert.equal(q.data.account,null);assert.equal(q.data.financeDetail,null)
+})
+test('unauthorized account entry gives guidance without requesting financial data',async()=>{
+ const p=ready(),old=api.get;let reads=0;api.get=async()=>{reads++;return {}};p.data.canAccounts=false;await p.section({currentTarget:{dataset:{section:'account',accountPanel:'income'}}});assert.equal(reads,0);assert.equal(p.data.section,'account');assert.equal(p.data.state,'ready');assert.equal(p.data.account,null);api.get=old
+})
+test('stale or switched warehouse confirmation cannot submit and repeated confirmation posts once',async()=>{
+ const old=api.post;let writes=0;api.post=async()=>{writes++;return {id:'w'}}
+ for(const change of ['generation','warehouse','hidden','permission']){
+  const p=ready();p.prepareWithdrawal();if(change==='generation')p.generation++;if(change==='warehouse')p.data.store={id:'other'};if(change==='hidden')p.hidden=true;if(change==='permission')p.data.canAccounts=false
+  await p.confirmWithdrawal();assert.equal(writes,0);assert.equal(p.data.withdrawalConfirm,null)
+ }
+ const p=ready();p.loadSection=async()=>{};wx.showToast=()=>{};p.prepareWithdrawal();await Promise.all([p.confirmWithdrawal(),p.confirmWithdrawal()]);assert.equal(writes,1);api.post=old
+})
+test('guarded financial actions cannot expose inaccessible rows or modify frozen confirmation',()=>{
+ const p=ready();p.applyAccount({income:[{id:'i',status:'HELD'}],withdrawals:[{id:'w',amountFen:100,status:'REJECTED'}]})
+ p.openWithdrawal({currentTarget:{dataset:{id:'missing'}}});assert.equal(p.data.financeDetail,null);p.openWithdrawal({currentTarget:{dataset:{id:'w'}}});assert.equal(p.data.financeDetail.statusDescription.includes('解冻'),true);p.backFinance();assert.equal(p.data.accountPanel,'history')
+ p.data.canAccounts=false;p.openIncome({currentTarget:{dataset:{id:'i'}}});p.openWithdrawal({currentTarget:{dataset:{id:'w'}}});p.filterIncome({currentTarget:{dataset:{value:'HELD'}}});p.allWithdrawal();p.prepareWithdrawal();assert.equal(p.data.financeDetail,null);assert.equal(p.data.withdrawalConfirm,null)
+ p.data.canAccounts=true;p.data.account={withdrawalReady:true,balance:{availableFen:10000}};p.data.withdrawalForm.amount='999';p.prepareWithdrawal();assert.match(p.data.error,/余额/)
+ p.data.withdrawalForm.amount='20';p.prepareWithdrawal();p.allWithdrawal();assert.equal(p.data.withdrawalForm.amount,'20');p.data.busy=true;p.cancelWithdrawal();assert.ok(p.data.withdrawalConfirm);p.data.busy=false;p.cancelWithdrawal();p.filterIncome({currentTarget:{dataset:{value:'invalid'}}});assert.equal(p.data.incomeFilter,'')
+})
+test('server permission revocation clears balance and private form after failed submission',async()=>{
+ const p=ready(),old=api.post;api.post=async()=>{const e=new Error('无账户权限');e.statusCode=403;throw e};p.prepareWithdrawal();await p.confirmWithdrawal();assert.equal(p.data.account,null);assert.equal(p.data.canAccounts,false);assert.equal(p.data.withdrawalForm.bankAccount,'');api.post=old
+})

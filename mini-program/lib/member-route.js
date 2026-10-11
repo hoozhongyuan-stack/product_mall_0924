@@ -1,6 +1,7 @@
 const { orderFilters } = require('./order-filters')
 
 const PRIVATE_ROUTES = Object.freeze({
+  center: '/pages/member/center',
   points: '/pages/member/points',
   consumption: '/pages/member/consumption',
   coupons: '/pages/coupons/index',

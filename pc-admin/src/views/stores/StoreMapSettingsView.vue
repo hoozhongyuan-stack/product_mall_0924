@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, confirmedWrite, type Account } from '../../api'
 import './stores.css'
 import StoreSettlementSettingsPanel from './StoreSettlementSettingsPanel.vue'
-import StoreProfitRulesPanel from './StoreProfitRulesPanel.vue'
 interface Credential { configured: boolean; tail: string }
 interface MapSettings {
   revision: number; managed: boolean; source: 'ENV' | 'MANAGED'; encryptionReady: boolean; available: boolean
@@ -86,6 +85,5 @@ onUnmounted(() => { epoch++; clearInputs() })
       <div class="store-actions"><button class="primary-button" type="submit" :disabled="busy || !password">{{ busy ? '正在保存…' : '确认保存' }}</button><button class="secondary-button" type="button" :disabled="busy" @click="clearInputs">取消</button></div>
     </form>
     <StoreSettlementSettingsPanel :account="account" />
-    <StoreProfitRulesPanel :account="account" />
   </section>
 </template>

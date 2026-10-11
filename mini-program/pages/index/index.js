@@ -6,7 +6,7 @@ const startup = require('../../lib/startup')
 Page({
   data: {
     roots: [], leaves: [], activeRootId: '', activeLeafId: '',
-    categoryState: 'loading', categoryError: '',
+    categoryState: 'loading', categoryError: '', activeBannerUrl: '', failedCategoryImages: {}, failedBannerImages: {},
     products: [], listState: 'idle', listError: '',
     searchInput: '', keyword: '', searchFocused: false,
     page: 0, hasMore: false, loadingMore: false, total: 0, failedImages: {},
@@ -45,7 +45,7 @@ Page({
   async loadCategories() {
     this.setData({ categoryState: 'loading', categoryError: '' })
     try {
-      const roots = catalog.categoryTree(await api.get('/api/v1/app/categories'))
+      const roots = catalog.categoryTree(await api.get('/api/v1/app/categories'), api.baseUrl())
       const activeRoot = roots.find((item) => item.id === this.data.activeRootId) ||
         roots.find((item) => item.id === this.requestedCategoryId ||
           item.children.some((child) => child.id === this.requestedCategoryId)) || roots[0]
@@ -54,7 +54,7 @@ Page({
         leaves.find((item) => item.id === this.requestedCategoryId) || leaves[0]
       this.requestedCategoryId = ''
       this.setData({ roots, leaves, activeRootId: activeRoot ? activeRoot.id : '',
-        activeLeafId: activeLeaf ? activeLeaf.id : '', categoryState: roots.length ? 'ready' : 'empty' })
+        activeLeafId: activeLeaf ? activeLeaf.id : '', activeBannerUrl: activeLeaf ? activeLeaf.bannerImageUrl : '', failedCategoryImages: {}, failedBannerImages: {}, categoryState: roots.length ? 'ready' : 'empty' })
       if (roots.length || this.data.keyword) await this.loadProducts(true)
       else this.setData({ products: [], listState: 'empty', hasMore: false, total: 0 })
     } catch (error) {
@@ -90,14 +90,16 @@ Page({
     if (!root || root.id === this.data.activeRootId) return
     const leaf = root.children[0]
     this.setData({ activeRootId: root.id, activeLeafId: leaf ? leaf.id : '',
-      leaves: root.children, keyword: '', searchInput: '' })
+      leaves: root.children, activeBannerUrl: leaf ? leaf.bannerImageUrl : '', keyword: '', searchInput: '' })
     return this.loadProducts(true)
   },
 
   selectLeaf(event) {
     const id = event.currentTarget.dataset.id
     if (id === this.data.activeLeafId) return
-    this.setData({ activeLeafId: id, keyword: '', searchInput: '' })
+    const leaf = this.data.leaves.find(item => item.id === id)
+    if (!leaf) return
+    this.setData({ activeLeafId: id, activeBannerUrl: leaf.bannerImageUrl, keyword: '', searchInput: '' })
     return this.loadProducts(true)
   },
 
@@ -112,6 +114,8 @@ Page({
     if (this.data.activeRootId) return this.loadProducts(true)
   },
 
+  categoryImageError(event) { this.setData({ failedCategoryImages: { ...this.data.failedCategoryImages, [event.currentTarget.dataset.id]: true } }) },
+  bannerImageError(event) { this.setData({ failedBannerImages: { ...this.data.failedBannerImages, [event.currentTarget.dataset.id]: true } }) },
   onImageError(event) {
     this.setData({ failedImages: { ...this.data.failedImages, [event.currentTarget.dataset.id]: true } })
   },

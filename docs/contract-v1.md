@@ -803,3 +803,15 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 - `GET /api/v1/admin/stores/map-runtime`（stores.manage）：`{jsApiKey,securityProxyUrl}`，JS Key 属浏览器运行参数；Web 服务 Key、安全码不下发。响应 private/no-store。
 - `GET /api/v1/admin/stores/map-search?q=&city=` 保持 `{configured,items:[{name,address,city,latitude,longitude}]}`；`GET /api/v1/admin/stores/map-reverse?latitude=&longitude=` 返回同样地点对象。坐标 GCJ-02；鉴权、限流、超时、响应大小限制及错误脱敏。
 - 高德 JS SDK serviceHost 指向同源 `/api/v1/admin/stores/amap-proxy/_AMapService`。代理仅允许固定地图样式/搜索/逆地理路径、GET，禁用重定向；服务器注入安全码并覆盖客户端 Key，不支持任意 URL。加载失败保留原前置仓地址、坐标。
+
+
+### 5.34 个人中心与商品比例分层（2026-10-11）
+
+本节替代5.28中PC进货价与平台比例共用弹窗的使用方式；历史订单快照和分润公式不变。进货成本按销售规格设置，平台比例按商品设置。旧SKU组合接口保留兼容性，但新PC管理页不调用它。
+
+- `GET /api/v1/admin/stores/product-profit-rules`：`stores.read`；接受分页、`search`、`categoryId`、`configuration`。商品行返回 `productId/productName/productNo/categoryId/platformShareBps/shareRevision/shareSource/skus`；规格返回既有 `skuId/specLabel/skuCode/saleUnit/currentUnitVersionId/purchaseCostFen/revision/requiresReconfiguration`。商品比例来源区分明确商品规则、旧一致规则、旧冲突、未配置；冲突不能任取旧值。
+- `POST /api/v1/admin/stores/purchase-costs`：仅 `{items:[{skuId,expectedRevision,purchaseCostFen,expectedUnitVersionId}]}`，1–100个不同规格；整体事务。密码确认动作 `stores.cost.batch.configure`、revision0，target为按小写UUID排序的 `[[skuId,expectedRevision,purchaseCostFen,expectedUnitVersionId],...]` canonical JSON的SHA-256。只保存进货成本与当前销售单位版本，不改变商品比例；保存时对锁定规格重验 `expectedUnitVersionId`，单位变化返回409 `UNIT_REVISION_CONFLICT`，整批不保存并要求刷新核对。
+- `POST /api/v1/admin/stores/platform-shares`：仅 `{items:[{productId,expectedRevision}],platformShareBps}`，1–100个不同商品；比例整数0–10000，整体事务。密码确认动作 `stores.share.batch.configure`、revision0，target为 `[platformShareBps,[[productId,expectedRevision],...]]` canonical JSON的SHA-256，小写UUID排序。只保存商品比例，不改SKU成本。两种写操作均需 `stores.manage`、有效后台身份、CSRF与密码确认；任何修订冲突均409整批不保存。
+- 分类创建与更新新增可空 `imageAssetId/bannerAssetId`；一级仅允许正方形入口图，二级仅允许宽大于高横幅；图片复用现有素材授权、有效文件验证、引用保护和回收。后台返回素材DTO，公开分类仅返回 `imageUrl/bannerImageUrl`等公开字段。未配置图片为空，不提供虚构素材。
+- `GET /api/v1/admin/storefront/filing` 返回 `{recordNo,revision}`，需 `navigation.read`；`PUT` 接受 `{expectedRevision,recordNo}`，需 `navigation.edit`与CSRF。备案号最长100字符，不允许控制字符，可清空，修订冲突409；后台读取和保存共用每账号60次/分钟数据库额度，超额429。`GET /api/v1/app/storefront`新增 `filing:{recordNo}`；个人中心底部显示，空值隐藏。
+- 新小程序路由 `pages/member/center` 承载权益与等级、积分账户和规则；复用会员概览、积分明细与消费历史接口，不新增积分账本或消费统计口径。

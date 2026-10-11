@@ -90,3 +90,6 @@ test('stock save reload failure does not announce successful recheck',async()=>{
  const oldGet=api.get,oldPatch=api.patch,oldToast=wx.showToast;let toasts=0;wx.showToast=()=>toasts++;api.patch=async()=>({});api.get=async()=>{throw new Error('重载失败')}
  const p=ready(['products']);p.generation=1;p.data.section='products';p.data.products=[{id:'p',revision:1,onSale:true,skus:[{id:'s',availableBaseUnits:10}]}];await p.saveProduct({currentTarget:{dataset:{id:'p'}}});assert.equal(p.data.state,'error');assert.equal(toasts,0);assert.equal(p.data.busy,false);api.get=oldGet;api.patch=oldPatch;wx.showToast=oldToast
 })
+test('financial discovery remains visible without account permission but exposes no balance',()=>{
+ const shown=dashboard.present({stats:null},['products']);assert.equal(shown.financeShortcuts.length,4);assert.deepEqual(shown.businessShortcuts.map(row=>row.key),['products']);assert.equal(shown.financeShortcuts[1].accountPanel,'income');assert.equal(Object.hasOwn(shown,'balance'),false)
+})

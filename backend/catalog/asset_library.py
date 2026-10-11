@@ -78,6 +78,9 @@ def references_page(request, asset_id, granted):
     queries.append(reference_query(ProductDescriptionImage.objects.filter(asset_id=asset_id), domain="CATALOG",
         object_id="product_id", label="product__name", role="DESCRIPTION_IMAGE",
         version="product__revision", state="BOUND"))
+    from .models import Category
+    for field, role in (("image_id", "CATEGORY_ICON"), ("banner_id", "CATEGORY_BANNER")):
+        queries.append(reference_query(Category.objects.filter(**{field: asset_id}), domain="CATALOG", object_id="id", label="name", role=role, version="revision", state="BOUND"))
     from stores.models import Store
     queries.append(reference_query(Store.objects.filter(logo_id=asset_id), domain='STORE', object_id='id', label='name', role='LOGO', version='revision', state='BOUND'))
     query = queries[0].union(*queries[1:], all=True).order_by("domain", "object_id", "ref_version", "role")

@@ -8,6 +8,7 @@ from catalog import views as catalog_views
 from catalog import product_sale_views as catalog_sale_views
 from catalog import media_views
 from pages import views as page_views
+from pages.filing_views import filing
 from pages import startup_views, history, storefront_views, editor_views, coupon_views as page_coupon_views, release_reports
 from inventory import views as inventory_views
 from checkout import views as checkout_views
@@ -96,6 +97,7 @@ urlpatterns = [
          {"operation": "versions"}),
     re_path(r"^api/v1/admin/(?P<segment>navigation|customer-service)/rollback$", storefront_views.admin_view,
          {"operation": "rollback"}),
+    path("api/v1/admin/storefront/filing", filing),
     path("api/v1/app/storefront", storefront_views.public_view),
     path("api/v1/admin/exchange-offers", exchange_views.offers_view),
     path("api/v1/admin/exchange-offers/<uuid:offer_id>", exchange_views.offer_detail_view),

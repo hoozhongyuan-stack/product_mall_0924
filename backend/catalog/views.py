@@ -8,10 +8,11 @@ from django.db.models import Count, Exists, Max, Min, OuterRef, Q, Subquery
 from django.utils import timezone
 
 from common.http import offset_response, parse_json_object, method
-from accounts.security import audit, error, permissions, require, response
+from accounts.security import audit, error, permissions, require, require_live, response
 
 from .description import parse_description, set_description_images
 from .media import resolve_media, set_gallery
+from .category_media import category_media
 from .models import BatchCategoryRequest, Category, MemberGrade, Product, Sku, SkuGradePrice, SkuSpecSelection, SkuUnitVersion
 from .presentation import asset_data, category_data, grade_data, product_data, public_product_data, sku_data
 from .sale_state import change_sku_sale_status
@@ -72,21 +73,27 @@ def categories_view(request):
     if bad:
         return bad
     if request.method == "GET":
-        items = list(Category.objects.all())
+        items = list(Category.objects.select_related("image", "banner").all())
         stats = category_totals(items)
         return response(request, [category_data(item, stats) for item in items])
     try:
         values = body(request)
+        if set(values) - {"name", "sortOrder", "status", "parentId", "imageAssetId", "bannerAssetId"}:
+            raise CatalogError("分类请求字段不正确。")
         name = text_field(values.get("name"), "分类名称", 80)
         order = number_field(values.get("sortOrder", 0), "排序", 0, 1000000)
         status = values.get("status", Category.Status.ACTIVE)
         if status not in Category.Status.values:
             raise CatalogError("分类状态不正确。")
         with transaction.atomic():
+            actor, bad = require_live(request, "catalog.write")
+            if bad:
+                return bad
             parent = category_parent(values.get("parentId"))
-            item = Category.objects.create(parent=parent, name=name, sort_order=order, status=status)
+            media = category_media(actor, values, parent)
+            item = Category.objects.create(parent=parent, name=name, sort_order=order, status=status, **media)
             audit(request, "category.create", "category", item.id, actor,
-                  after={"name": item.name, "parentId": str(parent.id) if parent else None})
+                  after={"name": item.name, "parentId": str(parent.id) if parent else None, "imageAssetId": str(item.image_id) if item.image_id else None, "bannerAssetId": str(item.banner_id) if item.banner_id else None})
         return response(request, category_data(item, {item.id: (0, 0)}), 201)
     except CatalogError as exc:
         return failure(request, exc)
@@ -102,9 +109,12 @@ def category_detail_view(request, category_id):
     try:
         values = body(request)
         revision = number_field(values.get("expectedRevision"), "预期修订号", 1)
-        if set(values) - {"name", "sortOrder", "status", "expectedRevision"}:
-            raise CatalogError("该接口只支持修改名称、排序和状态。")
+        if set(values) - {"name", "sortOrder", "status", "expectedRevision", "imageAssetId", "bannerAssetId"}:
+            raise CatalogError("该接口只支持修改名称、排序、状态和分类图片。")
         with transaction.atomic():
+            actor, bad = require_live(request, "catalog.write")
+            if bad:
+                return bad
             item = Category.objects.select_for_update().filter(id=category_id).first()
             if not item:
                 raise CatalogError("分类不存在。", "NOT_FOUND", 404)
@@ -121,12 +131,15 @@ def category_detail_view(request, category_id):
                 ).exists()
                 if in_use:
                     raise CatalogError("请先下架此分类中的在售商品。", "CATEGORY_IN_USE", 409)
-            before = {"name": item.name, "sortOrder": item.sort_order, "status": item.status}
+            before = {"name": item.name, "sortOrder": item.sort_order, "status": item.status, "imageAssetId": str(item.image_id) if item.image_id else None, "bannerAssetId": str(item.banner_id) if item.banner_id else None}
+            media = category_media(actor, values, item.parent, item)
+            for field, asset in media.items():
+                setattr(item, field, asset)
             item.name, item.sort_order, item.status = name, order, status
             item.revision += 1
-            item.save(update_fields=["name", "sort_order", "status", "revision", "updated_at"])
+            item.save(update_fields=["name", "sort_order", "status", "image", "banner", "revision", "updated_at"])
             audit(request, "category.update", "category", item.id, actor, before=before,
-                  after={"name": name, "sortOrder": order, "status": status})
+                  after={"name": name, "sortOrder": order, "status": status, "imageAssetId": str(item.image_id) if item.image_id else None, "bannerAssetId": str(item.banner_id) if item.banner_id else None})
         return response(request, category_data(item, category_totals(list(Category.objects.all()))))
     except CatalogError as exc:
         return failure(request, exc)
@@ -657,7 +670,7 @@ def public_categories_view(request):
     bad = method(request, "GET")
     if bad:
         return bad
-    visible = list(Category.objects.filter(status=Category.Status.ACTIVE).filter(
+    visible = list(Category.objects.select_related("image", "banner").filter(status=Category.Status.ACTIVE).filter(
         Q(parent__isnull=True) | Q(parent__status=Category.Status.ACTIVE)
     ))
     display_order = lambda item: (item.sort_order, item.name, str(item.id))
@@ -665,7 +678,7 @@ def public_categories_view(request):
     items = [item for root in roots for item in (
         root, *sorted((child for child in visible if child.parent_id == root.id), key=display_order)
     )]
-    return response(request, [category_data(item) for item in items])
+    return response(request, [category_data(item, public=True) for item in items])
 
 
 def public_products_view(request):

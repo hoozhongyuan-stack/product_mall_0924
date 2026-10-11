@@ -142,6 +142,8 @@ def confirm_view(request):
                 "notification.task.recover_reservation": "notification.recover",
                 "stores.map.configure": "stores.manage",
                 "stores.settlement.configure": "stores.manage",
+                "stores.cost.batch.configure": "stores.manage",
+                "stores.share.batch.configure": "stores.manage",
                 "stores.profit.configure": "stores.manage",
                 "stores.profit.batch.configure": "stores.manage",
                 "stores.withdrawal.review": "stores.accounts.manage",

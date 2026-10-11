@@ -15,7 +15,7 @@ from .views import guarded,page_bounds
 
 
 def rule_data(sku,rule=None):
-    return {'skuId':str(sku.id),'productName':sku.product.name,'specKey':sku.spec_key,'specLabel':specification_label(sku),'skuCode':sku.sku_code,'saleUnit':sku.current_unit.sale_unit if sku.current_unit else '', 'purchaseCostFen':rule.purchase_cost_fen if rule else None,'platformShareBps':rule.platform_share_bps if rule else None,'revision':rule.revision if rule else 0,'requiresReconfiguration':bool(rule and rule.unit_version_id!=sku.current_unit_id)}
+    return {'skuId':str(sku.id),'currentUnitVersionId':str(sku.current_unit_id) if sku.current_unit_id else None,'productName':sku.product.name,'specKey':sku.spec_key,'specLabel':specification_label(sku),'skuCode':sku.sku_code,'saleUnit':sku.current_unit.sale_unit if sku.current_unit else '', 'purchaseCostFen':rule.purchase_cost_fen if rule else None,'platformShareBps':rule.platform_share_bps if rule else None,'revision':rule.revision if rule else 0,'requiresReconfiguration':bool(rule and rule.unit_version_id!=sku.current_unit_id)}
 
 
 def valid_amounts(body):
@@ -49,6 +49,9 @@ def batch_confirmation_target(body, items):
 
 
 def save_rule(request, actor, sku, row, body, action='stores.profit.configure'):
+    from .models import StoreProductProfitRule
+    if StoreProductProfitRule.objects.filter(pk=sku.product_id).exists():
+        raise StoreError("该商品已启用商品维度平台比例，请分别设置规格进货价和商品平台比例。", "USE_SEPARATE_RULES", 409)
     before = rule_data(sku, row)
     updated = StoreSkuProfitRule(sku=sku, unit_version=sku.current_unit,
         purchase_cost_fen=body['purchaseCostFen'], platform_share_bps=body['platformShareBps'],

@@ -1,3 +1,4 @@
+<view wx:if="{{showRecord && recordNo}}" class="filing-number">{{recordNo}}</view>
 <view wx:if="{{showNavigation}}" class="navigation-spacer" aria-hidden="true"></view>
 <view wx:if="{{showNavigation}}" class="navigation" role="navigation" aria-label="商城底部导航">
   <button wx:for="{{items}}" wx:key="key" class="navigation-item {{activeKey === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="changeTab" aria-label="{{item.label}}" aria-current="{{activeKey === item.key ? 'page' : 'false'}}">

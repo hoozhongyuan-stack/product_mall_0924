@@ -12,6 +12,8 @@ class Category(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT, related_name="children")
+    image = models.ForeignKey("Asset", null=True, blank=True, on_delete=models.PROTECT, related_name="category_icons")
+    banner = models.ForeignKey("Asset", null=True, blank=True, on_delete=models.PROTECT, related_name="category_banners")
     name = models.CharField(max_length=80)
     sort_order = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.ACTIVE)
@@ -24,6 +26,7 @@ class Category(models.Model):
         ordering = ["parent_id", "sort_order", "name"]
         constraints = [
             models.CheckConstraint(condition=~models.Q(id=models.F("parent_id")), name="category_not_self_parent"),
+            models.CheckConstraint(condition=(models.Q(parent__isnull=True, banner__isnull=True) | models.Q(parent__isnull=False, image__isnull=True)), name="category_image_role_by_depth"),
         ]
 
 

@@ -16,6 +16,7 @@
     "pages/aftersales/index",
     "pages/aftersales/detail",
     "pages/member/index",
+    "pages/member/center",
     "pages/member/points",
     "pages/member/consumption",
     "pages/coupons/index",

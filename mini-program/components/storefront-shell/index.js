@@ -9,13 +9,14 @@ function currentKey() {
 
 Component({
   properties: {
+    showRecord: { type: Boolean, value: false },
     showNavigation: { type: Boolean, value: false },
     showService: { type: Boolean, value: false },
     productDetail: { type: Boolean, value: false },
   },
   data: {
     items: presentStorefront(null, '').navigation,
-    service: null,
+    service: null, recordNo: '',
     activeKey: '',
     qrOpen: false,
     qrFailed: false,
@@ -36,12 +37,12 @@ Component({
       try {
         const result = presentStorefront(await api.get('/api/v1/app/storefront'), api.baseUrl())
         if (token !== this.requestToken) return
-        this.setData({ items: result.navigation, service: result.service,
+        this.setData({ items: result.navigation, service: result.service, recordNo: result.recordNo,
           qrOpen: false, qrFailed: false, serviceIconFailed: false, failedNavIcons: {} })
       } catch (_) {
         if (token !== this.requestToken) return
         const fallback = presentStorefront(null, '')
-        this.setData({ items: fallback.navigation, service: null, qrOpen: false })
+        this.setData({ items: fallback.navigation, service: null, recordNo: '', qrOpen: false })
       }
     },
     changeTab(event) {

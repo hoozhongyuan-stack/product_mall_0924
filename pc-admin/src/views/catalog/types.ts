@@ -5,6 +5,10 @@ import type { Asset } from '../../shared/media'
 export type { Asset } from '../../shared/media'
 
 export interface Category {
+  imageAssetId?: string | null
+  bannerAssetId?: string | null
+  image?: Asset | null
+  banner?: Asset | null
   id: string
   parentId: string | null
   name: string
