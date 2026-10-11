@@ -1,6 +1,8 @@
 """Store-scoped member operations; all read and write paths check staff membership."""
 from uuid import UUID
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import cache_control
+from django.views.decorators.vary import vary_on_headers
 from accounts.security import response, error, parse_json
 from common.http import method
 from customers.auth import require_member
@@ -12,6 +14,8 @@ from stores.views import guarded
 
 
 @csrf_exempt
+@cache_control(private=True, no_store=True)
+@vary_on_headers('Authorization', 'Cookie')
 @guarded
 def orders_view(request, store_id, order_id=None):
     bad = method(request, 'GET', *(['POST'] if order_id else []))
@@ -34,6 +38,8 @@ def orders_view(request, store_id, order_id=None):
             if not row:
                 raise FulfillmentError('订单不存在。', 'ORDER_NOT_FOUND', 404)
             return response(request, order_data(row))
+        if set(request.GET) - {'page', 'status', 'fulfillment'} or any(len(request.GET.getlist(key)) != 1 for key in request.GET):
+            raise FulfillmentError('订单筛选参数不正确。')
         try:
             page = int(request.GET.get('page', '1'))
         except ValueError as exc:
@@ -70,6 +76,8 @@ def orders_view(request, store_id, order_id=None):
 
 
 @csrf_exempt
+@cache_control(private=True, no_store=True)
+@vary_on_headers('Authorization', 'Cookie')
 @guarded
 def aftersales_view(request, store_id, case_id=None):
     bad=method(request,'GET',*(['POST'] if case_id else []))
@@ -99,6 +107,13 @@ def aftersales_view(request, store_id, case_id=None):
             data=case_data(case,admin=False)
             data.update(storeNotes=notes_data(case),canWithdraw=False,canSubmitReturnShipment=False,canRecordReceipt=case.status=='WAITING_RETURN',platformReviewRequired=True)
             return response(request,data)
+        if set(request.GET) - {'page', 'status'} or any(len(request.GET.getlist(key)) != 1 for key in request.GET):
+            raise AfterSaleError('售后筛选参数不正确。')
+        if 'status' in request.GET:
+            if request.GET['status'] != 'ACTIVE':
+                raise AfterSaleError('售后状态不正确。')
+            from aftersales.service import ACTIVE
+            rows = rows.filter(status__in=ACTIVE)
         try:
             page=int(request.GET.get('page','1'))
         except ValueError as exc:

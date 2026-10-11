@@ -767,6 +767,12 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 - 前置仓账户返回实际可用、冻结、累计发放和待结算金额，收入及提现各最多100条；异常收入未知金额返回 null。提现 POST `/api/v1/app/store-center/stores/{storeId}/withdrawals` 接受 `requestKey/amountFen/payeeName/bankName/bankAccount`，原子冻结并对固定请求键防重复；普通读取脱敏，银行卡加密保存。
 - 平台提现 `POST /api/v1/admin/stores/{storeId}/withdrawals/{id}/{review|pay|payee}` 需要 `stores.accounts.manage`、CSRF、当前修订和各自密码确认。状态 `PENDING_REVIEW → APPROVED_PENDING_PAYMENT → PAID`，或审核驳回 `REJECTED` 并解冻。pay 必须提供线下付款凭证，审批不等于付款；payee 是单独敏感读取。结算命令接入现有维护调度，严格超过订单售后快照期限且无处理中售后才入账，读取账户不会写资金事实。
 
+### 前置仓工作台概览与待办（2026-10-11）
+
+- 工作台概览：`GET /api/v1/app/store-center/stores/{storeId}/overview` 使用会员 Bearer 身份，仅当前启用员工及匹配会员 auth_version 可读；不接受查询参数。返回 `{storeId,permissions,stats}`，`permissions` 为本人当前该店 `products/orders/accounts` 能力。缺少 `orders` 时 `stats=null`，不读取订单或售后统计；无员工授权返回403，未登录返回401。响应 `Cache-Control: private,no-store`、`Vary: Authorization,Cookie`，复用前置仓请求限流。账户金额仍由原 `account` 接口独立授权读取。
+- 工作台 `stats` 为 `{waitingPreparation,waitingPickup,waitingDelivery,waitingShipment,totalOrders,activeAfterSales}`，全部为该店数据库全量计数，不能取分页首屏长度。四项待办复用现有履约任务 SQL 条件：已付款、仍有未退款实物、无阻断履约的进行中实物售后；待备货为自提／配送且尚无备货事实，待自提／待配送为对应模式 READY，待发货为快递尚无发货事实。完成、未付款、关闭、全退款及阻断售后订单不计待办。`totalOrders` 包括该店全部持久订单状态；`activeAfterSales` 按该店售后单数量统计 `PENDING_REVIEW|WAITING_RETURN|WAITING_REFUND`，不是涉及售后的订单数。
+- 点击待办使用前置仓订单列表 `/orders?fulfillment=WAITING_PREPARATION|WAITING_PICKUP|WAITING_DELIVERY|WAITING_SHIPMENT`，省略状态筛选仍执行任务自身已付款条件；原 `status=PENDING_PAYMENT|PAID|CLOSED` 与任务取交集。订单列表允许 `page/status/fulfillment`，未知或重复查询参数400，过滤后计数和分页。总订单入口省略筛选。售后列表 `/aftersales?status=ACTIVE` 与概览进行中售后口径相同；省略 status 返回全部历史售后；允许 `page/status`，未知值／参数或重复参数400。两种列表仍需该店 `orders` 权限，原操作与业务状态规则不变。
+
 ### 前置仓操作体验修订（2026-10-10）
 
 - 人员查询：`GET /api/v1/admin/stores/{storeId}/staff?memberSearch=...` 要求 `stores.manage`；查询 2–100 字的会员编号、昵称或 UUID，最多返回 20 个启用会员，响应 `{members:[{id,memberNo,name}]}`，不包含手机号或微信身份，禁止缓存。无查询参数的人员列表仍返回 `{items:[...]}`。

@@ -1,3 +1,56 @@
 @import "../../styles/store.wxss";
+.center-page{padding:0 24rpx 40rpx;background:#f4f5f5;color:#20252a;box-sizing:border-box}
+.warehouse-header{display:flex;align-items:center;gap:20rpx;padding:30rpx 24rpx;margin:0 -24rpx;min-width:0}
+.warehouse-banner{background:#a3202b;color:#fff;padding-top:40rpx;padding-bottom:40rpx}
+.warehouse-compact{background:#fff;border-bottom:1rpx solid #e7e9eb}
+.warehouse-symbol{width:76rpx;height:76rpx;padding:14rpx;background:#fff2f0;border-radius:16rpx;box-sizing:border-box;flex:none}
+.warehouse-heading{flex:1;min-width:0}
+.warehouse-name{font-weight:700;font-size:34rpx;line-height:1.4;overflow-wrap:anywhere}
+.warehouse-hours{font-size:24rpx;line-height:1.6;margin-top:8rpx;color:#66717a}
+.warehouse-banner .warehouse-hours{color:#fff0ee}
+.warehouse-switch{font-size:26rpx;color:#a3202b;background:#fff;border:1rpx solid #e7e9eb;border-radius:8rpx;padding:12rpx 20rpx;white-space:nowrap}
+.section-navigation{display:flex;align-items:center;gap:12rpx;margin:0 -24rpx;background:#fff;border-bottom:1rpx solid #e7e9eb;padding:8rpx 20rpx}
+.back-workbench{flex:none;background:transparent;color:#66717a;padding:10rpx 4rpx;font-size:24rpx;line-height:1.6;margin:0}
+.section-tabs{flex:1;width:0;white-space:nowrap}
+.tab-track{display:inline-flex;gap:8rpx;align-items:center}
+.section-tab{margin:0;background:transparent;color:#66717a;font-size:26rpx;padding:18rpx 16rpx;line-height:1.5;border-radius:0;white-space:nowrap}
+.section-tab.selected{color:#a3202b;font-weight:700;border-bottom:4rpx solid #a3202b}
+.dashboard-orders,.dashboard-account,.shortcut-list{background:#fff;border-radius:16rpx;margin:24rpx 0;overflow:hidden}
+.todo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:24rpx 8rpx}
+.todo-item{display:flex;flex-direction:column;align-items:center;gap:10rpx;background:transparent;color:#66717a;font-size:24rpx;padding:8rpx 0;line-height:1.5;margin:0;border-radius:0;min-width:0}
+.todo-count{font-size:40rpx;font-weight:700;color:#20252a;font-variant-numeric:tabular-nums}
+.order-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1rpx solid #e7e9eb;padding:20rpx}
+.summary-item{display:flex;flex-direction:column;gap:8rpx;text-align:center;margin:0;background:transparent;color:#66717a;font-size:24rpx;line-height:1.5;padding:8rpx;border-radius:0}
+.summary-item+.summary-item{border-left:1rpx solid #e7e9eb}
+.summary-count{font-size:32rpx;font-weight:700;color:#20252a;font-variant-numeric:tabular-nums}
+.count-unit{font-size:22rpx;font-weight:400;color:#66717a}
+.dashboard-account{padding:24rpx}
+.module-title{font-size:29rpx;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:16rpx}
+.text-action{margin:0;padding:6rpx 0;line-height:1.6;background:transparent;color:#a3202b;font-size:24rpx;font-weight:400}
+.balance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24rpx 20rpx;padding:24rpx 0}
+.balance-grid>view{display:flex;flex-direction:column;gap:8rpx;color:#66717a;font-size:24rpx;min-width:0}
+.balance-value{font-size:30rpx;font-weight:700;color:#20252a;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.shortcut{display:flex;align-items:center;gap:20rpx;width:100%;box-sizing:border-box;margin:0;border-radius:0;background:#fff;color:#20252a;padding:24rpx;font-size:28rpx;line-height:1.5;text-align:left;border-bottom:1rpx solid #e7e9eb}
+.shortcut:last-child{border-bottom:0}
+.shortcut image{width:40rpx;height:40rpx;flex:none}
+.shortcut-arrow{margin-left:auto;color:#66717a;font-size:32rpx}
+.dashboard-note{font-size:24rpx;line-height:1.7;color:#66717a;margin:28rpx 4rpx}
+.account-navigation{margin-top:16rpx;background:#fff;white-space:nowrap;border-radius:12rpx}
+.account-amount{font-weight:700;color:#a3202b}
+.finance-record{padding:24rpx 0;border-bottom:1rpx solid #e7e9eb}
+.finance-record:last-child{border-bottom:0}
+.finance-reference{max-width:65%;overflow-wrap:anywhere}
+.finance-record .row{gap:24rpx}
+.finance-record .caption,.finance-record .muted,.order-reference{overflow-wrap:anywhere}
+.product-sale-state{display:inline-block;padding:8rpx 12rpx;font-size:24rpx;margin:16rpx 0 10rpx;border-radius:8rpx}
+.sale-active{color:#24765b;background:#eef6f2}
+.sale-inactive{color:#66717a;background:#f4f5f5}
+.card .title{font-size:30rpx;line-height:1.5;overflow-wrap:anywhere}
+.card{border-radius:16rpx}
+.center-page .caption,.center-page .muted{color:#66717a}
+.center-page .row{gap:16rpx}
+button[disabled]{opacity:.55}
 
-.account-amount{font-weight:700;color:#a3202b}.finance-record{padding:24rpx 0;border-bottom:1rpx solid #e7e9eb}.finance-record:last-child{border-bottom:0}.finance-reference{max-width:65%;overflow-wrap:anywhere}.finance-record .row{gap:24rpx}.finance-record .caption,.finance-record .muted{overflow-wrap:anywhere}
+.list-heading{font-size:28rpx;font-weight:700;margin:28rpx 4rpx 8rpx}
+.center-page button{min-height:44px}
+.warehouse-switch{min-height:44px;display:flex;align-items:center;justify-content:center;box-sizing:border-box}

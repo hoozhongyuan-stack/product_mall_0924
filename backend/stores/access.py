@@ -29,6 +29,16 @@ def require_staff(member,store_id,permission='orders'):
     return store
 
 
+def staff_permissions(member, store_id):
+    """Live staff membership boundary, including staff without order access."""
+    store = get_store(store_id)
+    row = StoreStaff.objects.filter(store=store, member=member, enabled=True,
+        member__enabled=True, member__auth_version=member.auth_version).first()
+    if row is None:
+        raise StoreError('没有该前置仓的操作权限。', 'STORE_FORBIDDEN', 403)
+    return sorted(set(row.permissions) & {'products', 'orders', 'accounts'})
+
+
 def sale_product_ids(store):
     return StoreProduct.objects.filter(store=store,on_sale=True,product__status='ON_SALE').values_list('product_id',flat=True)
 

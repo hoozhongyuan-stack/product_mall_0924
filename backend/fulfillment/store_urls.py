@@ -1,6 +1,8 @@
 from django.urls import path
 from .store_views import orders_view
+from .store_overview import overview_view
 urlpatterns = [
+    path('api/v1/app/store-center/stores/<uuid:store_id>/overview', overview_view),
     path('api/v1/app/store-center/stores/<uuid:store_id>/orders', orders_view),
     path('api/v1/app/store-center/stores/<uuid:store_id>/orders/<uuid:order_id>', orders_view),
     path('api/v1/app/store-center/stores/<uuid:store_id>/orders/<uuid:order_id>/fulfillment', orders_view),
