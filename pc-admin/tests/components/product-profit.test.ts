@@ -1,5 +1,5 @@
 import { mount, flushPromises } from "@vue/test-utils";
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { createHash, webcrypto } from "node:crypto";
 import ProductProfitView from "../../src/views/stores/ProductProfitView.vue";
 import { api, ApiError, confirmedWrite, type Account } from "../../src/api";
@@ -8,6 +8,9 @@ vi.mock("../../src/api", async (importOriginal) => ({
   api: vi.fn(),
   confirmedWrite: vi.fn(),
 }));
+vi.mock("../../src/shared/confirm",()=>({confirmAction:vi.fn(async()=>true)}));
+import {confirmAction} from "../../src/shared/confirm";
+beforeEach(()=>vi.mocked(confirmAction).mockResolvedValue(true));
 const wrappers: ReturnType<typeof mount>[] = [];
 const row = {
   productId: "p1",
@@ -117,7 +120,7 @@ describe("separate product share and SKU cost", () => {
     const w = await setup();
     await w.get('[data-select="p1"]').setValue(true);
     expect(w.text()).toContain("已选 1");
-    await w.get('[data-action="next"]').trigger("click");
+    await w.get('.admin-list-pager .btn-next').trigger("click");
     await flushPromises();
     expect(w.text()).toContain("已选 0");
     expect(api).toHaveBeenLastCalledWith(expect.stringContaining("page=2"));
@@ -147,6 +150,7 @@ describe("profit rule recovery and boundaries", () => {
       .findAll("button")
       .find((b) => b.text() === "批量设置平台比例")!
       .trigger("click");
+    await flushPromises();
     await w.get("#product-share").setValue("100.01");
     expect(
       w
@@ -310,3 +314,14 @@ it("does not submit purchase costs when the current sales unit is missing", asyn
   ).toBeDefined();
   expect(confirmedWrite).not.toHaveBeenCalled();
 });
+
+it('resets product profit filters to the complete server query',async()=>{
+ const w=await setup();await w.get('input[type="search"]').setValue('测试商品');
+ const reset=w.findAll('button').find(b=>b.text()==='重置');expect(reset).toBeDefined();await reset!.trigger('click');await flushPromises();
+ expect(vi.mocked(api).mock.lastCall?.[0]).toContain('search=&categoryId=&configuration=ALL&page=1&pageSize=20');expect(w.get('input[type="search"]').element).toHaveProperty('value','')
+})
+it('permits current-page read-only comparison without allowing rule writes',async()=>{
+ const w=await setup();await w.setProps({account:{accountId:'reader',permissionCodes:['stores.read']} as Account});await flushPromises();
+ expect(w.get('[data-select="p1"]').attributes('disabled')).toBeUndefined();await w.get('[data-select="p1"]').setValue(true);const compare=w.findAll('button').find(b=>b.text()==='对比所选规则');expect(compare).toBeDefined();await compare!.trigger('click');await flushPromises();
+ expect(w.text()).toContain('当前页所选 1 条记录');expect(w.text()).toContain('双瓶装');expect(w.get('[data-action="cost"]').attributes('disabled')).toBeDefined();expect(vi.mocked(api).mock.calls.some(c=>c[1]?.method)).toBe(false)
+})

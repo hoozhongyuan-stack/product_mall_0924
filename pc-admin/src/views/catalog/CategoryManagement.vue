@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import AdminListPager from '../../shared/list/AdminListPager.vue';
+import AdminSelectionBar from '../../shared/list/AdminSelectionBar.vue';
+import AdminSelectedRowsDialog from '../../shared/list/AdminSelectedRowsDialog.vue';
+import AdminStatusBadge from '../../shared/list/AdminStatusBadge.vue';
+import { pageWindow } from '../../shared/list/list-state.mjs';
+import { useCurrentPageSelection } from '../../shared/list/useCurrentPageSelection';
 import { confirmAction } from "../../shared/confirm";
 
 import { computed, onMounted, onUnmounted, watch, ref } from "vue";
@@ -13,6 +19,78 @@ const canWrite = computed(() =>
   props.account.permissionCodes.includes("catalog.write"),
 );
 const categories = ref<Category[]>([]);
+const roots = computed(() =>
+  categories.value.filter((item) => !item.parentId).sort(byOrder),
+);
+
+const keyword = ref("");
+const statusFilter = ref("");
+const page = ref(1);
+const pageSize = ref(20);
+const compareOpen = ref(false);
+const appliedFilters = ref({ keyword: "", status: "" });
+const filteredGroups = computed(() => {
+  const query = appliedFilters.value.keyword.trim().toLocaleLowerCase();
+  const nameMatches = (row: Category) =>
+    !query || row.name.toLocaleLowerCase().includes(query);
+  const statusMatches = (row: Category) =>
+    !appliedFilters.value.status || row.status === appliedFilters.value.status;
+  return roots.value.flatMap((root) => {
+    const children = categories.value
+      .filter((row) => row.parentId === root.id)
+      .sort(byOrder);
+    const matchingChildren = children.filter(
+      (row) => statusMatches(row) && (nameMatches(row) || nameMatches(root)),
+    );
+    const rootMatches = nameMatches(root) && statusMatches(root);
+    return rootMatches || matchingChildren.length
+      ? [{ root, children: matchingChildren }]
+      : [];
+  });
+});
+const rootPage = computed(() =>
+  pageWindow(filteredGroups.value, page.value, pageSize.value),
+);
+const rows = computed(() =>
+  rootPage.value.items.flatMap((group) => [group.root, ...group.children]),
+);
+const selection = useCurrentPageSelection(() => rows.value, (row) => row.id);
+const comparisonColumns = [
+  { key: "name", label: "分类名称" },
+  { key: "level", label: "层级" },
+  { key: "parent", label: "上级分类" },
+  { key: "products", label: "关联商品" },
+  { key: "sort", label: "排序" },
+  { key: "status", label: "状态" },
+];
+const comparisonRows = computed(() =>
+  selection.selectedRows.value.map((row) => ({
+    name: row.name,
+    level: row.parentId ? "二级" : "一级",
+    parent: row.parentId
+      ? categories.value.find((parent) => parent.id === row.parentId)?.name || "未知上级"
+      : "—",
+    products: row.productCount ?? 0,
+    sort: row.sortOrder,
+    status: row.status === "ACTIVE" ? "启用" : "停用",
+  })),
+);
+function applyFilters(reset = false) {
+  if (reset) {
+    keyword.value = "";
+    statusFilter.value = "";
+  }
+  appliedFilters.value = { keyword: keyword.value, status: statusFilter.value };
+  page.value = 1;
+  selection.clear();
+}
+function changePage(next: number, size: number) {
+  page.value = next;
+  pageSize.value = size;
+  selection.clear();
+}
+watch([keyword, statusFilter], selection.clear);
+
 const loading = ref(true);
 const saving = ref(false);
 const error = ref("");
@@ -67,6 +145,9 @@ watch(
     mediaBusy.value = false;
     saving.value = false;
     categories.value = [];
+    selection.clear();
+    compareOpen.value = false;
+    page.value = 1;
     void load();
   },
 );
@@ -81,17 +162,6 @@ watch(
   },
   { flush: "sync" },
 );
-const roots = computed(() =>
-  categories.value.filter((item) => !item.parentId).sort(byOrder),
-);
-const rows = computed(() =>
-  roots.value.flatMap((root) => [
-    root,
-    ...categories.value
-      .filter((item) => item.parentId === root.id)
-      .sort(byOrder),
-  ]),
-);
 function byOrder(a: Category, b: Category) {
   return a.sortOrder - b.sortOrder || a.name.localeCompare(b.name);
 }
@@ -99,6 +169,7 @@ function byOrder(a: Category, b: Category) {
 async function load() {
   const token = ++generation;
   loading.value = true;
+  selection.clear();
   listError.value = "";
   try {
     const result = await api<Category[]>("/categories");
@@ -108,9 +179,10 @@ async function load() {
     }
     return false;
   } catch (reason) {
-    if (token === generation)
+    if (token === generation) {
       listError.value =
         reason instanceof Error ? reason.message : "分类加载失败。";
+    }
     return false;
   } finally {
     if (token === generation) loading.value = false;
@@ -291,7 +363,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="catalog-section">
+  <div class="catalog-section admin-list-page">
     <div class="page-heading">
       <div>
         <h2>商品分类</h2>
@@ -310,11 +382,15 @@ async function save() {
     <p v-if="listError && !editor" class="error notice" role="alert">
       {{ listError }}
     </p>
+    <form class="catalog-filters" role="search" @submit.prevent="applyFilters()"><label>分类名称<input v-model="keyword" aria-label="分类关键词" maxlength="80" placeholder="一级或二级分类名称" /></label><label>分类状态<select v-model="statusFilter" aria-label="分类状态"><option value="">全部状态</option><option value="ACTIVE">启用</option><option value="INACTIVE">停用</option></select></label><button class="primary-button" type="submit" :disabled="loading">查询</button><button class="secondary-button" type="button" :disabled="loading" @click="applyFilters(true)">重置</button></form>
+    <p class="hint">按一级分类分页，每组携带符合条件的二级分类；匹配二级分类时保留上级分类，便于核对层级。</p>
+    <AdminSelectionBar v-if="!loading && !listError" :count="selection.selectedIds.value.length" unit="个分类" :loading="loading || saving" @clear="selection.clear"><button class="secondary-button" :disabled="!selection.selectedIds.value.length || loading || saving" @click="compareOpen=true">核对所选分类</button></AdminSelectionBar>
     <p v-if="loading" class="loading-inline" role="status">正在加载分类…</p>
-    <div v-else class="panel table-wrap category-table">
+    <div v-else class="panel table-wrap category-table admin-list-table" tabindex="0" aria-label="分类列表，可横向滚动">
       <table>
         <thead>
           <tr>
+            <th scope="col"><input type="checkbox" aria-label="选择当前页分类" :checked="selection.allSelected.value" :indeterminate="selection.indeterminate.value" :disabled="loading || saving || !!listError" @change="selection.togglePage(($event.target as HTMLInputElement).checked)" /></th>
             <th scope="col">分类名称</th>
             <th scope="col">层级</th>
             <th scope="col">关联商品</th>
@@ -325,6 +401,7 @@ async function save() {
         </thead>
         <tbody>
           <tr v-for="item in rows" :key="item.id">
+            <td><input type="checkbox" :aria-label="`选择分类 ${item.name}`" :checked="selection.selectedIds.value.includes(item.id)" :disabled="loading || saving || !!listError" @change="selection.toggle(item.id,($event.target as HTMLInputElement).checked)" /></td>
             <td :class="['strong-cell', { 'child-category': !!item.parentId }]">
               {{ item.name }}
             </td>
@@ -332,13 +409,7 @@ async function save() {
             <td>{{ item.productCount ?? 0 }}</td>
             <td>{{ item.sortOrder }}</td>
             <td>
-              <span
-                :class="[
-                  'badge',
-                  item.status === 'ACTIVE' ? 'badge-good' : 'badge-muted',
-                ]"
-                >{{ item.status === "ACTIVE" ? "启用" : "停用" }}</span
-              >
+              <AdminStatusBadge :status="item.status" :label="item.status === 'ACTIVE' ? '启用' : '停用'" />
             </td>
             <td v-if="canWrite">
               <button
@@ -363,9 +434,12 @@ async function save() {
         </tbody>
       </table>
       <p v-if="!rows.length" class="empty-state">
-        尚无分类。先创建一级分类，再添加二级分类，商品才能选择分类。
+        {{categories.length?'未找到符合条件的分类，可调整检索条件。':'尚无分类。先创建一级分类，再添加二级分类，商品才能选择分类。'}}
       </p>
     </div>
+    <p v-if="!loading && !listError" class="hint">共 {{filteredGroups.length}} 组一级分类，本页 {{rootPage.items.length}} 组，展示 {{rows.length}} 条分类。</p>
+    <AdminListPager v-if="!loading && !listError" :page="rootPage.page" :page-size="pageSize" :total="rootPage.total" :loading="loading || saving" @change="changePage" />
+    <AdminSelectedRowsDialog v-model="compareOpen" title="核对所选分类" :columns="comparisonColumns" :rows="comparisonRows" />
     <button
       v-if="listError && !loading && !editor"
       class="text-button retry"

@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { confirmAction } from '../shared/confirm'
+import AdminListPager from '../shared/list/AdminListPager.vue'
+import AdminStatusBadge from '../shared/list/AdminStatusBadge.vue'
+import AdminSelectionBar from '../shared/list/AdminSelectionBar.vue'
+import AdminSelectedRowsDialog from '../shared/list/AdminSelectedRowsDialog.vue'
+
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError, api, confirmedWrite, type Account, type PermissionGroup } from '../api'
 import PasswordDialog from '../components/PasswordDialog.vue'
@@ -34,6 +40,7 @@ async function passwordTargetChanged() {
 }
 
 async function load() {
+  selectedIds.value = []
   loading.value = true
   error.value = ''
   try {
@@ -44,6 +51,7 @@ async function load() {
     ])
     accounts.value = accountRows
     groups.value = groupRows
+    page.value = Math.min(page.value, Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)))
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '账号加载失败。'
   } finally {
@@ -136,31 +144,64 @@ function closeForm() {
   disableTarget.value = null
   newPassword.value = ''
   }
+
+
+const search = ref(''), enabledFilter = ref(''), page = ref(1), pageSize = ref(20)
+const appliedSearch = ref(''), appliedEnabled = ref('')
+const filteredRows = computed(() => accounts.value.filter(row => `${row.loginName} ${row.displayName}`.toLowerCase().includes(appliedSearch.value.toLowerCase()) && (!appliedEnabled.value || String(row.enabled) === appliedEnabled.value)))
+const visibleRows = computed(() => filteredRows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+function applyFilters() { appliedSearch.value = search.value.trim(); appliedEnabled.value = enabledFilter.value; page.value=1; selectedIds.value = [] }
+function resetFilters() { search.value=''; enabledFilter.value=''; applyFilters() }
+function pageChanged(value:number,size:number) { page.value=value; pageSize.value=size; selectedIds.value = [] }
+const compareRows = computed(() => currentRows.value.filter(row => selectedIds.value.includes(row.accountId)).map(row => ({...row, status:row.enabled ? '启用' : '停用', groups:groupNames(row.groupIds) })))
+const detailTarget = ref<Account | null>(null)
+
+const selectedIds = ref<string[]>([])
+const comparisonOpen = ref(false)
+const currentRows = computed(() => visibleRows.value)
+const allSelected = computed(() => currentRows.value.length > 0 && currentRows.value.every(row => selectedIds.value.includes(row.accountId)))
+function toggleRow(id: string) { selectedIds.value = selectedIds.value.includes(id) ? selectedIds.value.filter(value => value !== id) : [...selectedIds.value, id] }
+function selectPage() { selectedIds.value = allSelected.value ? [] : currentRows.value.map(row => row.accountId) }
+watch([search,enabledFilter],()=>{selectedIds.value = []})
+async function requestCloseForm() {
+  if (saving.value) return false
+  const original=JSON.stringify([loginName.value,displayName.value,newPassword.value,groupIds.value])
+  if (formOpen.value && (loginName.value || displayName.value || newPassword.value || groupIds.value.length) && !await confirmAction('有未保存账号资料，确定关闭？')) return false
+  if (saving.value || original!==JSON.stringify([loginName.value,displayName.value,newPassword.value,groupIds.value])) return false
+  closeForm(); loginName.value=''; displayName.value=''; groupIds.value=[]
+  return true
+}
+async function closeAccountDialog(done:() => void) { if(await requestCloseForm()) done() }
 </script>
 
 <template>
-  <section class="page-content">
+  <section class="page-content admin-list-page">
     <div class="page-heading"><div><h1>子账号</h1><p>查看授权范围，创建或停用后台账号。主账号可以重置子账号密码。</p></div>
       <button v-if="canManage" class="primary-button" type="button" :disabled="loading || !groups.length" @click="openCreate">创建子账号</button>
     </div>
     <p v-if="canManage && !loading && !groups.length" class="hint">创建账号需要一个可用权限组及权限组读取权限。</p>
-    <p v-if="error" class="error notice" role="alert">{{ error }}</p>
+    <form class="admin-list-filters" @submit.prevent="applyFilters"><label>登录名 / 显示名<input v-model="search" maxlength="150" placeholder="查询账号" /></label><label>状态<select v-model="enabledFilter"><option value="">全部状态</option><option value="true">启用</option><option value="false">停用</option></select></label><button class="primary-button" :disabled="loading">查询</button><button class="secondary-button" type="button" :disabled="loading" @click="resetFilters">重置</button></form>
+<AdminSelectionBar :count="selectedIds.length" unit="条" :loading="loading" @clear="selectedIds=[]"><button class="secondary-button" :disabled="!selectedIds.length" @click="comparisonOpen=true">批量查看</button></AdminSelectionBar>
+<p v-if="error" class="error notice" role="alert">{{ error }}</p>
     <p v-if="loading" class="loading-inline" role="status">正在加载账号…</p>
-    <div v-else class="panel table-wrap">
-      <table><thead><tr><th>登录名</th><th>显示名</th><th>身份</th><th>权限组</th><th>状态</th><th v-if="canManage || isOwner">操作</th></tr></thead>
-        <tbody><tr v-for="item in accounts" :key="item.accountId">
-          <td class="strong-cell">{{ item.loginName }}</td><td>{{ item.displayName }}</td>
+    <div v-else class="panel table-wrap admin-list-table">
+      <table><thead><tr><th><input type="checkbox" aria-label="选择当前页全部记录" :checked="allSelected" @change="selectPage" /></th><th>登录名</th><th>显示名</th><th>身份</th><th>权限组</th><th>状态</th><th>操作</th></tr></thead>
+        <tbody><tr v-for="item in visibleRows" :key="item.accountId">
+          <td><input type="checkbox" :aria-label="`选择账号 ${item.loginName}`" :checked="selectedIds.includes(item.accountId)" @change="toggleRow(item.accountId)" /></td><td class="strong-cell">{{ item.loginName }}</td><td>{{ item.displayName }}</td>
           <td>{{ item.kind === 'OWNER' ? '主账号' : '子账号' }}</td><td>{{ groupNames(item.groupIds) }}</td>
-          <td><span :class="['badge', item.enabled ? 'badge-good' : 'badge-muted']">{{ item.enabled ? '启用' : '停用' }}</span></td>
-          <td v-if="canManage || isOwner"><template v-if="item.kind === 'STAFF' && item.accountId !== account.accountId"><button v-if="isOwner" class="text-button" type="button" @click="passwordTarget = item">重置密码</button><button v-if="canManage && item.enabled" class="text-button danger" type="button" @click="openDisable(item)">停用</button></template><span v-else>—</span></td>
+          <td><AdminStatusBadge :status="item.enabled ? 'ENABLED' : 'DISABLED'" :label="item.enabled ? '启用' : '停用'" :tone="item.enabled ? 'success' : 'neutral'" /></td>
+          <td><button class="text-button" @click="detailTarget=item">查看</button><template v-if="item.kind === 'STAFF' && item.accountId !== account.accountId"><button v-if="isOwner" class="text-button" type="button" @click="passwordTarget = item">重置密码</button><button v-if="canManage && item.enabled" class="text-button danger" type="button" @click="openDisable(item)">停用</button></template><span v-else>—</span></td>
         </tr></tbody></table>
-      <p v-if="!accounts.length" class="empty-state">暂无账号。</p>
+      <p v-if="!visibleRows.length" class="empty-state">当前条件下暂无账号。</p>
     </div>
-    <button v-if="error && !loading" class="text-button retry" type="button" @click="load">重新加载</button>
+    <AdminListPager :page="page" :page-size="pageSize" :total="filteredRows.length" :loading="loading" @change="pageChanged" />
+<AdminSelectedRowsDialog v-model="comparisonOpen" title="所选账号" :rows="compareRows" :columns="[{key:'loginName',label:'登录名'},{key:'displayName',label:'显示名'},{key:'groups',label:'权限组'},{key:'status',label:'状态'}]" />
+<el-dialog :model-value="Boolean(detailTarget)" title="账号详情" @update:model-value="detailTarget=null"><template v-if="detailTarget"><dl><dt>登录名</dt><dd>{{detailTarget.loginName}}</dd><dt>显示名</dt><dd>{{detailTarget.displayName}}</dd><dt>身份</dt><dd>{{detailTarget.kind==='OWNER'?'主账号':'子账号'}}</dd><dt>权限组</dt><dd>{{groupNames(detailTarget.groupIds)}}</dd><dt>修订</dt><dd>{{detailTarget.revision}}</dd></dl></template></el-dialog>
+<button v-if="error && !loading" class="text-button retry" type="button" @click="load">重新加载</button>
     <PasswordDialog v-if="passwordTarget" :target="passwordTarget" @close="passwordTarget = null" @changed="passwordReset" @stale="passwordTargetChanged" />
 
-    <form v-if="formOpen" class="panel action-panel" @submit.prevent="createAccount">
-      <div class="panel-heading"><h2>创建子账号</h2><button class="text-button" type="button" @click="closeForm">取消</button></div>
+    <el-dialog :model-value="formOpen" title="创建子账号" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" :before-close="closeAccountDialog"><form class="action-panel" @submit.prevent="createAccount"><p v-if="error" class="error notice" role="alert">{{error}}</p>
+      <div class="panel-heading"><h2>创建子账号</h2><button class="text-button" type="button"  :disabled="saving" @click="requestCloseForm">取消</button></div>
       <div class="form-grid">
         <label>登录名<input v-model="loginName" autocomplete="off" maxlength="150" required placeholder="例如 operator-01" /></label>
         <label>显示名<input v-model="displayName" maxlength="120" required placeholder="例如 商品运营" /></label>
@@ -173,12 +214,12 @@ function closeForm() {
       </fieldset>
 
       <button class="primary-button" type="submit" :disabled="saving">{{ saving ? '创建中…' : '确认创建' }}</button>
-    </form>
-    <form v-if="disableTarget" class="panel action-panel" @submit.prevent="disableAccount">
-      <div class="panel-heading"><h2>停用 {{ disableTarget.displayName }}</h2><button class="text-button" type="button" @click="closeForm">取消</button></div>
+    </form></el-dialog>
+    <el-dialog :model-value="Boolean(disableTarget)" title="停用账号" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" :before-close="closeAccountDialog"><form v-if="disableTarget" class="action-panel" @submit.prevent="disableAccount"><p v-if="error" class="error notice" role="alert">{{error}}</p>
+      <div class="panel-heading"><h2>停用 {{ disableTarget.displayName }}</h2><button class="text-button" type="button"  :disabled="saving" @click="requestCloseForm">取消</button></div>
       <p>停用后，该子账号现有会话会失效，无法再次登录。</p>
 
       <button class="danger-button" type="submit" :disabled="saving">{{ saving ? '停用中…' : '确认停用' }}</button>
-    </form>
+    </form></el-dialog>
   </section>
 </template>

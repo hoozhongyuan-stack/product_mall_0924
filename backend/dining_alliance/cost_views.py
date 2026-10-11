@@ -1,4 +1,5 @@
 """Retired restaurant-specific costs remain readable as historical archives."""
+from django.db.models import Q
 from accounts.security import require
 from common.http import method,offset_response
 from stores.access import get_store
@@ -23,5 +24,5 @@ def costs_view(request):
     if request.GET.get('storeId'):
         rows=rows.filter(store=get_store(request.GET['storeId']))
     query=request.GET.get('search','').strip()[:120]
-    if query:rows=rows.filter(sku__product__name__icontains=query)
+    if query:rows=rows.filter(Q(sku__product__name__icontains=query)|Q(sku__sku_code__icontains=query)|Q(store__name__icontains=query))
     return offset_response(request,{**page_data(request,rows,cost_data),'retired':True,'activeCostConfiguration':'/api/v1/admin/stores/purchase-costs'})

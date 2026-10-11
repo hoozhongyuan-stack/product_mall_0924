@@ -856,3 +856,13 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 `GET /api/v1/app/home`、`GET /api/v1/app/pages/{id}`、`GET /api/v1/app/products`、`GET /api/v1/app/products/{id}` 支持 `diningSessionId`。提供该参数即为餐饮扫码范围，必须当前 Bearer 会员拥有有效会话；禁止与 `storeId` 混用或重复参数。DTO 沿用普通读取格式，商品与组件商品仅含餐饮店和会话固定仓可售交集，数量限制在交集后应用。发布装修配置不改写，固定仓缺货不切换。成功和失败均禁止缓存并按 Authorization 区分。无参数保持普通读取；无效餐饮参数不能回退普通读取。
 
 本轮餐饮后台批量管理接口、成本退役、订单来源/归属/履约仓筛选及兼容路由详见 `docs/dining-alliance.md` 的“后台批量管理调整”节；已成交快照不追改。
+
+### 后台列表规范化增量（2026-10-11，本地开发）
+
+- 后台 `GET /api/v1/admin/stores/{storeId}/account` 与 `GET /api/v1/admin/dining-alliance/restaurants/{restaurantId}/account` 的收入与提现分别接受 `incomePage/incomePageSize/incomeSearch/incomeStatus/incomeDateFrom/incomeDateTo` 和 `withdrawalPage/withdrawalPageSize/withdrawalSearch/withdrawalStatus/withdrawalDateFrom/withdrawalDateTo`。Page 为 1–10000，PageSize 为 20/50/100；关键词最多120字符，状态限各域既有枚举，日期按本地自然日闭区间核对。重复参数、非法状态/日期、逆序日期及结束日9999-12-31返回400。
+- `data` 增加独立 `incomePagination`、`withdrawalPagination`，各含 `{page,pageSize,total}`；对应顶层 `meta.income/meta.withdrawal`。检索覆盖授权对象完整历史，分页不改变可用、冻结、已发放或待结算余额；GET 不执行结算。小程序既有读取继续兼容原最多100条历史记录。
+- `GET /api/v1/admin/code-versions` 新增 `q`（名称、来源修订、摘要）；`GET /api/v1/admin/code-sync-jobs` 新增 `q`（任务、修订、失败码）和 `status`（STARTED/SUCCEEDED/FAILED）。关键词最多100字符；先服务端过滤后游标分页。带筛选的签名游标绑定筛选条件，换条件不可沿用旧游标。
+- 客户端普通分页统一20/50/100，拥有总数的接口展示跳页；审计、版本/同步及消息任务保留真实游标，仅上一页/下一页，无伪总数或任意跳页。完整授权数组的分类、账号、权限组、仓库采用客户端完整集筛选分页。
+- 列表勾选限定当前页，检索、换页、重新读取清除选择。只读批量核对不增加写权限；商品批量状态/分类与订单批量发货沿用原接口、权限、修订和幂等恢复。未知发货结果保留原请求身份，禁止作为新的批量项重复提交。
+
+页面和附属详情表边界见[后台列表规范化交付清单](admin-list-standardization.md)。

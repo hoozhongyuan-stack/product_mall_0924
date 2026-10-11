@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import AdminCursorPager from '../shared/list/AdminCursorPager.vue'
+import AdminStatusBadge from '../shared/list/AdminStatusBadge.vue'
+import AdminSelectionBar from '../shared/list/AdminSelectionBar.vue'
+import AdminSelectedRowsDialog from '../shared/list/AdminSelectedRowsDialog.vue'
+import { useCurrentPageSelection } from '../shared/list/useCurrentPageSelection'
 import { computed, onMounted, ref } from 'vue'
 import { api, type Account, type AuditEntry } from '../api'
 import ExportPanel from './exports/ExportPanel.vue'
@@ -10,6 +15,11 @@ const blank = (): Filters => ({ from: '', to: '', actorId: '', actionCode: '', o
 const filters = ref<Filters>(blank())
 const applied = ref<Filters>(blank())
 const logs = ref<AuditEntry[]>([])
+const selection = useCurrentPageSelection(()=>logs.value,row=>row.id)
+const pageSize = ref(20), compareOpen = ref(false), selectedAudit = ref<AuditEntry|null>(null)
+const compareColumns = [{key:'time',label:'时间'},{key:'action',label:'动作'},{key:'result',label:'结果'},{key:'actor',label:'操作者'},{key:'object',label:'对象'}]
+const compareRows = computed(()=>selection.selectedRows.value.map(row=>({time:timestamp(row.occurredAt),action:row.actionCode,result:resultText[row.result]||row.result,actor:row.actorId,object:`${row.objectType} ${row.objectId}`})))
+function changeSize(size:number) {pageSize.value=size;previous.value=[];void load('')}
 const range = ref('默认近 90 天')
 const loading = ref(true)
 const error = ref('')
@@ -36,8 +46,9 @@ let generation = 0
 async function load(next = cursor.value) {
   const current = ++generation
   loading.value = true
+  selection.clear()
   error.value = ''
-  const query = new URLSearchParams()
+  const query = new URLSearchParams({limit:String(pageSize.value)})
   for (const [key, value] of Object.entries(applied.value)) if (value) query.set(key, value)
   if (next) query.set('cursor', next)
   try {
@@ -91,7 +102,7 @@ const resultText: Record<string, string> = { SUCCESS: '成功', DENIED: '已拒�
 </script>
 
 <template>
-  <section class="page-content audit-page">
+  <section class="page-content audit-page admin-list-page">
     <header class="page-heading"><div><h1>操作日志</h1><p>按操作时间筛选；前后值由服务端脱敏后展示。</p></div>
       <button class="secondary-button" type="button" :disabled="loading" @click="load()">重新读取</button></header>
     <form class="panel audit-filters" aria-label="筛选操作日志" @submit.prevent="apply">
@@ -104,21 +115,25 @@ const resultText: Record<string, string> = { SUCCESS: '成功', DENIED: '已拒�
       <label>结果<select v-model="filters.result"><option value="">全部结果</option><option value="SUCCESS">成功</option><option value="DENIED">已拒绝</option><option value="FAILED">失败</option></select></label>
       <div class="audit-actions"><button class="primary-button" type="submit" :disabled="loading">查询</button><button class="secondary-button" type="button" :disabled="loading" @click="reset">重置</button></div>
     </form>
-    <p class="audit-range">{{ range }} · 每页 20 条，按时间倒序</p>
+    <p class="audit-range">{{ range }} · 按时间倒序</p>
     <p v-if="error" class="error notice" role="alert">{{ error }} <button class="text-button" type="button" @click="load()">重试</button></p>
     <p v-if="loading" class="loading-inline" role="status">正在查询操作日志…</p>
-    <div v-else-if="!error" class="panel table-wrap" tabindex="0" aria-label="操作日志列表，可横向滚动">
-      <table><thead><tr><th scope="col">时间</th><th scope="col">操作</th><th scope="col">结果</th><th scope="col">操作者 ID</th><th scope="col">对象</th><th scope="col">详情</th></tr></thead>
+    <AdminSelectionBar v-if="!loading && !error" :count="selection.selectedIds.value.length" @clear="selection.clear"><button class="secondary-button" :disabled="!selection.selectedIds.value.length" @click="compareOpen=true">核对所选</button></AdminSelectionBar>
+    <div v-if="!loading && !error" class="panel table-wrap admin-list-table" tabindex="0" aria-label="操作日志列表，可横向滚动">
+      <table><thead><tr><th scope="col"><input type="checkbox" :checked="selection.allSelected.value" :indeterminate="selection.indeterminate.value" aria-label="选择当前页日志" @change="selection.togglePage(($event.target as HTMLInputElement).checked)"></th><th scope="col">时间</th><th scope="col">操作</th><th scope="col">结果</th><th scope="col">操作者 ID</th><th scope="col">对象</th><th scope="col">详情</th></tr></thead>
         <tbody><tr v-for="item in logs" :key="item.id">
-          <td>{{ timestamp(item.occurredAt) }}</td><td class="strong-cell">{{ item.actionCode }}</td>
-          <td><span :class="['badge', item.result === 'SUCCESS' ? 'badge-good' : 'badge-muted']">{{ resultText[item.result] || item.result }}</span></td>
+          <td><input type="checkbox" :checked="selection.selectedIds.value.includes(item.id)" :aria-label="`选择日志 ${item.id}`" @change="selection.toggle(item.id,($event.target as HTMLInputElement).checked)"></td><td>{{ timestamp(item.occurredAt) }}</td><td class="strong-cell">{{ item.actionCode }}</td>
+          <td><AdminStatusBadge :status="item.result" :label="resultText[item.result] || item.result"/></td>
           <td class="code">{{ item.actorId || '未识别' }}</td>
           <td>{{ item.objectType }}<br /><span class="code">{{ item.objectId || '—' }}</span></td>
-          <td><details><summary>查看脱敏详情</summary><pre>{{ JSON.stringify({ before: item.before, after: item.after, requestId: item.requestId }, null, 2) }}</pre></details></td>
+          <td><button class="text-button" @click="selectedAudit=item">查看脱敏详情</button></td>
         </tr></tbody></table>
       <p v-if="!logs.length" class="empty-state">当前条件下没有操作日志。可调整日期或清除筛选。</p>
     </div>
-    <div v-if="!error && !loading" class="audit-pages"><span>第 {{ previous.length + 1 }} 页</span><div><button class="secondary-button" :disabled="!previous.length" @click="back">上一页</button><button class="secondary-button" :disabled="!nextCursor" @click="forward">下一页</button></div></div>
+    <AdminCursorPager :page="previous.length+1" :page-size="pageSize" :has-previous="Boolean(previous.length)" :has-next="Boolean(nextCursor)" :loading="loading" @previous="back" @next="forward" @size="changeSize"/>
+    <AdminSelectedRowsDialog v-model="compareOpen" title="核对所选日志" :columns="compareColumns" :rows="compareRows"/>
+    <el-dialog :model-value="Boolean(selectedAudit)" title="日志脱敏详情" width="760px" :close-on-click-modal="false" @update:model-value="(value:boolean)=>{if(!value)selectedAudit=null}"><pre v-if="selectedAudit" style="max-width:100%">{{JSON.stringify({before:selectedAudit.before,after:selectedAudit.after,requestId:selectedAudit.requestId},null,2)}}</pre><template #footer><button class="secondary-button" @click="selectedAudit=null">关闭</button></template></el-dialog>
+
     <ExportPanel v-if="canExport" kind="AUDIT" :filters="exportFilters" :actor-id="account.accountId" />
   </section>
 </template>

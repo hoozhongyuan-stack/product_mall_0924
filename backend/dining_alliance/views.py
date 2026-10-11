@@ -36,6 +36,14 @@ def guarded(fn):
     return inner
 
 
+def filter_enabled(request,rows):
+    if request.GET.get('enabled'):
+        value=request.GET['enabled']
+        if value not in ('true','false') or len(request.GET.getlist('enabled'))!=1:raise DiningError('状态筛选无效。')
+        rows=rows.filter(enabled=value=='true')
+    return rows
+
+
 def page_data(request,rows,serialize):
     page=int(request.GET.get('page',1));size=int(request.GET.get('pageSize',20))
     if not 1<=page<=10000 or not 1<=size<=100:
@@ -82,7 +90,10 @@ def admin_tables(request,restaurant_id,table_id=None):
     if bad:return bad
     get_restaurant(restaurant_id)
     if request.method=='GET':
-        return offset_response(request,page_data(request,DiningTable.objects.filter(restaurant_id=restaurant_id),table_data))
+        rows=DiningTable.objects.filter(restaurant_id=restaurant_id).order_by('number','id')
+        if request.GET.get('search'):rows=rows.filter(number__icontains=request.GET['search'].strip()[:40])
+        rows=filter_enabled(request,rows)
+        return offset_response(request,page_data(request,rows,table_data))
     with transaction.atomic():
         actor,bad=require_live(request,'dining.manage')
         if bad:return bad
@@ -107,7 +118,11 @@ def admin_staff(request,restaurant_id):
             actor,bad=require(request,'dining.manage')
             if bad:return bad
             return response(request,{'members':search_staff_members(request.GET['memberSearch'])})
-        return offset_response(request,page_data(request,RestaurantStaff.objects.filter(restaurant_id=restaurant_id).select_related('member').order_by('id'),staff_data))
+        rows=RestaurantStaff.objects.filter(restaurant_id=restaurant_id).select_related('member').order_by('id')
+        if request.GET.get('search'):
+            query=request.GET['search'].strip()[:100]
+            rows=rows.filter(Q(member__nickname__icontains=query)|Q(member__member_no__icontains=query))
+        return offset_response(request,page_data(request,filter_enabled(request,rows),staff_data))
     body=parse_json_object(request)
     if set(body)!={'memberId','permissions','enabled','revision'} or type(body['enabled']) is not bool or type(body.get('revision')) is not int or not isinstance(body['permissions'],list) or any(not isinstance(p,str) or p not in ('products','orders','finance') for p in body['permissions']):
         raise DiningError('餐饮店管理员权限无效。')
@@ -264,6 +279,10 @@ def orders_response(request,order_id=None,restaurant_id=None):
     search=request.GET.get('search','').strip()
     if len(search)>40:raise DiningError('订单号搜索不超过 40 字。')
     if search:rows=rows.filter(order__order_no__icontains=search)
+    status=request.GET.get('status','')
+    if status:
+        if status not in ('PENDING_PAYMENT','PAID','CLOSED') or len(request.GET.getlist('status'))!=1:raise DiningError('订单状态筛选无效。')
+        rows=rows.filter(order__status=status)
     if order_id:
         row=rows.filter(order_id=order_id).first()
         if not row:raise DiningError('订单不存在。','DINING_NOT_FOUND',404)
@@ -285,8 +304,8 @@ def admin_finance(request,restaurant_id,withdrawals=False,withdrawal_id=None,act
             row=change_withdrawal(restaurant_id,withdrawal_id,action,parse_json_object(request))
             audit(request,'dining.withdrawal.'+action,'dining_withdrawal',row.id,actor=actor,after=withdrawal_data(row))
         return response(request,withdrawal_data(row))
-    data=account_data(restaurant)
-    return response(request,{'items':data['withdrawals']} if withdrawals else data)
+    data=account_data(restaurant,history_params=request.GET)
+    return response(request,{'items':data['withdrawals'],**data['withdrawalPagination']} if withdrawals else data,meta={'income':data['incomePagination'],'withdrawal':data['withdrawalPagination']})
 
 
 @csrf_exempt

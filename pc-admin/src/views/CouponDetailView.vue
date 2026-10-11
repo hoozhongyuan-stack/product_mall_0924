@@ -13,12 +13,13 @@ import { campaignLifecycle } from './coupons/lifecycle.mjs'
 import { useCampaignClock } from './coupons/clock'
 const now = useCampaignClock()
 import './coupons/coupons.css'
-const props=defineProps<{account:Account}>(),route=useRoute(),router=useRouter(),campaign=ref<Campaign|null>(null),loading=ref(false),loadError=ref(''),saved=ref(''),confirm=ref(''),issueBusy=ref(false)
-const target=computed(()=>String(route.params.campaignId||'new')),isNew=computed(()=>target.value==='new')
+const props=defineProps<{account:Account; campaignId?: string; embedded?: boolean }>(),route=useRoute(),router=useRouter(),campaign=ref<Campaign|null>(null),loading=ref(false),loadError=ref(''),saved=ref(''),confirm=ref(''),issueBusy=ref(false)
+const embeddedTarget=ref(props.campaignId)
+const target=computed(()=>String(embeddedTarget.value || route.params.campaignId||'new')),isNew=computed(()=>target.value==='new')
 const empty=():CampaignForm=>({code:'',title:'',kind:'FULL_REDUCTION',minimum:'100',discount:'10',productIds:[],redeemEligible:false,validFrom:'',validUntil:'',totalQuantity:'100',selfClaimLimit:'1',claimMode:'BOTH',issuanceEnabled:true})
 const form=ref<CampaignForm>(empty())
 const dirty=computed(()=>saved.value!==JSON.stringify(form.value)),canManage=computed(()=>props.account.permissionCodes.includes('coupon.manage')),canPublish=computed(()=>props.account.permissionCodes.includes('coupon.publish'))
-const {pending,busy,error,notice,storageError,verified,recover,write}=useCouponOperation(()=>props.account,()=>target.value,async result=>{confirm.value='';const r=result as Campaign;if(r?.id){campaign.value=r;assign(r);if(isNew.value){saved.value=JSON.stringify(form.value);await router.replace(`/coupons/${r.id}`)}}else await load(false)},()=>dirty.value)
+const {pending,busy,error,notice,storageError,verified,recover,write}=useCouponOperation(()=>props.account,()=>target.value,async result=>{confirm.value='';const r=result as Campaign;if(r?.id){campaign.value=r;assign(r);if(isNew.value){saved.value=JSON.stringify(form.value);if(props.embedded) embeddedTarget.value=r.id; else await router.replace(`/coupons/${r.id}`)}}else await load(false)},()=>dirty.value)
 let sequence=0
 const local=(v:string)=>{const d=new Date(v);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
 function assign(c:Campaign){form.value={code:c.code,title:c.title,kind:c.kind,minimum:(c.minGoodsFen/100).toFixed(2),discount:(c.discountFen/100).toFixed(2),productIds:[...c.productIds],redeemEligible:c.redeemEligible,validFrom:local(c.validFrom),validUntil:local(c.validUntil),totalQuantity:String(c.totalQuantity),selfClaimLimit:String(c.selfClaimLimit),claimMode:c.claimMode,issuanceEnabled:c.issuanceEnabled};saved.value=JSON.stringify(form.value)}
@@ -28,8 +29,16 @@ async function save(){if(!pending.value&&campaignError(form.value))return;await 
 async function confirmAction(){if(!campaign.value)return;const c=campaign.value;await write(`/coupon-campaigns/${c.id}/${confirm.value}`, 'POST',confirm.value==='publish'?{expectedRevision:c.revision}:{expectedRevision:c.revision,issuanceEnabled:!c.issuanceEnabled},'coupon.publish','coupon.publish')}
 async function retry(){if(!pending.value)return;const p=pending.value;await write(p.path,p.method,p.body,p.action,p.action==='coupon.publish'?'coupon.publish':'coupon.manage')}
 onMounted(()=>load(false));onUnmounted(()=>sequence++);watch(()=>`${target.value}:${props.account.accountId}:${props.account.permissionCodes.join(',')}`,()=>{sequence++;confirm.value='';form.value=empty();saved.value=JSON.stringify(form.value);void load(false)})
+
+async function mayClose() {
+  if (busy.value || issueBusy.value) return false
+  const originalTarget=target.value, originalSaved=saved.value, originalForm=JSON.stringify(form.value), originalPending=pending.value?.key
+  const allowed=!(dirty.value || pending.value) || await confirmDiscard(pending.value ? '操作结果待确认，原请求已保留。确定关闭？' : '有未保存修改，确定关闭？')
+  return allowed && !(busy.value || issueBusy.value) && originalTarget===target.value && originalSaved===saved.value && originalForm===JSON.stringify(form.value) && originalPending===pending.value?.key
+}
+defineExpose({mayClose})
 </script>
-<template><section class="page-content coupon-page"><header class="page-heading"><div><RouterLink to="/coupons" class="text-link">返回活动列表</RouterLink><h1>{{isNew?'创建优惠券活动':campaign?.title||'优惠券活动'}}</h1><p>发布前保存草稿；发布后保留券面规则，暂停只停止新增领取及发券。</p></div><el-button :disabled="busy||issueBusy||loading" @click="load()">刷新活动</el-button></header>
+<template><section class="page-content coupon-page"><header class="page-heading"><div><RouterLink v-if="!embedded" to="/coupons" class="text-link">返回活动列表</RouterLink><h1>{{isNew?'创建优惠券活动':campaign?.title||'优惠券活动'}}</h1><p>发布前保存草稿；发布后保留券面规则，暂停只停止新增领取及发券。</p></div><el-button :disabled="busy||issueBusy||loading" @click="load()">刷新活动</el-button></header>
 <p v-if="loading" role="status">正在读取活动…</p><div v-if="loadError" class="notice error" role="alert">{{loadError}} <el-button @click="load(false)">重新读取</el-button></div><p v-if="error||storageError" class="notice error" role="alert">{{error||storageError}}</p><p v-if="notice" class="notice" role="status">{{notice}}</p>
 <section v-if="pending" class="panel"><h2>操作结果待确认</h2><p>已锁定原请求。读取其最终结果后，可继续使用原请求身份重试。</p><el-button :loading="busy" @click="recover">读取操作结果</el-button><template v-if="verified"><el-button :disabled="busy||!!storageError" @click="retry">原请求重试</el-button></template></section>
 <template v-if="!loading&&!loadError&&(isNew||campaign)"><form v-if="isNew||campaign?.status==='DRAFT'" @submit.prevent="save"><CampaignEditor v-model="form" :account="account" :disabled="busy||!!pending||!canManage" :product-names="campaign?.productNames||[]"/><div class="coupon-actions"><el-button v-if="canManage" native-type="submit" type="primary" :loading="busy" :disabled="!!pending||!!storageError||!!campaignError(form)||!dirty">{{isNew?'保存草稿':'保存修改'}}</el-button><el-button v-if="campaign&&canPublish" :disabled="busy||issueBusy||!!pending||dirty||!!storageError" @click="begin('publish')">发布活动</el-button><span v-if="!canManage" class="coupon-note">当前账号只可查看活动。</span><span v-if="campaign&&dirty" class="coupon-note">先保存修改，再发布。</span></div></form>

@@ -10,8 +10,8 @@ import { useProcurementOperation } from './operation'
 import type { ProcurementOrder } from './types'
 import '../stores.css'
 import './procurement.css'
-const props=defineProps<{account:Account}>(), route=useRoute()
-const id=computed(()=>String(route.params.orderId || ''))
+const props=defineProps<{account:Account;recordId?:string;embedded?:boolean}>(), route=useRoute()
+const id=computed(()=>props.recordId??String(route.params.orderId || ''))
 const order=ref<ProcurementOrder|null>(null), loading=ref(false), error=ref(''), action=ref(''), fresh=ref(false)
 const initial=()=>({freight:'0.00',carrier:'',tracking:'',reason:'',paymentReference:'',reference:'',note:'',refundConfirmed:false})
 const form=reactive(initial())
@@ -43,6 +43,7 @@ async function close() {
  if(seq!==session || locked.value)return false
  action.value='';session++;return true
 }
+defineExpose({canClose:close})
 async function beforeClose(done:()=>void){if(await close())done()}
 async function submit() {
  if(!order.value || !fresh.value || loading.value || locked.value)return
@@ -61,7 +62,7 @@ watch(()=>JSON.stringify([props.account.accountId,props.account.permissionCodes,
 onUnmounted(()=>{epoch++;session++})
 </script>
 <template>
- <div class="stores-page procurement-page"><RouterLink to="/stores/procurement">‹ 返回进货订单</RouterLink>
+ <div class="stores-page procurement-page"><RouterLink v-if="!embedded" to="/stores/procurement">‹ 返回进货订单</RouterLink>
  <p v-if="error" class="error" role="alert">{{error}}</p><p v-if="op.error.value" class="error" role="alert">{{op.error.value}}</p><p v-if="op.storageError.value" class="error" role="alert">{{op.storageError.value}}</p><p v-if="op.notice.value" role="status">{{op.notice.value}}</p>
  <button :disabled="loading || op.busy.value" @click="load">重新读取订单</button><p v-if="loading" role="status">正在读取订单…</p>
  <section v-if="op.pending.value" class="panel store-section"><h3>上次操作结果待确认</h3><p>原请求已保留，请先读取结果。未完成时使用原请求重试。</p><button :disabled="op.busy.value" @click="op.recover">读取操作结果</button><template v-if="op.verified.value"><button :disabled="op.busy.value" @click="op.write(op.pending.value.path,op.pending.value.method,op.pending.value.body,op.pending.value.action,actionPermission(op.pending.value.path.split('/').at(-1)))">使用原请求重试</button></template></section>

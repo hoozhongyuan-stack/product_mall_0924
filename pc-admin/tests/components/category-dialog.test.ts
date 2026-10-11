@@ -1,5 +1,5 @@
 import { mount, flushPromises } from "@vue/test-utils";
-import { afterEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { defineComponent } from "vue";
 import { confirmAction } from "../../src/shared/confirm";
 import CategoryManagement from "../../src/views/catalog/CategoryManagement.vue";
@@ -56,9 +56,17 @@ const dialog = defineComponent({
     '<section v-if="modelValue" role="dialog" :aria-label="title"><slot/><slot name="footer"/></section>',
 });
 const wrappers: ReturnType<typeof mount>[] = [];
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ success: true, data: [] }),
+  }));
+});
 afterEach(() => {
   wrappers.splice(0).forEach((w) => w.unmount());
   vi.resetAllMocks();
+  vi.unstubAllGlobals();
 });
 async function setup(
   permissionCodes = ["catalog.read", "catalog.write", "asset.upload"],
@@ -103,7 +111,7 @@ describe("category modal editor", () => {
       "value",
       "",
     );
-    expect(w.get("select").element).toHaveProperty("value", "root");
+    expect(w.get('form[aria-label="分类编辑"] select').element).toHaveProperty("value", "root");
     expect(
       w.getComponent({ name: "CategoryImageEditor" }).props("secondary"),
     ).toBe(true);
@@ -123,7 +131,7 @@ describe("category modal editor", () => {
     vi.mocked(api).mockImplementation(async (path, init) =>
       init ? child : [root, child],
     );
-    await w.get("form").trigger("submit");
+    await w.get('form[aria-label="分类编辑"]').trigger("submit");
     await flushPromises();
     expect(api).toHaveBeenCalledWith("/categories/child", {
       method: "PATCH",
@@ -152,7 +160,7 @@ describe("category modal editor", () => {
           })
         : Promise.resolve([root, child]),
     );
-    await w.get("form").trigger("submit");
+    await w.get('form[aria-label="分类编辑"]').trigger("submit");
     expect(
       w.get('input[placeholder="请输入分类名称"]').attributes("disabled"),
     ).toBeDefined();
@@ -171,14 +179,14 @@ describe("category modal editor", () => {
     const w = await setup();
     await button(w, "编辑").trigger("click");
     await w.get('input[placeholder="请输入分类名称"]').setValue("");
-    await w.get("form").trigger("submit");
+    await w.get('form[aria-label="分类编辑"]').trigger("submit");
     expect(w.get("[role=dialog] [role=alert]").text()).toContain("分类名称");
     await w.get('input[placeholder="请输入分类名称"]').setValue("新名");
     vi.mocked(api).mockImplementation(async (path, init) => {
       if (init) throw new ApiError("冲突", 409, "REVISION_CONFLICT");
       return [{ ...root, revision: 3 }, child];
     });
-    await w.get("form").trigger("submit");
+    await w.get('form[aria-label="分类编辑"]').trigger("submit");
     await flushPromises();
     expect(w.get("[role=dialog] [role=alert]").text()).toContain("其他人修改");
     expect(button(w, "保存分类").attributes("disabled")).toBeDefined();
@@ -217,7 +225,7 @@ it("asks before discarding edits and preserves the draft when cancellation is de
   await button(w, "取消").trigger("click");
   await flushPromises();
   expect(w.find("[role=dialog]").exists()).toBe(true);
-  expect(w.get("input").element).toHaveProperty("value", "草稿");
+  expect(w.get('form[aria-label="分类编辑"] input').element).toHaveProperty("value", "草稿");
   vi.mocked(confirmAction).mockResolvedValueOnce(true);
   await button(w, "取消").trigger("click");
   await flushPromises();
@@ -234,7 +242,7 @@ it("ignores an old deactivation confirmation after closing and reopening the sam
   });
   await flushPromises();
   await button(w, "编辑").trigger("click");
-  await w.get("select").setValue("INACTIVE");
+  await w.get('form[aria-label="分类编辑"] select').setValue("INACTIVE");
   let finish: (value: boolean) => void = () => {};
   vi.mocked(confirmAction).mockImplementationOnce(
     () =>
@@ -242,7 +250,7 @@ it("ignores an old deactivation confirmation after closing and reopening the sam
         finish = resolve;
       }),
   );
-  await w.get("form").trigger("submit");
+  await w.get('form[aria-label="分类编辑"]').trigger("submit");
   vi.mocked(confirmAction).mockResolvedValueOnce(true);
   await button(w, "取消").trigger("click");
   await flushPromises();
@@ -251,7 +259,7 @@ it("ignores an old deactivation confirmation after closing and reopening the sam
   finish(true);
   await flushPromises();
   expect(vi.mocked(api).mock.calls.every((call) => !call[1])).toBe(true);
-  expect(w.get("input").element).toHaveProperty("value", "新会话字段");
+  expect(w.get('form[aria-label="分类编辑"] input').element).toHaveProperty("value", "新会话字段");
 });
 it("preserves list read failure after revision conflict and allows reloading after close", async () => {
   const w = await setup();
@@ -260,7 +268,7 @@ it("preserves list read failure after revision conflict and allows reloading aft
     if (init) throw new ApiError("冲突", 409, "REVISION_CONFLICT");
     throw new Error("读取失败");
   });
-  await w.get("form").trigger("submit");
+  await w.get('form[aria-label="分类编辑"]').trigger("submit");
   await flushPromises();
   expect(w.get("[role=dialog] [role=alert]").text()).toContain(
     "读取最新分类失败",
@@ -279,7 +287,7 @@ it("keeps submission failures inside the modal and ignores confirmation after un
   const w = await setup();
   await button(w, "编辑").trigger("click");
   vi.mocked(api).mockRejectedValue(new Error("保存失败"));
-  await w.get("form").trigger("submit");
+  await w.get('form[aria-label="分类编辑"]').trigger("submit");
   await flushPromises();
   expect(w.get("[role=dialog] [role=alert]").text()).toBe("保存失败");
   expect(w.findAll("[role=alert]")).toHaveLength(1);
@@ -294,7 +302,7 @@ it("keeps submission failures inside the modal and ignores confirmation after un
   });
   await flushPromises();
   await button(w, "编辑").trigger("click");
-  await w.get("select").setValue("INACTIVE");
+  await w.get('form[aria-label="分类编辑"] select').setValue("INACTIVE");
   let finish: (value: boolean) => void = () => {};
   vi.mocked(confirmAction).mockImplementationOnce(
     () =>
@@ -302,7 +310,7 @@ it("keeps submission failures inside the modal and ignores confirmation after un
         finish = resolve;
       }),
   );
-  await w.get("form").trigger("submit");
+  await w.get('form[aria-label="分类编辑"]').trigger("submit");
   const calls = vi.mocked(api).mock.calls.length;
   w.unmount();
   finish(true);

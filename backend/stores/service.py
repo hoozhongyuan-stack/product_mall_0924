@@ -172,9 +172,9 @@ def update_product(store,product_id,body,member):
     return next(row for row in products_data(store,product_id=product.id) if row['id']==str(product.id))
 
 
-def account_data(store):
+def account_data(store,history_params=None):
     from payments.store_accounts import account_data as read_account
-    return read_account(store)
+    return read_account(store,history_params=history_params)
 
 
 def account_summaries(stores):

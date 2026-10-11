@@ -43,3 +43,10 @@
 }
 .el-overlay-message-box { display: flex; align-items: center; justify-content: center; padding: 24px 16px; overflow: hidden; }
 .is-message-box .el-overlay-message-box::after { display: none; }
+
+/* List editors teleport outside page-content; retain the same native form controls. */
+.el-dialog__body :where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not(.el-input__inner):not(.el-select__input), select:not(.el-select__input), textarea:not(.el-textarea__inner)) {
+  width:100%;min-width:0;min-height:40px;padding:9px 12px;border:1px solid #cbd0d4;
+  border-radius:var(--mall-radius-control);background:var(--mall-color-surface);color:var(--mall-color-text);
+}
+.el-dialog__body :where(input,select,textarea):disabled {background:var(--mall-color-canvas-admin);cursor:not-allowed}

@@ -4,6 +4,7 @@ export interface Store {
  supportedModes:string[];deliveryRadiusMeters:number|null;deliveryFeeFen:number|null;revision:number
 }
 export interface StoreAccount {
+ incomePagination?:{page:number;pageSize:number;total:number};withdrawalPagination?:{page:number;pageSize:number;total:number};
  storeId:string;storeName:string;settlementReady:boolean;withdrawalReady:boolean;reason:string
  balance:{pendingFen:number|null;availableFen:number|null;frozenFen:number|null;paidFen:number|null}
  income:StoreIncome[];withdrawals:StoreWithdrawal[]

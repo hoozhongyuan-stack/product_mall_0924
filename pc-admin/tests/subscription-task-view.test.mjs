@@ -23,3 +23,9 @@ test('task query keeps bounded filters and opaque cursor', () => {
     '?eventType=ORDER_PAID&status=FAILED&createdFrom=2026-09-01&createdTo=2026-09-28&limit=20&cursor=opaque%2Bcursor')
   assert.equal(taskQuery({ eventType: '', status: '', createdFrom: '', createdTo: '' }, ''), '?limit=20')
 })
+
+test('task query sends the chosen cursor page size and rejects unsupported page sizes', () => {
+  assert.equal(taskQuery({}, 'opaque+cursor', 50), '?limit=50&cursor=opaque%2Bcursor')
+  assert.equal(taskQuery({}, '', 100), '?limit=100')
+  assert.throws(() => taskQuery({}, '', 21), /分页/)
+})

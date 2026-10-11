@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import AdminCursorPager from '../shared/list/AdminCursorPager.vue'
+import AdminStatusBadge from '../shared/list/AdminStatusBadge.vue'
+import AdminSelectionBar from '../shared/list/AdminSelectionBar.vue'
+import AdminSelectedRowsDialog from '../shared/list/AdminSelectedRowsDialog.vue'
+
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, type Account } from '../api'
 import ReleaseWorkflowPanel from './ReleaseWorkflowPanel.vue'
 import './code-versions.css'
@@ -64,6 +69,25 @@ const canManageKey = computed(() => props.account.permissionCodes.includes('code
 const canManagePlatform = computed(() => props.account.permissionCodes.includes('wechat.integration.read') && props.account.permissionCodes.includes('wechat.integration.manage'))
 const directCheckCodes = new Set(['APP_ID', 'SOURCE_PACKAGE', 'RELEASE_CONFIG', 'UPLOAD_KEY'])
 const directChecks = computed(() => readiness.value?.checks.filter(check => directCheckCodes.has(check.code)) || [])
+const pageSize=ref(20),jobPageSize=ref(20),versionQuery=ref(''),jobQuery=ref(''),jobStatus=ref('')
+const appliedVersionQuery=ref(''),appliedJobQuery=ref(''),appliedJobStatus=ref('')
+const versionIds=ref<string[]>([]),jobIds=ref<string[]>([]),versionComparison=ref(false),jobComparison=ref(false),jobDetail=ref<SyncJob|null>(null)
+const versionsSelected=computed(()=>versions.value.length>0&&versions.value.every(row=>versionIds.value.includes(row.versionId)))
+const jobsSelected=computed(()=>jobs.value.length>0&&jobs.value.every(row=>jobIds.value.includes(row.taskId)))
+const versionComparisonRows=computed(()=>versions.value.filter(row=>versionIds.value.includes(row.versionId)).map(row=>({...row,storage:storageLabel(row.storageStatus),size:formatSize(row.packageBytes)})))
+const jobComparisonRows=computed(()=>jobs.value.filter(row=>jobIds.value.includes(row.taskId)).map(row=>({...row,state:jobLabel(row.status)})))
+function toggleVersion(id:string){versionIds.value=versionIds.value.includes(id)?versionIds.value.filter(value=>value!==id):[...versionIds.value,id]}
+function toggleJob(id:string){jobIds.value=jobIds.value.includes(id)?jobIds.value.filter(value=>value!==id):[...jobIds.value,id]}
+function selectVersions(){versionIds.value=versionsSelected.value?[]:versions.value.map(row=>row.versionId)}
+function selectJobs(){jobIds.value=jobsSelected.value?[]:jobs.value.map(row=>row.taskId)}
+function queryVersions(){appliedVersionQuery.value=versionQuery.value.trim();previousCursors.value=[];void loadVersions('')}
+function queryJobs(){appliedJobQuery.value=jobQuery.value.trim();appliedJobStatus.value=jobStatus.value;previousJobCursors.value=[];void loadJobs('')}
+function resetVersions(){versionQuery.value='';queryVersions()}
+function resetJobs(){jobQuery.value='';jobStatus.value='';queryJobs()}
+function changeVersionSize(size:number){pageSize.value=size;previousCursors.value=[];void loadVersions('')}
+function changeJobSize(size:number){jobPageSize.value=size;previousJobCursors.value=[];void loadJobs('')}
+watch(versionQuery,()=>{versionIds.value=[]})
+watch([jobQuery,jobStatus],()=>{jobIds.value=[]})
 let versionGeneration = 0
 let jobGeneration = 0
 let detailGeneration = 0
@@ -170,11 +194,12 @@ function jobLabel(status: string) {
 }
 
 async function loadVersions(cursor = currentCursor.value) {
+  versionIds.value=[]
   const generation = ++versionGeneration
   versionLoading.value = true
   versionError.value = ''
   try {
-    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+    const params=new URLSearchParams();if(cursor)params.set('cursor',cursor);if(pageSize.value!==20)params.set('limit',String(pageSize.value));if(appliedVersionQuery.value)params.set('q',appliedVersionQuery.value);const query=params.size?`?${params}`:''
     const page = await api<VersionPage>(`/code-versions${query}`)
     if (generation !== versionGeneration) return false
     versions.value = page.items
@@ -190,11 +215,12 @@ async function loadVersions(cursor = currentCursor.value) {
 }
 
 async function loadJobs(cursor = currentJobCursor.value) {
+  jobIds.value=[]
   const generation = ++jobGeneration
   jobLoading.value = true
   jobError.value = ''
   try {
-    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+    const params=new URLSearchParams();if(cursor)params.set('cursor',cursor);if(jobPageSize.value!==20)params.set('limit',String(jobPageSize.value));if(appliedJobQuery.value)params.set('q',appliedJobQuery.value);if(appliedJobStatus.value)params.set('status',appliedJobStatus.value);const query=params.size?`?${params}`:''
     const result = await api<{ items: SyncJob[]; nextCursor: string | null }>(`/code-sync-jobs${query}`)
     if (generation !== jobGeneration) return false
     jobs.value = result.items
@@ -263,11 +289,11 @@ function closeDetail() {
 }
 
 onMounted(() => { void Promise.all([loadVersions(''), loadJobs(), loadReadiness()]) })
-onUnmounted(() => { ++readinessGeneration; ++keyGeneration;  clearKeyInput() })
+onUnmounted(() => { ++versionGeneration; ++jobGeneration; ++detailGeneration; ++readinessGeneration; ++keyGeneration;  clearKeyInput() })
 </script>
 
 <template>
-  <section class="page-content code-versions-page">
+  <section class="page-content admin-list-page code-versions-page">
     <header class="page-heading">
       <div><h1>代码版本</h1><p>上传密钥，选择代码包，直接上传到微信开发版本。</p></div>
       <button class="secondary-button" type="button" :disabled="versionLoading || jobLoading" @click="refresh">重新读取</button>
@@ -304,27 +330,31 @@ onUnmounted(() => { ++readinessGeneration; ++keyGeneration;  clearKeyInput() })
     <details class="code-release-disclosure code-build-details"><summary>代码包与构建记录</summary>
     <section class="code-versions-section" aria-labelledby="code-versions-title">
       <div class="code-versions-section-heading"><h2 id="code-versions-title">不可变版本</h2><span>最近构建优先</span></div>
+      <form class="admin-list-filters" @submit.prevent="queryVersions"><label>版本名称 / 来源修订 / 摘要<input v-model="versionQuery" maxlength="100" placeholder="检索全部构建版本" /></label><button class="primary-button" :disabled="versionLoading">查询</button><button class="secondary-button" type="button" :disabled="versionLoading" @click="resetVersions">重置</button></form>
+      <AdminSelectionBar :count="versionIds.length" :loading="versionLoading" @clear="versionIds=[]"><button class="secondary-button" :disabled="!versionIds.length" @click="versionComparison=true">批量查看</button></AdminSelectionBar>
       <p v-if="versionLoading" class="loading-inline" role="status">正在读取代码版本…</p>
       <div v-if="!versionLoading && !versionError && !versions.length" class="panel code-versions-empty">暂无代码版本。部署流程完成首次构建与私有存储同步后，记录会出现在这里。</div>
-      <div v-if="!versionLoading && !versionError && versions.length" class="panel code-versions-table-wrap">
-        <table class="code-versions-table"><thead><tr><th scope="col">版本</th><th scope="col">内部存储</th><th scope="col">构建来源</th><th scope="col">包体积</th><th scope="col">完成时间</th><th scope="col">操作</th></tr></thead>
-          <tbody><tr v-for="item in versions" :key="item.versionId"><th scope="row">{{ item.versionLabel }}</th><td><span :class="['code-versions-state', item.storageStatus === 'READY' ? 'is-ready' : item.storageStatus === 'STORED_UNVERIFIED' ? 'is-present' : 'is-warning']">{{ storageLabel(item.storageStatus) }}</span></td><td class="code-versions-hash">{{ item.sourceRevision || `SHA-256 ${item.sourceDigest.slice(0, 12)}…` }}</td><td>{{ formatSize(item.packageBytes) }}</td><td>{{ formatTime(item.completedAt) }}</td><td><button class="text-button" type="button" :aria-label="`查看版本 ${item.versionLabel} 详情`" @click="loadDetail(item.versionId)">查看详情</button></td></tr></tbody>
+      <div v-if="!versionLoading && !versionError && versions.length" class="panel table-wrap admin-list-table code-versions-table-wrap">
+        <table class="code-versions-table"><thead><tr><th><input type="checkbox" aria-label="选择当前页全部版本" :checked="versionsSelected" @change="selectVersions" /></th><th scope="col">版本</th><th scope="col">内部存储</th><th scope="col">构建来源</th><th scope="col">包体积</th><th scope="col">完成时间</th><th scope="col">操作</th></tr></thead>
+          <tbody><tr v-for="item in versions" :key="item.versionId"><td><input type="checkbox" :aria-label="`选择版本 ${item.versionLabel}`" :checked="versionIds.includes(item.versionId)" @change="toggleVersion(item.versionId)" /></td><th scope="row">{{ item.versionLabel }}</th><td><AdminStatusBadge :status="item.storageStatus" :label="storageLabel(item.storageStatus)" :tone="item.storageStatus==='READY'?'success':item.storageStatus==='STORED_UNVERIFIED'?'pending':'danger'" /></td><td class="code-versions-hash">{{ item.sourceRevision || `SHA-256 ${item.sourceDigest.slice(0, 12)}…` }}</td><td>{{ formatSize(item.packageBytes) }}</td><td>{{ formatTime(item.completedAt) }}</td><td><button class="text-button" type="button" :aria-label="`查看版本 ${item.versionLabel} 详情`" @click="loadDetail(item.versionId)">查看详情</button></td></tr></tbody>
         </table>
       </div>
-      <nav v-if="versions.length && !versionError" class="code-versions-pagination" aria-label="代码版本分页"><button class="secondary-button" type="button" :disabled="versionLoading || !previousCursors.length" @click="previousPage">上一页</button><button class="secondary-button" type="button" :disabled="versionLoading || !nextCursor" @click="nextPage">下一页</button></nav>
+<AdminCursorPager :page="previousCursors.length+1" :page-size="pageSize" :has-previous="!!previousCursors.length" :has-next="!!nextCursor" :loading="versionLoading" @previous="previousPage" @next="nextPage" @size="changeVersionSize" />
     </section>
 
     <section class="code-versions-section" aria-labelledby="code-jobs-title">
       <div class="code-versions-section-heading"><h2 id="code-jobs-title">同步记录</h2></div>
+<form class="admin-list-filters" @submit.prevent="queryJobs"><label>任务 / 来源修订 / 失败码<input v-model="jobQuery" maxlength="100" placeholder="检索全部同步记录" /></label><label>同步状态<select v-model="jobStatus"><option value="">全部状态</option><option value="STARTED">处理中</option><option value="SUCCEEDED">已同步</option><option value="FAILED">失败</option></select></label><button class="primary-button" :disabled="jobLoading">查询</button><button class="secondary-button" type="button" :disabled="jobLoading" @click="resetJobs">重置</button></form>
+<AdminSelectionBar :count="jobIds.length" :loading="jobLoading" @clear="jobIds=[]"><button class="secondary-button" :disabled="!jobIds.length" @click="jobComparison=true">批量查看</button></AdminSelectionBar>
       <p v-if="jobError" class="notice" role="alert">{{ jobError }} <button class="text-button" type="button" @click="loadJobs()">重试</button></p>
       <p v-if="jobLoading" class="loading-inline" role="status">正在读取同步记录…</p>
       <div v-if="!jobLoading && !jobError && !jobs.length" class="panel code-versions-empty">暂无同步记录。构建由服务器部署流程发起，后台不接收本地上传包。</div>
-      <ol v-if="!jobLoading && !jobError && jobs.length" class="code-jobs-list"><li v-for="job in jobs" :key="job.taskId" class="panel"><div><strong>{{ jobLabel(job.status) }}</strong><span>{{ formatTime(job.createdAt) }} → {{ formatTime(job.completedAt) }}</span></div><p v-if="job.failureCode" class="code-jobs-failure">失败代码：{{ job.failureCode }}。请由运维检查构建日志和持久存储后重试部署命令。</p><small>任务 {{ job.taskId }}</small></li></ol>
-      <nav v-if="jobs.length && !jobError" class="code-versions-pagination" aria-label="同步记录分页"><button class="secondary-button" type="button" :disabled="jobLoading || !previousJobCursors.length" @click="previousJobPage">上一页</button><button class="secondary-button" type="button" :disabled="jobLoading || !nextJobCursor" @click="nextJobPage">下一页</button></nav>
+      <div v-if="!jobLoading && !jobError && jobs.length" class="panel table-wrap admin-list-table"><table><thead><tr><th><input type="checkbox" aria-label="选择当前页全部同步记录" :checked="jobsSelected" @change="selectJobs" /></th><th>任务 / 版本</th><th>状态</th><th>失败码</th><th>创建时间</th><th>完成时间</th><th>操作</th></tr></thead><tbody><tr v-for="job in jobs" :key="job.taskId"><td><input type="checkbox" :aria-label="`选择同步记录 ${job.taskId}`" :checked="jobIds.includes(job.taskId)" @change="toggleJob(job.taskId)" /></td><td><strong>{{job.taskId}}</strong><small>{{job.versionId||'未形成版本'}}</small></td><td><AdminStatusBadge :status="job.status" :label="jobLabel(job.status)" :tone="job.status==='SUCCEEDED'?'success':job.status==='FAILED'?'danger':'processing'" /></td><td>{{job.failureCode||'—'}}</td><td>{{formatTime(job.createdAt)}}</td><td>{{formatTime(job.completedAt)}}</td><td><button class="text-button" @click="jobDetail=job">查看详情</button></td></tr></tbody></table></div>
+<AdminCursorPager :page="previousJobCursors.length+1" :page-size="jobPageSize" :has-previous="!!previousJobCursors.length" :has-next="!!nextJobCursor" :loading="jobLoading" @previous="previousJobPage" @next="nextJobPage" @size="changeJobSize" />
     </section>
     </details>
 
-    <el-drawer :model-value="!!selectedId" title="代码版本详情" size="min(540px, 94vw)" @close="closeDetail">
+    <el-dialog :model-value="!!selectedId" title="代码版本详情" width="min(800px, calc(100vw - 32px))" @close="closeDetail">
       <p v-if="detailLoading" role="status">正在读取版本详情…</p>
       <p v-if="detailError" class="notice" role="alert">{{ detailError }} <button class="text-button" type="button" @click="loadDetail(selectedId)">重试</button></p>
       <div v-if="selected && !detailLoading && !detailError" class="code-version-detail">
@@ -333,6 +363,9 @@ onUnmounted(() => { ++readinessGeneration; ++keyGeneration;  clearKeyInput() })
         <dl><div><dt>版本 ID</dt><dd>{{ selected.versionId }}</dd></div><div><dt>来源修订</dt><dd>{{ selected.sourceRevision || '未证明' }}</dd></div><div><dt>源码摘要 SHA-256</dt><dd>{{ selected.sourceDigest }}</dd></div><div><dt>包摘要 SHA-256</dt><dd>{{ selected.packageSha256 }}</dd></div><div><dt>包体积</dt><dd>{{ formatSize(selected.packageBytes) }}</dd></div><div><dt>文件数</dt><dd>{{ selected.fileCount }}</dd></div><div><dt>创建时间</dt><dd>{{ formatTime(selected.createdAt) }}</dd></div><div><dt>完成时间</dt><dd>{{ formatTime(selected.completedAt) }}</dd></div><div v-if="selected.failureCode"><dt>失败代码</dt><dd>{{ selected.failureCode }}</dd></div></dl>
         <p class="code-version-detail-note">此版本只证明服务器源码包与商城后台私有存储记录。微信上传、审核和发布均须另外核验平台回执。</p>
       </div>
-    </el-drawer>
+    </el-dialog>
+<AdminSelectedRowsDialog v-model="versionComparison" title="所选代码版本" :rows="versionComparisonRows" :columns="[{key:'versionLabel',label:'版本'},{key:'sourceRevision',label:'来源修订'},{key:'storage',label:'存储状态'},{key:'size',label:'包体积'}]" />
+<AdminSelectedRowsDialog v-model="jobComparison" title="所选同步记录" :rows="jobComparisonRows" :columns="[{key:'taskId',label:'任务'},{key:'versionId',label:'版本ID'},{key:'state',label:'状态'},{key:'failureCode',label:'失败码'}]" />
+<el-dialog :model-value="!!jobDetail" title="同步记录详情" @close="jobDetail=null"><template v-if="jobDetail"><dl><dt>任务ID</dt><dd>{{jobDetail.taskId}}</dd><dt>版本ID</dt><dd>{{jobDetail.versionId||'未形成版本'}}</dd><dt>状态</dt><dd>{{jobLabel(jobDetail.status)}}</dd><dt>失败码</dt><dd>{{jobDetail.failureCode||'—'}}</dd><dt>创建 / 完成</dt><dd>{{formatTime(jobDetail.createdAt)}} / {{formatTime(jobDetail.completedAt)}}</dd></dl><p v-if="jobDetail.failureCode">请由运维核查构建日志和持久存储。</p></template></el-dialog>
   </section>
 </template>

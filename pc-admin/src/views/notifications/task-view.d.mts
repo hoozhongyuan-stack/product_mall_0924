@@ -4,4 +4,4 @@ export function eventLabel(value: string): string
 export function statusLabel(value: string): string
 export function reasonLabel(value: string): string
 export function canRecover(task: { status: string; recoverable: boolean; attemptCount: number }, hasPermission: boolean): boolean
-export function taskQuery(filters: { eventType: string; status: string; createdFrom: string; createdTo: string }, cursor?: string): string
+export function taskQuery(filters: { eventType: string; status: string; createdFrom: string; createdTo: string }, cursor?: string, pageSize?: number): string

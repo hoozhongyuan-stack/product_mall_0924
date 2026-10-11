@@ -76,7 +76,7 @@ it('blocks route updates and unload during a write, without discarding a pending
   await wrapper.get('input[placeholder="例如 上海中心仓"]').setValue('新仓')
   let finish!: (value: unknown) => void
   vi.mocked(api).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }) as never)
-  await wrapper.get('form').trigger('submit')
+  await wrapper.get('form.inventory-form').trigger('submit')
   expect(wrapper.get('input[placeholder="例如 WH-001"]').attributes('disabled')).toBeDefined()
   expect(wrapper.findAll('button').find(b => b.text() === '取消')!.attributes('disabled')).toBeDefined()
   expect(wrapper.findAll('button').find(b => b.text() === '关闭表单')!.attributes('disabled')).toBeDefined()

@@ -36,6 +36,13 @@ onBeforeRouteLeave(mayLeave);onBeforeRouteUpdate(mayLeave)
 function beforeUnload(event:BeforeUnloadEvent){if(busy.value||unknown.value||pending.value){event.preventDefault();event.returnValue=''}}
 window.addEventListener('beforeunload',beforeUnload)
 onUnmounted(()=>{active=false;window.removeEventListener('beforeunload',beforeUnload)})
+async function mayClose() {
+ if(busy.value) return false
+ const original=JSON.stringify([props.item.caseId,pending.value,unknown.value])
+ const allowed=await mayLeave()
+ return allowed && !busy.value && active && original===JSON.stringify([props.item.caseId,pending.value,unknown.value])
+}
+defineExpose({mayClose})
 </script>
 <template>
 <section class="panel order-section"><h2>{{isPointsOrder(item)?'退积分与数量确认':'零现金售后与权益确认'}}</h2><p>{{isPointsOrder(item)?`${pointRefundState(item).summary} 无现金转出，数量、库存或核销额度按原积分快照处理。`:'本次现金退款合计为零，没有现金转出。确认后按成交快照处理售后数量、库存或核销额度，以及适用的优惠券和积分。'}}</p><p v-if="item.status==='COMPLETED'" class="order-success">{{isPointsOrder(item)?'退积分售后已完成，不产生资金退款凭证。':'零现金售后已完成，不产生资金退款凭证。'}}</p><p v-if="pending && !unknown" class="order-note">已查询最新状态，上次请求内容与标识已保留，可沿同一请求重试。</p><p v-if="unknown" class="order-warning">提交结果未知，请先刷新处理状态；查询完成前不能再次确认。</p><p v-if="error" class="error" role="alert">{{error}}</p><button v-if="canSettle" class="primary-button" :disabled="busy" @click="dialog=true">{{pending?'沿同一请求确认权益处理':'核对数量与权益，授权完成售后'}}</button><p v-else-if="item.status==='WAITING_REFUND' && !permitted" class="order-note">当前账号没有权益结算权限。</p>

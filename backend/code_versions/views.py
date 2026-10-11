@@ -1,5 +1,7 @@
 """Permission-gated, non-downloadable local code version read model."""
 
+import hashlib
+import json
 import uuid
 
 from django.core import signing
@@ -14,8 +16,35 @@ from .models import CodeBuildJob, CodeSourceProvenance, CodeVersion
 from .service import object_status
 
 
+def _filter_salt(request, salt):
+    scope = [request.GET.get("q", "").strip(), request.GET.get("status", "")]
+    return salt if not any(scope) else salt + ":" + hashlib.sha256(json.dumps(scope).encode()).hexdigest()[:16]
+
+
+def _list_query(request, query, *, jobs=False):
+    allowed = {"limit", "cursor", "q"} | ({"status"} if jobs else set())
+    keyword = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "")
+    if set(request.GET) - allowed or len(keyword) > 100 or jobs and status not in {"", "STARTED", "SUCCEEDED", "FAILED"}:
+        return None, error(request, 400, "VALIDATION_FAILED", "查询参数不正确。")
+    conditions = Q()
+    if keyword:
+        if jobs:
+            conditions &= Q(source_revision__icontains=keyword) | Q(failure_code__icontains=keyword) | Q(version__version_label__icontains=keyword)
+            try:
+                identifier = uuid.UUID(keyword)
+                conditions |= Q(id=identifier) | Q(version_id=identifier)
+            except ValueError:
+                pass
+        else:
+            conditions &= Q(version_label__icontains=keyword) | Q(source_digest__icontains=keyword) | Q(proven_revision__icontains=keyword)
+    if status:
+        conditions &= Q(status=status)
+    return (query.filter(conditions) if keyword or status else query), None
+
+
 def _page(request, query, salt, serializer):
-    if set(request.GET) - {"limit", "cursor"}:
+    if set(request.GET) - {"limit", "cursor", "q", "status"}:
         return None, error(request, 400, "VALIDATION_FAILED", "查询参数不正确。")
     try:
         limit = int(request.GET.get("limit", "20"))
@@ -23,6 +52,7 @@ def _page(request, query, salt, serializer):
         return None, error(request, 400, "VALIDATION_FAILED", "分页数量不正确。")
     if not 1 <= limit <= 100:
         return None, error(request, 400, "VALIDATION_FAILED", "分页数量不正确。")
+    salt = _filter_salt(request, salt)
     cursor = request.GET.get("cursor")
     if cursor:
         try:
@@ -80,7 +110,10 @@ def versions_view(request):
     _, bad = require(request, "code.version.read")
     if bad:
         return bad
-    result, bad = _page(request, _versions(), "code-version-list", _version)
+    query, bad = _list_query(request, _versions())
+    if bad:
+        return bad
+    result, bad = _page(request, query, "code-version-list", _version)
     return bad or cursor_response(request, result)
 
 
@@ -108,5 +141,8 @@ def jobs_view(request):
     _, bad = require(request, "code.version.read")
     if bad:
         return bad
-    result, bad = _page(request, CodeBuildJob.objects.all(), "code-job-list", _job)
+    query, bad = _list_query(request, CodeBuildJob.objects.all(), jobs=True)
+    if bad:
+        return bad
+    result, bad = _page(request, query, "code-job-list", _job)
     return bad or cursor_response(request, result)

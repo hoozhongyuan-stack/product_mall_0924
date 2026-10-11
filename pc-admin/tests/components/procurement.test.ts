@@ -29,7 +29,7 @@ describe('procurement list',()=>{
   const{w}=await setup(List,'/stores/procurement')
   expect(w.text()).toContain('深圳1号仓');await w.find('input').setValue('P2026');await w.find('select').setValue('PAID');await w.find('form').trigger('submit');await flushPromises()
   expect(vi.mocked(api).mock.calls.at(-1)![0]).toContain('q=P2026&status=PAID')
-  await click(w,'下一页');expect(vi.mocked(api).mock.calls.at(-1)![0]).toContain('page=2')
+  await w.get('.admin-list-pager .btn-next').trigger('click');await flushPromises();expect(vi.mocked(api).mock.calls.at(-1)![0]).toContain('page=2')
   await click(w,'重置');expect(vi.mocked(api).mock.calls.at(-1)![0]).toContain('page=1')
  })
  it('retains retry on read failure and clears unauthorized identity',async()=>{

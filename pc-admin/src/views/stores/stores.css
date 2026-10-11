@@ -2,3 +2,5 @@
 .store-withdrawal-row{padding:20px 0;border-bottom:1px solid var(--mall-color-border,#E7E9EB)}.store-withdrawal-row:last-child{border-bottom:0}.store-withdrawal-row header{display:grid;gap:8px}.store-withdrawal-row p{overflow-wrap:anywhere}.store-withdrawal-form{margin-top:20px;padding:20px;background:var(--mall-color-canvas-admin,#F4F5F5)}.store-withdrawal-form h3,.store-withdrawal-form p{margin:0}.store-withdrawal-review .store-actions{flex-wrap:wrap}.store-withdrawal-row input{box-sizing:border-box;max-width:100%}
 /* Keep account actions within the heading when the settlement description wraps. */
 .stores-page .page-heading > .store-actions{flex-shrink:0;flex-wrap:wrap}
+
+.stores-page .text-button,.stores-page .text-link{color:#175cd3}.stores-page .text-button.danger{color:var(--mall-color-danger,#b42318)}.stores-page select{min-height:36px;border:1px solid #d0d5dd;border-radius:6px;padding:6px 10px}.stores-page .store-actions{flex-wrap:wrap}.stores-page .el-dialog__body{max-height:calc(100dvh - 180px);overflow:auto}

@@ -21,7 +21,7 @@ async function setup(runtime=1, blocked=false, codePermission=false) {
   const account={accountId:'actor',permissionCodes:['page.read','page.edit','page.publish', ...(codePermission ? ['code.version.read'] : [])]}
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/pages/micro',component:MicroPageView,props:{account}}]})
   await router.push('/pages/micro?pageId=p1')
-  const wrapper=mount(defineComponent({template:'<RouterView />'}),{global:{plugins:[router],stubs:{PublicationHistory:true,PageCopyPanel:true,PageReusePanel:true,PageMetadataEditor:true,HomePagePreview:true,PageComponentEditor:true,ElDialog:true}}})
+  const wrapper=mount(defineComponent({template:'<RouterView />'}),{global:{plugins:[router],stubs:{PublicationHistory:true,PageCopyPanel:true,PageReusePanel:true,PageMetadataEditor:true,HomePagePreview:true,PageComponentEditor:true,ElDialog: { props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' }}}})
   wrappers.push(wrapper);await flushPromises();return wrapper
 }
 function button(w:ReturnType<typeof mount>,name:string){return w.findAll('button').find(b=>b.text()===name)!}

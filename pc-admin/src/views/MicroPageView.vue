@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import AdminListPager from '../shared/list/AdminListPager.vue'
+import AdminStatusBadge from '../shared/list/AdminStatusBadge.vue'
+import AdminSelectionBar from '../shared/list/AdminSelectionBar.vue'
+import AdminSelectedRowsDialog from '../shared/list/AdminSelectedRowsDialog.vue'
+import {useCurrentPageSelection} from '../shared/list/useCurrentPageSelection'
+import {ElDialog} from 'element-plus'
 import { confirmAction } from '../shared/confirm'
 
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -35,6 +41,13 @@ const canPublish = computed(() => props.account.permissionCodes.includes('page.p
 const canUpload = computed(() => props.account.permissionCodes.includes('asset.upload'))
 const list = ref<MicroPageSummary[]>([])
 const listPage = ref(1)
+const listPageSize=ref(20),compareOpen=ref(false),createOpen=ref(false)
+const selection=useCurrentPageSelection(()=>list.value,row=>row.pageId)
+const compareColumns=[{key:'name',label:'页面名称'},{key:'revision',label:'草稿修订'},{key:'published',label:'线上修订'},{key:'tags',label:'标签'}]
+const compareRows=computed(()=>selection.selectedRows.value.map(row=>({name:row.name,revision:row.revision,published:row.publishedRevision??'未发布',tags:(row.tags||[]).join('、')})))
+function changeListPage(page:number,size:number){listPageSize.value=size;void loadList(page)}
+async function beforeEditorClose(done:()=>void){if(busy.value||creating.value)return;const current=captureEditorContext();if(dirty.value&&!await confirmAction('微页面有未保存修改，确定关闭吗？'))return;if(!current()||busy.value||creating.value)return;await router.replace({path:'/pages/micro'});done()}
+async function beforeCreateClose(done:()=>void){if(creating.value||busy.value)return;const title=createName.value;if(title.trim()&&!await confirmAction('放弃尚未创建的页面名称？'))return;if(title!==createName.value||creating.value||busy.value)return;createOpen.value=false;done()}
 const listTotal = ref(0)
 const listLoading = ref(true)
 const listError = ref('')
@@ -127,9 +140,10 @@ onUnmounted(() => { detailSequence++; window.removeEventListener('beforeunload',
 
 async function loadList(page = 1) {
   const sequence = ++listSequence
+  selection.clear()
   listLoading.value = true
   listError.value = ''
-  const query = new URLSearchParams({ page: String(page), pageSize: '10' })
+  const query = new URLSearchParams({ page: String(page), pageSize: String(listPageSize.value) })
   if (listFilters.value.q) query.set('q', listFilters.value.q)
   if (listFilters.value.tag) query.set('tag', listFilters.value.tag)
   try {
@@ -213,6 +227,7 @@ async function createPage() {
     const created = await api<MicroDraft>('/pages', { method: 'POST', body: JSON.stringify({ name: title }) })
     if (!isCurrent() || !canEdit.value) return
     createName.value = ''
+    createOpen.value = false
     await loadList(1)
     await loadTargets()
     if (!isCurrent() || !canEdit.value) return
@@ -444,7 +459,7 @@ function rolledBack(result: RollbackResult) {
 </script>
 
 <template>
-  <section class="page-content home-editor-page micro-editor-page">
+  <section class="page-content home-editor-page micro-editor-page admin-list-page">
     <header class="page-heading home-page-heading">
       <div><h1>独立微页面</h1><p>创建页面、配置组件、预览草稿，再发布可供首页与其他微页面引用的版本。</p></div>
       <RouterLink class="text-link" to="/pages/home">返回首页装修</RouterLink>
@@ -453,24 +468,20 @@ function rolledBack(result: RollbackResult) {
     <details :key="currentPageId || 'list'" class="panel micro-page-list" :open="!currentPageId" aria-labelledby="micro-list-title">
       <summary id="micro-list-title">{{ draft ? `当前页面：${draft.name}` : '页面列表' }} <span>切换页面 / 新建 / 查询</span></summary>
       <div class="micro-list-heading"><div><h2>页面列表</h2><p>草稿不会改变已发布内容。可查看发布历史并回退线上版本。</p></div>
-        <form v-if="canEdit" class="micro-create" @submit.prevent="createPage"><label>新页面名称<input v-model="createName" maxlength="80" placeholder="例如 品牌故事" :disabled="creating || Boolean(busy)" /></label>
-          <button type="submit" class="primary-button" :disabled="creating || Boolean(busy)">{{ creating ? '创建中…' : '创建微页面' }}</button></form></div>
+        <button v-if="canEdit" class="primary-button" :disabled="Boolean(busy)||creating" @click="createOpen=true">新建微页面</button><ElDialog :model-value="createOpen" title="创建微页面" width="560px" :close-on-click-modal="false" :before-close="beforeCreateClose" :close-on-press-escape="!creating" :show-close="!creating">        <form v-if="canEdit" class="micro-create" @submit.prevent="createPage"><label>新页面名称<input v-model="createName" maxlength="80" placeholder="例如 品牌故事" :disabled="creating || Boolean(busy)" /></label>
+          <button type="submit" class="primary-button" :disabled="creating || Boolean(busy)">{{ creating ? '创建中…' : '创建微页面' }}</button></form></ElDialog></div>
       <form class="micro-list-filters" @submit.prevent="filterList"><label>搜索页面名称<input v-model="listQuery" maxlength="80" placeholder="输入页面名称" /></label><label>筛选业务标签<input v-model="listTag" maxlength="20" placeholder="精确标签，例如 活动" /></label><button type="submit" class="secondary-button" :disabled="listLoading">查询页面</button><button type="button" class="text-button" :disabled="listLoading" @click="resetFilters">重置筛选</button></form>
       <p v-if="listError" class="error notice" role="alert">{{ listError }} <button type="button" class="text-button" @click="loadList(listPage)">重试读取列表</button></p>
       <p v-if="listLoading" class="loading-inline" role="status">正在读取微页面…</p>
       <p v-else-if="!list.length" class="micro-empty">{{ listFilters.q || listFilters.tag ? '未找到符合条件的微页面，请调整筛选。' : '还没有独立微页面。创建第一张草稿后，可添加公告、图片或其他组件。' }}</p>
-      <div v-else class="micro-page-rows">
-        <button v-for="item in list" :key="item.pageId" type="button" class="micro-page-row" :class="{ selected: currentPageId === item.pageId }" :disabled="Boolean(busy) || creating" @click="selectPage(item.pageId)">
-          <div class="micro-page-identity"><strong>{{ item.name }}</strong><span v-if="item.tags?.length" class="micro-row-tags"><span v-for="tag in item.tags" :key="tag" class="badge badge-muted">{{ tag }}</span></span></div><span>草稿修订 {{ item.revision }}</span>
-          <span :class="item.publishedRevision ? 'badge badge-good' : 'badge badge-muted'">{{ item.publishedRevision ? `线上修订 ${item.publishedRevision}` : '未发布' }}</span>
-        </button>
-      </div>
-      <div v-if="listTotal > 10" class="micro-list-pagination"><span>共 {{ listTotal }} 张 · 第 {{ listPage }} 页</span>
-        <button type="button" class="secondary-button" :disabled="listPage <= 1 || listLoading" @click="loadList(listPage - 1)">上一页</button>
-        <button type="button" class="secondary-button" :disabled="listPage * 10 >= listTotal || listLoading" @click="loadList(listPage + 1)">下一页</button></div>
+      <AdminSelectionBar :count="selection.selectedIds.value.length" :loading="listLoading" @clear="selection.clear"><button class="secondary-button" :disabled="!selection.selectedIds.value.length||listLoading" @click="compareOpen=true">核对所选</button></AdminSelectionBar>
+      <div v-if="list.length" class="micro-page-rows table-wrap admin-list-table"><table><thead><tr><th><input type="checkbox" :checked="selection.allSelected.value" :disabled="listLoading" aria-label="选择当前页微页面" @change="selection.togglePage(($event.target as HTMLInputElement).checked)"></th><th>页面名称</th><th>业务标签</th><th>草稿修订</th><th>发布状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in list" :key="item.pageId"><td><input type="checkbox" :checked="selection.selectedIds.value.includes(item.pageId)" :disabled="listLoading" :aria-label="`选择页面 ${item.name}`" @change="selection.toggle(item.pageId,($event.target as HTMLInputElement).checked)"></td><td>{{item.name}}</td><td>{{item.tags?.join('、')||'—'}}</td><td>{{item.revision}}</td><td><AdminStatusBadge :status="item.publishedRevision?'ACTIVE':'DRAFT'" :label="item.publishedRevision?`线上修订 ${item.publishedRevision}`:'未发布'"/></td><td><button class="text-button" :disabled="Boolean(busy)||creating" @click="selectPage(item.pageId)">{{canEdit?'编辑页面':'查看页面'}}</button></td></tr></tbody></table></div>
+      <AdminListPager :page="listPage" :page-size="listPageSize" :total="listTotal" :loading="listLoading" @change="changeListPage"/>
+      <AdminSelectedRowsDialog v-model="compareOpen" title="核对所选微页面" :columns="compareColumns" :rows="compareRows"/>
+
     </details>
 
-    <p v-if="detailLoading" class="loading-inline" role="status">正在读取微页面草稿…</p>
+    <ElDialog :model-value="Boolean(currentPageId)" title="微页面编辑与预览" width="min(1500px,95vw)" :close-on-click-modal="false" :close-on-press-escape="!busy && !creating" :show-close="!busy && !creating" :before-close="beforeEditorClose">    <p v-if="detailLoading" class="loading-inline" role="status">正在读取微页面草稿…</p>
     <p v-else-if="currentPageId && !draft && error" class="error notice" role="alert">{{ error }} <button type="button" class="text-button" @click="loadDetail(currentPageId)">重新加载</button></p>
     <p v-else-if="!currentPageId" class="micro-empty">从列表选择页面后开始编辑。</p>
     <template v-else-if="draft && editor">
@@ -516,6 +527,7 @@ function rolledBack(result: RollbackResult) {
       <section class="panel page-metadata-panel" aria-label="分享与业务标签"><PageMetadataEditor :key="draft.pageId" :metadata="editor.metadata" :disabled="!canEdit || Boolean(busy)" @change="updateMetadata" /></section>
       <ReleaseReportPanel :report="report" :stale="reportStale" :loading="reportLoading" :error="reportError" :disabled="Boolean(busy) || detailLoading" @refresh="refreshReport" />
     </template>
+</ElDialog>
     <el-dialog v-model="publishOpen" title="确认发布独立微页面" width="min(480px, 92vw)" >
       <p>将“{{ draft?.name }}”的草稿修订 {{ draft?.revision }} 发布到小程序。发布后，站内链接才可指向这个页面。</p>
 

@@ -2,6 +2,7 @@
 from functools import wraps
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import cache_control
 from django.views.decorators.vary import vary_on_headers
@@ -41,7 +42,11 @@ def admin_stores(request,store_id=None):
         if store_id: return response(request,store_data(get_store(store_id),True))
         rows = Store.objects.select_related('warehouse').all()
         query = request.GET.get('search',request.GET.get('q','')).strip()[:120]
-        if query: rows=rows.filter(name__icontains=query)
+        if query: rows=rows.filter(Q(name__icontains=query)|Q(contact_name__icontains=query)|Q(contact_phone__icontains=query))
+        if request.GET.get('enabled'):
+            value=request.GET['enabled']
+            if value not in ('true','false') or len(request.GET.getlist('enabled'))!=1:raise StoreError('状态筛选无效。')
+            rows=rows.filter(enabled=value=='true')
         page,size,start=page_bounds(request)
         return response(request,{'items':[store_data(row,True) for row in rows[start:start+size]],'total':rows.count(),'page':page,'pageSize':size})
     with transaction.atomic():
@@ -116,8 +121,12 @@ def admin_accounts(request,store_id=None):
     if bad: return bad
     actor,bad = require(request,'stores.accounts.read')
     if bad: return bad
-    if store_id: return response(request,account_data(get_store(store_id)))
+    if store_id:
+        data=account_data(get_store(store_id),history_params=request.GET)
+        return response(request,data,meta={'income':data['incomePagination'],'withdrawal':data['withdrawalPagination']})
     rows = Store.objects.order_by('name','id')
+    query=request.GET.get('search','').strip()[:120]
+    if query:rows=rows.filter(name__icontains=query)
     page,size,start=page_bounds(request)
     return response(request,{'items':account_summaries(rows[start:start+size]),'total':rows.count(),'page':page,'pageSize':size})
 

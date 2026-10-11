@@ -42,12 +42,13 @@ export function canRecover(task, hasPermission) {
   return !!hasPermission && task.status === 'RESERVED' && task.recoverable === true
 }
 
-export function taskQuery(filters, cursor = '') {
+export function taskQuery(filters, cursor = '', pageSize = 20) {
+  if (![20, 50, 100].includes(pageSize)) throw new Error('分页条数不正确。')
   const params = new URLSearchParams()
   for (const key of ['eventType', 'status', 'createdFrom', 'createdTo']) {
     if (filters[key]) params.set(key, filters[key])
   }
-  params.set('limit', '20')
+  params.set('limit', String(pageSize))
   if (cursor) params.set('cursor', cursor)
   return `?${params.toString()}`
 }

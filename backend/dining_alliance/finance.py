@@ -92,19 +92,25 @@ def income_data(snap, now=None):
                             status='AVAILABLE'
                         else:
                             reason='已过售后期，等待前置仓净结算和佣金扣除确认。'
-    return {'orderId':str(order.id), 'orderNo':order.order_no, 'commissionFen':snap.commission_fen, 'status':status, 'reason':reason, 'availableAt':available_at.isoformat() if available_at else None, 'tableNumber':snap.table_number, 'bookedAt':completed.isoformat() if completed else None}
+    return {'orderId':str(order.id), 'orderNo':order.order_no, 'commissionFen':snap.commission_fen, 'status':status, 'reason':reason, 'availableAt':available_at.isoformat() if available_at else None, 'tableNumber':snap.table_number, 'bookedAt':completed.isoformat() if completed else None, 'createdAt':snap.created_at.isoformat()}
 
 
 def withdrawal_data(row):
     return {'id':str(row.id), 'amountFen':row.amount_fen, 'status':row.status, 'reason':row.reason, 'revision':row.revision, 'createdAt':row.created_at.isoformat()}
 
 
-def account_data(restaurant):
-    incomes = [income_data(row) for row in DiningOrderSnapshot.objects.filter(restaurant=restaurant).select_related('order').order_by('-created_at')]
-    withdrawals = list(Withdrawal.objects.filter(restaurant=restaurant))
+def account_data(restaurant, history_params=None):
+    incomes = [income_data(row) for row in DiningOrderSnapshot.objects.filter(restaurant=restaurant).select_related('order').order_by('-created_at','order_id')]
+    withdrawals = list(Withdrawal.objects.filter(restaurant=restaurant).order_by('-created_at','id'))
     frozen = sum(row.amount_fen for row in withdrawals if row.status in ('PENDING','APPROVED'))
     mature = sum(row['commissionFen'] for row in incomes if row['status']=='AVAILABLE')
-    return {'matureFen':mature, 'availableFen':max(0,mature-frozen), 'pendingFen':sum(row['commissionFen'] for row in incomes if row['status'] in ('ESTIMATED','PENDING')), 'heldFen':sum(row['commissionFen'] for row in incomes if row['status']=='HELD'), 'totalCommissionFen':sum(row['commissionFen'] for row in incomes), 'frozenFen':frozen, 'incomes':incomes[:100], 'withdrawals':[withdrawal_data(row) for row in withdrawals[:100]], 'payoutEnabled':False, 'fundingSource':'FULFILLMENT_STORE_PROFIT','fundingLabel':'佣金由履约前置仓利润承担'}
+    result = {'matureFen':mature, 'availableFen':max(0,mature-frozen), 'pendingFen':sum(row['commissionFen'] for row in incomes if row['status'] in ('ESTIMATED','PENDING')), 'heldFen':sum(row['commissionFen'] for row in incomes if row['status']=='HELD'), 'totalCommissionFen':sum(row['commissionFen'] for row in incomes), 'frozenFen':frozen, 'incomes':incomes[:100], 'withdrawals':[withdrawal_data(row) for row in withdrawals[:100]], 'payoutEnabled':False, 'fundingSource':'FULFILLMENT_STORE_PROFIT','fundingLabel':'佣金由履约前置仓利润承担'}
+    if history_params is not None:
+        from .read_history import history_page
+        income_page=history_page(incomes,history_params,'income',{'ESTIMATED','PENDING','HELD','AVAILABLE'})
+        withdrawal_page=history_page([withdrawal_data(row) for row in withdrawals],history_params,'withdrawal',{'PENDING','APPROVED','REJECTED'})
+        result={**result,'incomes':income_page['items'],'withdrawals':withdrawal_page['items'],'incomePagination':{k:v for k,v in income_page.items() if k!='items'},'withdrawalPagination':{k:v for k,v in withdrawal_page.items() if k!='items'}}
+    return result
 
 
 @transaction.atomic

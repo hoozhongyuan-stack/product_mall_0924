@@ -15,8 +15,11 @@ import './orders/orders.css'
 import {isPointsOrder} from '../shared/order-settlement.mjs'
 import {pointRefundState} from './aftersales/point-refund-state.mjs'
 import './aftersales/aftersales.css'
-const props = defineProps<{ account: Account }>()
+const props = defineProps<{ account: Account; caseId?: string; embedded?: boolean }>()
 const route = useRoute()
+type CloseGuard = {mayClose: () => Promise<boolean>}
+const returnPanel = ref<CloseGuard | null>(null), benefitPanel = ref<CloseGuard | null>(null), wechatPanel = ref<CloseGuard | null>(null)
+const target = computed(() => props.caseId || String(route.params.caseId || ''))
 const data = ref<AfterSaleCase | null>(null)
 const loading = ref(false)
 const busy = ref(false)
@@ -56,7 +59,7 @@ async function loadId(id: string) {
   } catch (reason) { if (ticket === generation) error.value = failure(reason) }
   finally { if (ticket === generation) loading.value = false }
 }
-function load() { return loadId(String(route.params.caseId)) }
+function load() { return loadId(target.value) }
 function resetForm() {
   reviewReason.value = ''; reviewDecision.value = null
   transfer.value = { externalRefundNo: '', amount: '', refundedAt: '', refundMethod: 'BANK_TRANSFER', proofReference: '', note: '', verified: false }
@@ -123,13 +126,22 @@ function beforeUnload(event: BeforeUnloadEvent) { if (dirty.value || busy.value)
 async function mayLeave() { return !busy.value && (!dirty.value || await confirmAction('处理尚未结束。离开后请从售后详情核查最新记录，确定离开？')) }
 onBeforeRouteLeave(mayLeave)
 onBeforeRouteUpdate(mayLeave)
-watch(() => route.params.caseId, id => { resetForm(); void loadId(String(id)) })
+watch(() => target.value, id => { resetForm(); void loadId(String(id)) })
 onMounted(() => { void load(); window.addEventListener('beforeunload', beforeUnload) })
 onUnmounted(() => { generation += 1;  window.removeEventListener('beforeunload', beforeUnload) })
+
+async function mayClose() {
+  if (busy.value) return false
+  const original = JSON.stringify([target.value, reviewDecision.value, reviewReason.value, transfer.value, pendingBody.value, outcomeUnknown.value])
+  for (const panel of [returnPanel.value, benefitPanel.value, wechatPanel.value]) { if (panel?.mayClose && !await panel.mayClose()) return false }
+  const allowed = await mayLeave()
+  return allowed && !busy.value && original === JSON.stringify([target.value, reviewDecision.value, reviewReason.value, transfer.value, pendingBody.value, outcomeUnknown.value])
+}
+defineExpose({mayClose})
 </script>
 <template>
   <section class="page-content orders-page aftersales-page">
-    <header class="page-heading"><div><RouterLink to="/aftersales" class="text-link">返回售后列表</RouterLink><h1>售后详情</h1><p>申请、审核和退款各自留痕；有现金退款须核实资金，零现金售后须确认数量与权益处理。</p></div><button class="secondary-button" :disabled="loading || busy" @click="load">刷新处理状态</button></header>
+    <header class="page-heading"><div><RouterLink v-if="!embedded" to="/aftersales" class="text-link">返回售后列表</RouterLink><h1>售后详情</h1><p>申请、审核和退款各自留痕；有现金退款须核实资金，零现金售后须确认数量与权益处理。</p></div><button class="secondary-button" :disabled="loading || busy" @click="load">刷新处理状态</button></header>
     <p v-if="loading" role="status">正在读取售后详情…</p>
     <div v-if="error" class="notice" role="alert">{{ error }} <button v-if="!data" class="text-button" @click="load">重新加载</button></div>
     <p v-if="notice" class="order-success" role="status">{{ notice }}</p>
@@ -138,9 +150,9 @@ onUnmounted(() => { generation += 1;  window.removeEventListener('beforeunload',
       <section v-if="data.storeNotes?.length" class="panel order-section"><h2>前置仓处理记录</h2><p class="order-note">前置仓提供的收货数量与处理意见供平台审核，退款和库存回补以平台验收结果为准。</p><article v-for="record in data.storeNotes" :key="record.id" class="order-instructions"><h3>{{ record.kind === 'RECEIPT' ? '退货收货记录' : '售后处理意见' }}</h3><p>{{ record.note }}</p><p v-if="record.kind === 'RECEIPT'">已收货 {{ record.receivedQuantity }} 件 · 前置仓检查可售 {{ record.salableQuantity }} 件 · 待平台审核</p><small>{{ time(record.occurredAt) }}</small></article></section>
       <section v-if="canReview" class="panel order-section"><h2>审核申请</h2><p>核对购买数量、履约记录与申请依据。同意后进入退款或待退货处理，{{isPointsOrder(data)?'当前不会自动退积分。':'当前不会自动退钱。'}}</p><form class="order-form" @submit.prevent="openDialog('review')"><label>审核决定<select v-model="reviewDecision" :disabled="busy"><option :value="null">请选择</option><option :value="true">同意申请</option><option :value="false">拒绝申请</option></select></label><label class="wide">审核依据<textarea v-model="reviewReason" :disabled="busy" rows="3" maxlength="500" placeholder="填写 5 至 500 字，将向顾客展示"></textarea></label><p class="wide order-note">{{ reviewValidation || '确认后提交审核结果。' }}</p><div class="wide"><button class="primary-button" :disabled="busy || Boolean(reviewValidation)">核对完成，确认审核</button></div></form></section>
       <p v-else-if="data.status === 'PENDING_REVIEW'" class="order-note">当前账号没有售后审核权限。</p>
-      <ReturnAcceptancePanel v-if="data.kind === 'RETURN_REFUND'" :key="data.caseId" :item="data" :account="account" @refresh="load" @busy="busy = $event" />
-      <BenefitSettlementPanel v-if="amounts.zeroCash" :key="data.caseId" :item="data" :account="account" @refresh="load" @busy="busy = $event" />
-      <WechatRefundPanel v-if="data.paymentMethod === 'WECHAT' && !amounts.zeroCash" :key="data.caseId" :item="data" :account="account" @refresh="load" @busy="busy = $event" />
+      <ReturnAcceptancePanel ref="returnPanel" v-if="data.kind === 'RETURN_REFUND'" :key="data.caseId" :item="data" :account="account" @refresh="load" @busy="busy = $event" />
+      <BenefitSettlementPanel ref="benefitPanel" v-if="amounts.zeroCash" :key="data.caseId" :item="data" :account="account" @refresh="load" @busy="busy = $event" />
+      <WechatRefundPanel ref="wechatPanel" v-if="data.paymentMethod === 'WECHAT' && !amounts.zeroCash" :key="data.caseId" :item="data" :account="account" @refresh="load" @busy="busy = $event" />
       <section v-if="canPrepare" class="panel order-section"><h2>登记实际线下退款凭证</h2><p>请先执行并核对实际转账，再登记渠道流水和可追溯凭证。登记不会改变售后完成状态，另一名授权人员复核后才能完成。</p><dl class="order-facts"><div><dt>原收款账户标识</dt><dd>{{ data.refundSource?.merchantAccountId || '未取得，请刷新核查' }}</dd></div><div><dt>原收款流水</dt><dd>{{ data.refundSource?.originalTradeNo || '未取得，请刷新核查' }}</dd></div><div><dt>本笔现金退款合计</dt><dd>{{ money(approvedAmount) }}</dd></div></dl><form class="order-form aftersale-transfer" @submit.prevent="prepareTransfer"><label>实际退款流水号<input v-model="transfer.externalRefundNo" maxlength="128" :disabled="busy || Boolean(pendingBody)" autocomplete="off"></label><label>实际退款金额（元）<input v-model="transfer.amount" inputmode="decimal" :disabled="busy || Boolean(pendingBody)" placeholder="须与本笔现金退款合计一致"></label><label>实际转账时间<input v-model="transfer.refundedAt" type="datetime-local" :disabled="busy || Boolean(pendingBody)"></label><label>退款方式<select v-model="transfer.refundMethod" :disabled="busy || Boolean(pendingBody)"><option value="BANK_TRANSFER">银行转账</option><option value="WECHAT_TRANSFER">微信转账</option><option value="ALIPAY_TRANSFER">支付宝转账</option><option value="CASH">现金</option><option value="OTHER">其他</option></select></label><label class="wide">转账凭证档案号<input v-model="transfer.proofReference" maxlength="128" :disabled="busy || Boolean(pendingBody)" placeholder="店铺留存的银行回单号或凭证档案号"></label><label class="wide">核对说明<textarea v-model="transfer.note" rows="3" maxlength="500" :disabled="busy || Boolean(pendingBody)" placeholder="填写店铺留存的凭证档案号和核对依据"></textarea></label><label class="wide check-row"><input v-model="transfer.verified" type="checkbox" :disabled="busy || Boolean(pendingBody)"><span>已核对实际转出记录、收退款账户、流水、金额、时间和凭证。</span></label><p class="wide order-note">{{ busy ? '正在保存核对记录…' : pendingBody ? '上次登记结果未知，内容已固定；请重试同一条记录或刷新核查。' : transferValidation }}</p><div class="wide"><button class="primary-button" :disabled="busy || !data.refundSource?.merchantAccountId || (!pendingBody && Boolean(transferValidation))">{{ busy ? '登记中…' : pendingBody ? '重试同一登记记录' : '保存退款凭证，交由另一人复核' }}</button></div></form></section>
       <p v-else-if="data.status === 'WAITING_REFUND' && data.paymentMethod === 'OFFLINE' && !amounts.zeroCash && !data.offlineRefund" class="order-note">当前账号没有线下退款凭证登记权限。</p>
       <section v-if="data.offlineRefund" class="panel order-section"><h2>实际退款核对记录</h2><p class="order-warning">{{ refundOutcome(data.offlineRefund.outcome) }}</p><dl class="order-facts"><div><dt>登记人员</dt><dd>{{ data.offlineRefund.preparedByName }}</dd></div><div><dt>收款账户标识</dt><dd>{{ data.offlineRefund.merchantAccountId }}</dd></div><div><dt>退款流水号</dt><dd>{{ data.offlineRefund.externalRefundNo }}</dd></div><div><dt>实际退款金额</dt><dd>{{ money(data.offlineRefund.amountFen) }}</dd></div><div><dt>转账时间</dt><dd>{{ time(data.offlineRefund.refundedAt) }}</dd></div><div><dt>退款方式</dt><dd>{{ refundMethodLabel(data.offlineRefund.refundMethod) }}</dd></div></dl><h3>转账凭证与核对说明</h3><p>{{ data.offlineRefund.proofReference }}</p><p class="order-instructions">{{ data.offlineRefund.note }}</p><p v-if="data.offlineRefund.authorizedByName">复核：{{ data.offlineRefund.authorizedByName }} · {{ time(data.offlineRefund.authorizedAt) }}</p><p v-if="outcomeUnknown" class="order-warning">上次确认结果未知，请刷新核查最新状态；只可处理这条已保存凭证。</p><button v-if="canConfirm" class="primary-button" :disabled="busy" @click="openDialog('refund')">独立核对完成，授权确认退款</button><p v-else-if="data.offlineRefund.preparedById === account.accountId && data.status !== 'COMPLETED'" class="order-note">你是这条退款凭证的登记人，请另一名有退款确认权限的人员复核。</p><p v-else-if="data.status !== 'COMPLETED'" class="order-note">当前记录不可确认。请核查权限、异常和最新处理结果。</p></section>

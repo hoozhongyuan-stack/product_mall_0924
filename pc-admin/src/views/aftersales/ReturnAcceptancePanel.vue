@@ -46,6 +46,13 @@ onBeforeRouteUpdate(leave)
 function beforeUnload(event:BeforeUnloadEvent) {if(dirty.value || busy.value){event.preventDefault();event.returnValue=''}}
 window.addEventListener('beforeunload',beforeUnload)
 onUnmounted(()=>{active=false;window.removeEventListener('beforeunload',beforeUnload)})
+async function mayClose() {
+ if(busy.value) return false
+ const original=JSON.stringify([props.item.caseId,form.value,preview.value,frozen.value,unknown.value])
+ const allowed=await leave()
+ return allowed && !busy.value && active && original===JSON.stringify([props.item.caseId,form.value,preview.value,frozen.value,unknown.value])
+}
+defineExpose({mayClose})
 </script>
 <template>
 <section class="panel order-section">

@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { confirmAction } from '../shared/confirm'
+import AdminListPager from '../shared/list/AdminListPager.vue'
+import AdminStatusBadge from '../shared/list/AdminStatusBadge.vue'
+import AdminSelectionBar from '../shared/list/AdminSelectionBar.vue'
+import AdminSelectedRowsDialog from '../shared/list/AdminSelectedRowsDialog.vue'
+
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ApiError, api, confirmedWrite, type Account, type PermissionGroup } from '../api'
 
@@ -33,10 +39,12 @@ const selected = ref<string[]>([])
 const canManage = computed(() => props.account.permissionCodes.includes('permission.manage'))
 
 async function load() {
+  selectedIds.value = []
   loading.value = true
   error.value = ''
   try {
     groups.value = await api<PermissionGroup[]>('/permission-groups')
+    page.value = Math.min(page.value, Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)))
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : '权限组加载失败。'
   } finally {
@@ -103,29 +111,53 @@ async function save() {
     saving.value = false
   }
 }
+
+
+const search = ref(''), enabledFilter = ref(''), page = ref(1), pageSize = ref(20)
+const appliedSearch = ref(''), appliedEnabled = ref('')
+const filteredRows = computed(() => groups.value.filter(row => `${row.name} ${row.code}`.toLowerCase().includes(appliedSearch.value.toLowerCase()) && (!appliedEnabled.value || String(row.enabled) === appliedEnabled.value)))
+const visibleRows = computed(() => filteredRows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
+function applyFilters() { appliedSearch.value = search.value.trim(); appliedEnabled.value = enabledFilter.value; page.value=1; selectedIds.value = [] }
+function resetFilters() { search.value=''; enabledFilter.value=''; applyFilters() }
+function pageChanged(value:number,size:number) { page.value=value; pageSize.value=size; selectedIds.value = [] }
+const compareRows = computed(() => currentRows.value.filter(row => selectedIds.value.includes(row.groupId)).map(row => ({...row, status:row.enabled ? '启用' : '停用', permissions:row.permissionCodes.join('、') })))
+const detailTarget = ref<PermissionGroup | null>(null)
+
+const selectedIds = ref<string[]>([])
+const comparisonOpen = ref(false)
+const currentRows = computed(() => visibleRows.value)
+const allSelected = computed(() => currentRows.value.length > 0 && currentRows.value.every(row => selectedIds.value.includes(row.groupId)))
+function toggleRow(id: string) { selectedIds.value = selectedIds.value.includes(id) ? selectedIds.value.filter(value => value !== id) : [...selectedIds.value, id] }
+function selectPage() { selectedIds.value = allSelected.value ? [] : currentRows.value.map(row => row.groupId) }
+watch([search,enabledFilter],()=>{selectedIds.value = []})
+async function requestCloseEditor() {
+  if (saving.value) return false
+  const original=JSON.stringify([editing.value,code.value,name.value,selected.value])
+  const dirty=editing.value==='new' ? !!(code.value || name.value || selected.value.length) : !!editing.value && JSON.stringify(editing.value.permissionCodes)!==JSON.stringify(selected.value)
+  if (dirty && !await confirmAction('有未保存权限修改，确定关闭？')) return false
+  if (saving.value || original!==JSON.stringify([editing.value,code.value,name.value,selected.value])) return false
+  closeEditor()
+  return true
+}
+async function closeGroupDialog(done:() => void) { if(await requestCloseEditor()) done() }
 </script>
 
 <template>
-  <section class="page-content">
+  <section class="page-content admin-list-page">
     <div class="page-heading"><div><h1>权限组</h1><p>查看或调整账号可执行的操作。</p></div>
       <button v-if="canManage" class="primary-button" type="button" @click="openCreate">创建权限组</button>
     </div>
-    <p v-if="error" class="error notice" role="alert">{{ error }}</p>
+    <form class="admin-list-filters" @submit.prevent="applyFilters"><label>名称 / 编码<input v-model="search" maxlength="150" placeholder="查询权限组" /></label><label>状态<select v-model="enabledFilter"><option value="">全部状态</option><option value="true">启用</option><option value="false">停用</option></select></label><button class="primary-button" :disabled="loading">查询</button><button class="secondary-button" type="button" :disabled="loading" @click="resetFilters">重置</button></form>
+<AdminSelectionBar :count="selectedIds.length" unit="条" :loading="loading" @clear="selectedIds=[]"><button class="secondary-button" :disabled="!selectedIds.length" @click="comparisonOpen=true">批量查看</button></AdminSelectionBar>
+<p v-if="error" class="error notice" role="alert">{{ error }}</p>
     <p v-if="loading" class="loading-inline" role="status">正在加载权限组…</p>
-    <div v-else class="group-grid">
-      <article v-for="group in groups" :key="group.groupId" class="panel group-card">
-        <div class="panel-heading"><div><h2>{{ group.name }}</h2><p class="code">{{ group.code }}</p></div>
-          <button v-if="canManage && group.enabled && !(account.kind === 'STAFF' && account.groupIds.includes(group.groupId))" class="text-button" type="button" @click="openEdit(group)">编辑权限</button>
-        </div>
-        <span :class="['badge', group.enabled ? 'badge-good' : 'badge-muted']">{{ group.enabled ? '启用' : '停用' }}</span>
-        <p>{{ group.permissionCodes.length }} 项权限</p>
-        <details><summary>查看操作码</summary><ul><li v-for="item in group.permissionCodes" :key="item">{{ item }}</li></ul></details>
-      </article>
-      <p v-if="!groups.length" class="panel empty-state">暂无权限组。</p>
-    </div>
-    <button v-if="error && !loading" class="text-button retry" type="button" @click="load">重新加载</button>
-    <form v-if="editing" class="panel action-panel" @submit.prevent="save">
-      <div class="panel-heading"><h2>{{ editing === 'new' ? '创建权限组' : `编辑 ${name} 的权限` }}</h2><button class="text-button" type="button" @click="closeEditor">取消</button></div>
+    <div v-else class="panel table-wrap admin-list-table"><table><thead><tr><th><input type="checkbox" aria-label="选择当前页全部记录" :checked="allSelected" @change="selectPage" /></th><th>名称 / 编码</th><th>权限数</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="group in visibleRows" :key="group.groupId"><td><input type="checkbox" :aria-label="`选择权限组 ${group.name}`" :checked="selectedIds.includes(group.groupId)" @change="toggleRow(group.groupId)" /></td><td><strong>{{group.name}}</strong><small>{{group.code}}</small></td><td>{{group.permissionCodes.length}} 项</td><td><AdminStatusBadge :status="group.enabled?'ENABLED':'DISABLED'" :label="group.enabled?'启用':'停用'" :tone="group.enabled?'success':'neutral'" /></td><td><button class="text-button" @click="detailTarget=group">查看权限</button><button v-if="canManage && group.enabled && !(account.kind === 'STAFF' && account.groupIds.includes(group.groupId))" class="text-button" @click="openEdit(group)">编辑权限</button></td></tr><tr v-if="!visibleRows.length"><td colspan="5" class="empty-state">当前条件下暂无权限组。</td></tr></tbody></table></div>
+    <AdminListPager :page="page" :page-size="pageSize" :total="filteredRows.length" :loading="loading" @change="pageChanged" />
+<AdminSelectedRowsDialog v-model="comparisonOpen" title="所选权限组" :rows="compareRows" :columns="[{key:'name',label:'名称'},{key:'code',label:'编码'},{key:'permissions',label:'权限码'},{key:'status',label:'状态'}]" />
+<el-dialog :model-value="Boolean(detailTarget)" title="权限组详情" @update:model-value="detailTarget=null"><template v-if="detailTarget"><h2>{{detailTarget.name}}</h2><p>{{detailTarget.code}} · 修订 {{detailTarget.revision}}</p><ul><li v-for="code in detailTarget.permissionCodes" :key="code">{{code}}</li></ul></template></el-dialog>
+<button v-if="error && !loading" class="text-button retry" type="button" @click="load">重新加载</button>
+    <el-dialog :model-value="Boolean(editing)" :title="editing==='new'?'创建权限组':'编辑权限'" :close-on-click-modal="false" :close-on-press-escape="!saving" :show-close="!saving" :before-close="closeGroupDialog"><form v-if="editing" class="action-panel" @submit.prevent="save"><p v-if="error" class="error notice" role="alert">{{error}}</p>
+      <div class="panel-heading"><h2>{{ editing === 'new' ? '创建权限组' : `编辑 ${name} 的权限` }}</h2><button class="text-button" type="button" :disabled="saving" @click="requestCloseEditor">取消</button></div>
       <div v-if="editing === 'new'" class="form-grid">
         <label>编码<input v-model="code" maxlength="60" required placeholder="例如 support" /></label>
         <label>名称<input v-model="name" maxlength="100" required placeholder="例如 客服" /></label>
@@ -138,6 +170,6 @@ async function save() {
       </div></fieldset>
 
       <button class="primary-button" type="submit" :disabled="saving">{{ saving ? '保存中…' : '确认保存' }}</button>
-    </form>
+    </form></el-dialog>
   </section>
 </template>

@@ -35,5 +35,12 @@ onBeforeRouteUpdate(mayLeave)
 function beforeUnload(event:BeforeUnloadEvent){if(busy.value || unknown.value){event.preventDefault();event.returnValue=''}}
 window.addEventListener('beforeunload',beforeUnload)
 onUnmounted(()=>{active=false;window.removeEventListener('beforeunload',beforeUnload)})
+async function mayClose() {
+ if(busy.value) return false
+ const original=JSON.stringify([props.item.caseId,requestKey.value,unknown.value])
+ const allowed=await mayLeave()
+ return allowed && !busy.value && active && original===JSON.stringify([props.item.caseId,requestKey.value,unknown.value])
+}
+defineExpose({mayClose})
 </script>
 <template><section class="panel order-section"><h2>微信原路退款</h2><p>{{ wechatRefundLabel(item.refundStatus || item.wechatRefund?.status) }}</p><p v-if="item.wechatRefund?.refundNo">退款业务号：{{ item.wechatRefund.refundNo }}</p><p>现金退款合计：{{ money(total) }}。受理成功仍可能处理中，只有验签通知或主动查单确认成功才完成售后。</p><p v-if="!item.wechatRefund?.available" class="order-warning">微信退款尚未配置或未启用。当前不能发起真实退款，商户账号联调后再开放。</p><p v-if="wechatFailureLabel(item.wechatRefund?.failureCode)" class="order-warning">{{ wechatFailureLabel(item.wechatRefund?.failureCode) }}</p><p v-if="unknown" class="order-warning">上次请求结果未知，请先刷新处理状态并查单；不要重新发起退款。</p><p v-if="error" class="error" role="alert">{{ error }}</p><button v-if="canDispatch" class="primary-button" :disabled="busy" @click="dialog=true">{{ item.wechatRefund?.status==='FAILED' ? '沿原退款单重试' : '核对金额，发起原路退款' }}</button><button v-if="canQuery" class="secondary-button" :disabled="busy" @click="query">{{ busy?'查询中…':'查询微信退款结果' }}</button><p v-if="!permitted">当前账号没有退款操作权限。</p><el-dialog v-model="dialog" title="授权发起微信原路退款" :close-on-click-modal="false" :close-on-press-escape="!busy" :show-close="!busy" ><p>{{ item.orderNo }} · {{ item.title }}</p><p>向原支付渠道申请退款 {{ money(total) }}。结果以微信通知和查询为准。</p><p v-if="error" role="alert">{{ error }}</p><template #footer><button class="secondary-button" :disabled="busy" @click="dialog=false">返回核对</button><button class="primary-button" :disabled="busy  || !canDispatch" @click="dispatch">{{ busy?'发起中…':'授权发起原路退款' }}</button></template></el-dialog></section></template>

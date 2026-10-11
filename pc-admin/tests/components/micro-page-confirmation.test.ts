@@ -23,7 +23,7 @@ async function setup() {
   const account = reactive({ accountId: 'actor', permissionCodes: ['page.read', 'page.edit'] })
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/pages/micro', component: MicroPageView, props: { account } }] })
   await router.push('/pages/micro?pageId=p1')
-  const wrapper = mount(defineComponent({ template: '<RouterView />' }), { global: { plugins: [router], stubs: { PublicationHistory: true, HomePagePreview: true, PageComponentEditor: true, ElDialog: true } } })
+  const wrapper = mount(defineComponent({ template: '<RouterView />' }), { global: { plugins: [router], stubs: { PublicationHistory: true, HomePagePreview: true, PageComponentEditor: true, ElDialog: { props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' } } } })
   wrappers.push(wrapper); await flushPromises()
   return { router, wrapper, account }
 }
@@ -44,9 +44,9 @@ it.each(['switch', 'create', 'reload'])('does not apply stale %s confirmation af
   await wrapper.get('.micro-editor-actions input').setValue('unsaved')
   let allow!: (value: boolean) => void
   vi.mocked(confirmAction).mockImplementationOnce(() => new Promise(resolve => { allow = resolve }))
-  if (action === 'create') { await wrapper.get('input[placeholder="例如 品牌故事"]').setValue('brand'); await wrapper.get('form.micro-create').trigger('submit') }
+  if (action === 'create') { await button(wrapper, '新建微页面').trigger('click'); await wrapper.get('input[placeholder="例如 品牌故事"]').setValue('brand'); await wrapper.get('form.micro-create').trigger('submit') }
   else if (action === 'reload') await button(wrapper, '重新读取').trigger('click')
-  else await wrapper.get('.micro-page-rows button:last-child').trigger('click')
+  else await wrapper.findAll('.micro-page-rows button').at(-1)!.trigger('click')
   await router.push('/pages/micro?pageId=other'); await flushPromises()
   allow(true); await flushPromises()
   expect(router.currentRoute.value.query.pageId).toBe('other')
@@ -62,6 +62,7 @@ it.each(['remove', 'create'])('refuses pending %s when edit permission is revoke
     await button(wrapper, '移除组件').trigger('click')
   } else {
     await wrapper.get('.micro-editor-actions input').setValue('unsaved')
+    await button(wrapper, '新建微页面').trigger('click')
     await wrapper.get('input[placeholder="例如 品牌故事"]').setValue('brand')
     await wrapper.get('form.micro-create').trigger('submit')
   }

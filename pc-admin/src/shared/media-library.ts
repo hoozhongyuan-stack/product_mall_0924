@@ -3,9 +3,9 @@ export type AssetKind = Asset['kind']
 export interface LibraryAsset extends Asset { originalName: string; createdAt: string; sha256: string; bindingStatus: 'BOUND' | 'UNBOUND'; availability: 'READY' | 'MISSING' | 'EXPIRED' }
 export interface AssetPage { items: LibraryAsset[]; total: number; page: number; pageSize: number }
 export interface SelectionRules { kind: AssetKind; square?: boolean; excludedIds?: string[] }
-export interface AssetFilters { kind?: AssetKind | ''; q?: string; binding?: string; page: number; square?: boolean }
+export interface AssetFilters { kind?: AssetKind | ''; q?: string; binding?: string; page: number; pageSize?: number; square?: boolean }
 export function assetQuery(filters: AssetFilters, canRead: boolean): string {
-  const query = new URLSearchParams({ page: String(filters.page), pageSize: '20' })
+  const query = new URLSearchParams({ page: String(filters.page), pageSize: String([20,50,100].includes(filters.pageSize || 20) ? (filters.pageSize || 20) : 20) })
   if (filters.kind) query.set('kind', filters.kind)
   if (filters.q?.trim()) query.set('q', filters.q.trim())
   if (!canRead) query.set('binding', 'UNBOUND')

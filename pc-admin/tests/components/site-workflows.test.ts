@@ -44,7 +44,7 @@ it('submits fulfillment and search to server, resets all filters and pagination 
   await wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(api).toHaveBeenLastCalledWith('/orders?page=1&pageSize=20&fulfillment=WAITING_SHIPMENT&search=M2026001')
-  await wrapper.findAll('button').find(button => button.text() === '下一页')!.trigger('click')
+  await wrapper.get('.admin-list-pager button.btn-next').trigger('click')
   await flushPromises()
   expect(api).toHaveBeenLastCalledWith('/orders?page=2&pageSize=20&fulfillment=WAITING_SHIPMENT&search=M2026001')
   await wrapper.findAll('button').find(button => button.text() === '重置')!.trigger('click')

@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import AdminStatusBadge from '../../shared/list/AdminStatusBadge.vue'
 import { confirmAction } from '../../shared/confirm'
 
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, ApiError } from '../../api'
 import { buildStocktakeSubmission } from './stocktake.mjs'
@@ -44,6 +45,8 @@ const confirmationPending = ref(false)
 let listSequence = 0
 let detailSequence = 0
 let skuSequence = 0
+let exportGeneration = 0
+onUnmounted(() => { exportGeneration++ })
 
 const hasDirtyCreate = computed(() => creating.value && createTouched.value)
 const hasDirtyCount = computed(() => selected.value?.status === 'COUNTING' && countTouched.value)
@@ -58,11 +61,15 @@ function toggleRow(id: string, value: boolean | string | number) {
   selectedIds.value = value ? [...selectedIds.value.filter(item => item !== id), id]
     : selectedIds.value.filter(item => item !== id)
 }
-function exportSelected() {
-  if (!selectedRows.value.length) return
+async function exportSelected() {
+  const generation = exportGeneration
+  const snapshot = selectedRows.value
+  const ids = selectedIds.value.join('|')
+  if (!snapshot.length || !await confirmAction(`导出当前页所选 ${snapshot.length} 张盘点单为 CSV？`)) return
+  if (generation !== exportGeneration || selectedIds.value.join('|') !== ids) return
   const rows = [
     ['盘点单号', '仓库', 'SKU 数', '创建人', '创建时间', '状态'],
-    ...selectedRows.value.map(row => [row.documentNo, row.warehouseName, row.itemCount,
+    ...snapshot.map(row => [row.documentNo, row.warehouseName, row.itemCount,
       row.createdBy, date(row.createdAt), statusName(row.status)]),
   ]
   const url = URL.createObjectURL(new Blob([csvTable(rows)], { type: 'text/csv;charset=utf-8' }))
@@ -88,9 +95,9 @@ function signed(value: number | null) { return value === null ? '—' : `${value
 function statusName(status: StocktakeStatus) {
   return ({ COUNTING: '盘点中', PENDING_REVIEW: '待审核', APPROVED: '已通过' } as const)[status]
 }
-function statusBadge(status: StocktakeStatus) {
-  return status === 'APPROVED' ? 'badge badge-good' : status === 'PENDING_REVIEW' ? 'badge badge-warning' : 'badge badge-muted'
-}
+async function closeSelected() { if(actionSaving.value || confirmationPending.value) return; if(hasDirtyCount.value && !await confirmAction('放弃尚未提交的实盘录入？')) return; detailSequence++;selected.value=null;countTouched.value=false;detailError.value='' }
+async function beforeCreateClose(done:()=>void) {if(createSaving.value)return;await toggleCreate();if(!creating.value)done()}
+async function beforeDetailClose(done:()=>void) {await closeSelected();if(!selected.value)done()}
 function changeCreate() { createTouched.value = true; createKey.value = crypto.randomUUID(); createError.value = '' }
 function changeCount(skuId: string, field: keyof CountInput, value: string) {
   counts.value = { ...counts.value, [skuId]: { ...counts.value[skuId], [field]: value } }
@@ -286,14 +293,14 @@ onMounted(() => { void loadList(1) })
     <p v-if="!canManage && !canReview" class="hint">当前账号可查看盘点记录。创建和提交需要库存管理权限，审核需要库存审核权限。</p>
     <form class="inventory-filters" @submit.prevent="loadList(1)"><label>单号<el-input v-model="filterDocumentNo" maxlength="40" clearable placeholder="输入盘点单号" /></label><label>仓库<el-select v-model="filterWarehouse" placeholder="全部仓库"><el-option label="全部仓库" value="" /><el-option v-for="row in warehouses" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label><label>状态<el-select v-model="filterStatus" placeholder="全部状态"><el-option label="全部状态" value="" /><el-option label="盘点中" value="COUNTING" /><el-option label="待审核" value="PENDING_REVIEW" /><el-option label="已通过" value="APPROVED" /></el-select></label><label>创建时间<InventoryDateRange v-model="filterDates" /></label><el-button type="primary" native-type="submit" :loading="listLoading">查询</el-button><el-button @click="filterDocumentNo = ''; filterWarehouse = ''; filterStatus = ''; filterDates = []; loadList(1)">重置</el-button></form>
     <p v-if="listError" class="notice" role="alert">{{ listError }} <el-button link type="primary" @click="loadList(tasks.page)">重试</el-button></p>
-    <div class="panel table-wrap" v-loading="listLoading"><table><thead><tr><th><el-checkbox :model-value="allSelected" :disabled="listLoading" aria-label="全选当前页盘点单" @change="toggleAll" /></th><th>盘点单号</th><th>仓库</th><th>盘点范围</th><th>SKU 数</th><th>创建人 / 时间</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="row in tasks.items" :key="row.stocktakeId"><td><el-checkbox :model-value="selectedIds.includes(row.stocktakeId)" :disabled="listLoading" :aria-label="`选择盘点单 ${row.documentNo}`" @change="toggleRow(row.stocktakeId, $event)" /></td><td class="code">{{ row.documentNo }}</td><td>{{ row.warehouseName }}</td><td>指定 SKU</td><td class="inventory-number">{{ row.itemCount }}</td><td>{{ row.createdBy }}<small class="inventory-subline">{{ date(row.createdAt) }}</small></td><td><span :class="statusBadge(row.status)">{{ statusName(row.status) }}</span></td><td><el-button link type="primary" :loading="detailLoading" @click="loadDetail(row.stocktakeId)">{{ row.status === 'COUNTING' && canManage ? '录入实盘' : row.status === 'PENDING_REVIEW' && canReview ? '审核差异' : '查看详情' }}</el-button></td></tr></tbody></table><p v-if="!listLoading && !listError && !tasks.items.length" class="inventory-empty">暂无匹配盘点单。可选择仓库与 SKU 创建盘点任务。</p></div>
-    <InventoryListFooter :page="tasks.page" :page-size="tasks.pageSize" :total="tasks.total" :selected-count="selectedIds.length" :loading="listLoading" @page="loadList" @size="changePageSize" @export="exportSelected" />
+    <div class="panel table-wrap admin-list-table" v-loading="listLoading"><table><thead><tr><th><el-checkbox :model-value="allSelected" :disabled="listLoading" aria-label="全选当前页盘点单" @change="toggleAll" /></th><th>盘点单号</th><th>仓库</th><th>盘点范围</th><th>SKU 数</th><th>创建人 / 时间</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="row in tasks.items" :key="row.stocktakeId"><td><el-checkbox :model-value="selectedIds.includes(row.stocktakeId)" :disabled="listLoading" :aria-label="`选择盘点单 ${row.documentNo}`" @change="toggleRow(row.stocktakeId, $event)" /></td><td class="code">{{ row.documentNo }}</td><td>{{ row.warehouseName }}</td><td>指定 SKU</td><td class="inventory-number">{{ row.itemCount }}</td><td>{{ row.createdBy }}<small class="inventory-subline">{{ date(row.createdAt) }}</small></td><td><AdminStatusBadge :status="row.status" :label="statusName(row.status)" :tone="row.status==='APPROVED'?'success':undefined"/></td><td><el-button link type="primary" :loading="detailLoading" @click="loadDetail(row.stocktakeId)">{{ row.status === 'COUNTING' && canManage ? '录入实盘' : row.status === 'PENDING_REVIEW' && canReview ? '审核差异' : '查看详情' }}</el-button></td></tr></tbody></table><p v-if="!listLoading && !listError && !tasks.items.length" class="inventory-empty">暂无匹配盘点单。可选择仓库与 SKU 创建盘点任务。</p></div>
+    <InventoryListFooter :page="tasks.page" :page-size="tasks.pageSize" :total="tasks.total" :selected-count="selectedIds.length" :loading="listLoading" @page="loadList" @size="changePageSize" @export="exportSelected" @clear="selectedIds=[]" />
 
-    <form v-if="creating && canManage" class="panel inventory-form stocktake-form" @submit.prevent="createTask"><h3>创建盘点任务</h3><div class="inventory-form-grid"><label>盘点仓库 <span class="required">*</span><el-select :model-value="createWarehouse" :disabled="createSaving" placeholder="选择仓库" @update:model-value="(value: string) => { createWarehouse = value; changeCreate() }"><el-option v-for="row in warehouses.filter((warehouse) => warehouse.enabled)" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label><label>SKU 范围 <span class="required">*</span><el-select :model-value="createSkus" multiple collapse-tags filterable remote reserve-keyword :remote-method="searchSkus" :loading="skuLoading" :disabled="createSaving" placeholder="搜索并选择 1 至 50 个 SKU" @update:model-value="setCreateSkus"><el-option v-for="sku in skuOptions" :key="sku.skuId" :label="`${sku.skuCode} · ${sku.productName}`" :value="sku.skuId" /></el-select></label></div><p class="help-text">已选 {{ createSkus.length }} / 50 个 SKU。任务创建时保存账面快照；盘点期间仓库可继续正常出入库。</p><p v-if="createError" class="error" role="alert">{{ createError }}</p><div class="inventory-actions"><el-button :disabled="createSaving" @click="toggleCreate">取消</el-button><el-button type="primary" native-type="submit" :loading="createSaving">创建任务</el-button></div></form>
+    <el-dialog :model-value="creating" :before-close="beforeCreateClose" title="创建盘点任务" width="900px" :close-on-click-modal="false" :show-close="!createSaving" :close-on-press-escape="!createSaving"><form v-if="creating && canManage" class="panel inventory-form stocktake-form" @submit.prevent="createTask"><h3>创建盘点任务</h3><div class="inventory-form-grid"><label>盘点仓库 <span class="required">*</span><el-select :model-value="createWarehouse" :disabled="createSaving" placeholder="选择仓库" @update:model-value="(value: string) => { createWarehouse = value; changeCreate() }"><el-option v-for="row in warehouses.filter((warehouse) => warehouse.enabled)" :key="row.warehouseId" :label="row.name" :value="row.warehouseId" /></el-select></label><label>SKU 范围 <span class="required">*</span><el-select :model-value="createSkus" multiple collapse-tags filterable remote reserve-keyword :remote-method="searchSkus" :loading="skuLoading" :disabled="createSaving" placeholder="搜索并选择 1 至 50 个 SKU" @update:model-value="setCreateSkus"><el-option v-for="sku in skuOptions" :key="sku.skuId" :label="`${sku.skuCode} · ${sku.productName}`" :value="sku.skuId" /></el-select></label></div><p class="help-text">已选 {{ createSkus.length }} / 50 个 SKU。任务创建时保存账面快照；盘点期间仓库可继续正常出入库。</p><p v-if="createError" class="error" role="alert">{{ createError }}</p><div class="inventory-actions"><el-button :disabled="createSaving" @click="toggleCreate">取消</el-button><el-button type="primary" native-type="submit" :loading="createSaving">创建任务</el-button></div></form></el-dialog>
 
     <p v-if="detailLoading" class="hint" role="status">正在读取盘点明细…</p>
     <p v-if="detailError" class="notice" role="alert">{{ detailError }} <el-button v-if="selected" link type="primary" @click="loadDetail(selected.stocktakeId, true)">重新读取</el-button></p>
-    <section v-if="selected" class="panel inventory-detail stocktake-detail" aria-live="polite"><div class="page-heading"><div><h3>盘点明细 · {{ selected.documentNo }}</h3><p>仓库：{{ selected.warehouseName }}　·　创建：{{ selected.createdBy }}，{{ date(selected.createdAt) }}</p></div><span :class="statusBadge(selected.status)">{{ statusName(selected.status) }}</span></div>
+    <el-dialog :model-value="Boolean(selected)" :before-close="beforeDetailClose" title="盘点明细与处理" width="1080px" :close-on-click-modal="false" :show-close="!actionSaving && !confirmationPending" :close-on-press-escape="!actionSaving && !confirmationPending"><p v-if="detailError" class="notice" role="alert">{{detailError}}</p><section v-if="selected" class="panel inventory-detail stocktake-detail" aria-live="polite"><div class="page-heading"><div><h3>盘点明细 · {{ selected.documentNo }}</h3><p>仓库：{{ selected.warehouseName }}　·　创建：{{ selected.createdBy }}，{{ date(selected.createdAt) }}</p></div><AdminStatusBadge :status="selected.status" :label="statusName(selected.status)" :tone="selected.status==='APPROVED'?'success':undefined"/></div>
       <p v-if="selected.reviewNote" class="inventory-conversion">最近审核意见：{{ selected.reviewNote }}</p>
       <p v-if="selected.status === 'COUNTING'" class="help-text">请录入基础单位实盘数。提交后服务端会读取最新账面，计算差异并交由有审核权限的账号处理。</p>
       <p v-else class="help-text">盘点人：{{ selected.submittedBy || '—' }}　·　提交时间：{{ date(selected.submittedAt) }}<template v-if="selected.reviewedBy">　·　审核人：{{ selected.reviewedBy }}，{{ date(selected.reviewedAt) }}</template></p>
@@ -304,6 +311,6 @@ onMounted(() => { void loadList(1) })
       <div v-if="selected.status === 'COUNTING' && canManage" class="inventory-actions"><el-button type="primary" :loading="actionSaving" @click="submitCount">提交差异审核</el-button></div>
       <div v-if="selected.status === 'PENDING_REVIEW' && canReview" class="inventory-actions"><el-button :disabled="actionSaving" @click="returnForCorrection">退回补充</el-button><el-button type="primary" :loading="actionSaving" :disabled="hasBookChanged" @click="approve">审核并生成调整流水</el-button></div>
       <p v-if="selected.status === 'PENDING_REVIEW' && !canReview" class="hint">当前账号没有库存审核权限，可查看差异但不能审核。</p>
-    </section>
+    </section></el-dialog>
   </div>
 </template>

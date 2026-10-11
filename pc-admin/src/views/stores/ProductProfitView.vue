@@ -4,6 +4,11 @@ import { ElDialog } from "element-plus";
 import { api, ApiError, confirmedWrite, type Account } from "../../api";
 import { amount } from "./types";
 import "./stores.css";
+import {confirmAction} from "../../shared/confirm";
+import {onBeforeRouteLeave} from "vue-router";
+import AdminSelectedRowsDialog from "../../shared/list/AdminSelectedRowsDialog.vue";
+import AdminListPager from "../../shared/list/AdminListPager.vue";
+import AdminSelectionBar from "../../shared/list/AdminSelectionBar.vue";
 interface Sku {
   skuId: string;
   currentUnitVersionId: string | null;
@@ -57,6 +62,11 @@ const skus = computed(() =>
   ),
 );
 let epoch = 0;
+let editBaseline='';
+const draftSignature=()=>JSON.stringify([share.value,costs.value]);
+const dirty=computed(()=>!!mode.value&&draftSignature()!==editBaseline);
+async function closeEdit(done?:()=>void){if(busy.value)return false;if(dirty.value&&!await confirmAction('进货价与分润尚未保存，确定关闭吗？'))return false;reset();done?.();return true}
+onBeforeRouteLeave(()=>closeEdit());
 function hundredths(value: string, max: number) {
   if (!/^\d+(\.\d{1,2})?$/.test(value)) return null;
   const [a, b = ""] = value.split(".");
@@ -79,6 +89,10 @@ const allowed = computed(
             hundredths(costs.value[s.skuId] || "", 9900000000) !== null,
         )),
 );
+const comparison=ref(false);
+const comparisonRows=computed(()=>rows.value.filter(row=>checked.value.includes(row.productId)).map(row=>({product:row.productName,code:row.productNo,costs:row.skus.map(sku=>`${sku.specLabel||sku.skuCode||'默认规格'} / 每${sku.saleUnit}：${sku.requiresReconfiguration?'需重新配置':sku.purchaseCostFen===null?'未配置':amount(sku.purchaseCostFen)}`).join('；'),share:row.platformShareBps===null?'未配置':`${row.platformShareBps/100}%`})));
+const selectionBlocked=computed(()=>!readable.value||busy.value||loading.value||needsRead.value||!!mode.value);
+function resetQuery(){if(busy.value||loading.value||mode.value)return;search.value='';categoryId.value='';configuration.value='ALL';page.value=1;void load()}
 const blocked = computed(
   () =>
     !permitted.value ||
@@ -98,10 +112,12 @@ function reset() {
 }
 async function load() {
   if (!readable.value || busy.value) return;
+  if(mode.value&&!await closeEdit())return;
   const token = ++epoch;
   loading.value = true;
   error.value = "";
   checked.value = [];
+  comparison.value=false;
   reset();
   try {
     const result = await api<{ items: Product[]; total: number }>(
@@ -150,6 +166,7 @@ function open(kind: "cost" | "share", products: Product[]) {
       ]),
     ),
   );
+  editBaseline=draftSignature();
   error.value = "";
   notice.value = "";
 }
@@ -273,7 +290,8 @@ async function save() {
     }
   }
 }
-function changePage(next: number) {
+function changePage(next: number,size=pageSize.value) {
+  pageSize.value=size;
   page.value = next;
   void load();
 }
@@ -307,7 +325,7 @@ onUnmounted(() => {
 });
 </script>
 <template>
-  <section class="page-content stores-page">
+  <section class="page-content stores-page admin-list-page">
     <header class="page-heading">
       <div>
         <h1>商品进货价与分润</h1>
@@ -362,7 +380,7 @@ onUnmounted(() => {
           </select></label
         ><button class="primary-button" :disabled="busy || loading || !!mode">
           查询
-        </button>
+        </button><button class="secondary-button" type="button" :disabled="busy||loading||!!mode" @click="resetQuery">重置</button>
       </form>
       <p v-if="error" role="alert">{{ error }}</p>
       <p v-if="notice" role="status">{{ notice }}</p>
@@ -370,9 +388,7 @@ onUnmounted(() => {
       <p v-else-if="!rows.length && !error" class="empty-state">
         暂无符合条件的商品。
       </p>
-      <div class="store-actions store-rule-toolbar">
-        <span>已选 {{ checked.length }} 个商品（仅当前页）</span
-        ><button
+      <AdminSelectionBar :count="checked.length" unit="个商品" :loading="busy||loading" @clear="checked=[]"><button
           class="secondary-button"
           :disabled="blocked || !checked.length"
           @click="openBatch('cost')"
@@ -384,11 +400,11 @@ onUnmounted(() => {
           @click="openBatch('share')"
         >
           批量设置平台比例
-        </button>
-      </div>
+        </button><button class="secondary-button" :disabled="selectionBlocked||!checked.length" @click="comparison=true">对比所选规则</button>
+      </AdminSelectionBar>
       <div
         v-if="rows.length"
-        class="table-wrap"
+        class="table-wrap admin-list-table"
         tabindex="0"
         aria-label="商品分润列表，可横向滚动"
       >
@@ -399,7 +415,7 @@ onUnmounted(() => {
                 <input
                   type="checkbox"
                   aria-label="选择当前页全部商品"
-                  :disabled="blocked"
+                  :disabled="selectionBlocked"
                   :checked="checked.length === rows.length"
                   :indeterminate="
                     checked.length > 0 && checked.length < rows.length
@@ -425,7 +441,7 @@ onUnmounted(() => {
                   :data-select="row.productId"
                   :aria-label="`选择 ${row.productName}`"
                   :checked="checked.includes(row.productId)"
-                  :disabled="blocked"
+                  :disabled="selectionBlocked"
                   @change="
                     select(
                       row.productId,
@@ -482,33 +498,7 @@ onUnmounted(() => {
           </tbody>
         </table>
       </div>
-      <div class="store-pagination">
-        <span>共 {{ total }} 个商品 · 第 {{ page }} 页</span
-        ><label
-          >每页<select
-            v-model.number="pageSize"
-            :disabled="busy || loading || !!mode"
-            @change="changePage(1)"
-          >
-            <option :value="10">10</option>
-            <option :value="20">20</option>
-            <option :value="50">50</option>
-          </select></label
-        ><button
-          class="secondary-button"
-          :disabled="page <= 1 || busy || loading || !!mode"
-          @click="changePage(page - 1)"
-        >
-          上一页</button
-        ><button
-          class="secondary-button"
-          data-action="next"
-          :disabled="page * pageSize >= total || busy || loading || !!mode"
-          @click="changePage(page + 1)"
-        >
-          下一页
-        </button>
-      </div>
+      <AdminListPager :page="page" :page-size="pageSize" :total="total" :loading="busy||loading||!!mode" @change="changePage"/>
     </section>
     <ElDialog
       :model-value="!!mode"
@@ -517,7 +507,7 @@ onUnmounted(() => {
       :close-on-click-modal="false"
       :show-close="!busy"
       :close-on-press-escape="!busy"
-      @update:model-value="!busy && reset()"
+      :before-close="closeEdit"
       ><p v-if="error" role="alert">{{ error }}</p>
       <form
         aria-label="规则编辑"
@@ -630,7 +620,7 @@ onUnmounted(() => {
             class="secondary-button"
             type="button"
             :disabled="busy"
-            @click="reset"
+            @click="closeEdit()"
           >
             取消
           </button>
@@ -653,6 +643,7 @@ onUnmounted(() => {
         </button>
       </form></ElDialog
     >
+    <AdminSelectedRowsDialog v-model="comparison" title="商品进货价与分润对比" :rows="comparisonRows" :columns="[{key:'product',label:'商品'},{key:'code',label:'商品编码'},{key:'costs',label:'各规格进货价'},{key:'share',label:'商品平台比例'}]"/>
   </section>
 </template>
 <style scoped>

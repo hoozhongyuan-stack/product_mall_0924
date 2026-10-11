@@ -27,7 +27,7 @@ async function setup(component: typeof HomePageView, category: () => Response | 
   const wrapper = mount(RouterView, { global: { plugins: [router], stubs: {
     PublicationHistory: true, HomePagePreview: true,
     PageComponentEditor: { name: 'PageComponentEditor', props: ['categories', 'products', 'pages'], template: '<div data-testid="target-editor" />' },
-    ElDialog: true, ElInput: true,
+    ElDialog: { props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' }, ElInput: true,
   } } })
   wrappers.push(wrapper)
   await flushPromises()

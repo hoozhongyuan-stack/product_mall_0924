@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import AdminListPager from './list/AdminListPager.vue'
+import AdminSelectionBar from './list/AdminSelectionBar.vue'
+import AdminSelectedRowsDialog from './list/AdminSelectedRowsDialog.vue'
+import AdminStatusBadge from './list/AdminStatusBadge.vue'
+import {useCurrentPageSelection} from './list/useCurrentPageSelection'
 import { computed, inject, onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 import { api, type Account } from '../api'
 import { assetQuery, selectionError, type AssetKind, type AssetPage, type LibraryAsset } from './media-library'
@@ -16,6 +21,11 @@ const q = ref('')
 const binding = ref('')
 const page = ref(1)
 const result = ref<AssetPage | null>(null)
+const pageSize = ref(20), compareOpen=ref(false), previewAsset=ref<LibraryAsset|null>(null), uploadOpen=ref(false)
+const selection=useCurrentPageSelection(()=>result.value?.items || [],row=>row.assetId)
+const compareColumns=[{key:'name',label:'文件名'},{key:'kind',label:'类型'},{key:'size',label:'体积'},{key:'binding',label:'引用状态'},{key:'created',label:'上传时间'}]
+const compareRows=computed(()=>selection.selectedRows.value.map(row=>({name:row.originalName,kind:row.kind,size:`${(row.byteSize/1024).toFixed(1)} KiB`,binding:row.bindingStatus==='BOUND'?'已引用':'未引用',created:new Date(row.createdAt).toLocaleString('zh-CN')})))
+function changeListPage(value:number,size:number){page.value=value;pageSize.value=size;void load()}
 const loading = ref(false)
 const uploading = ref(false)
 const error = ref('')
@@ -35,11 +45,12 @@ function invalid(asset: LibraryAsset) { return props.selecting ? selectionError(
 async function load(reset = false) {
   if (!canAccess.value) return
   if (reset) page.value = 1
+  selection.clear()
   const current = ++generation
   loading.value = true
   error.value = ''
   try {
-    const data = await api<AssetPage>(`/assets?${assetQuery({ kind: kindFilter.value, q: q.value, binding: binding.value, page: page.value, square: props.square }, props.canRead)}`)
+    const data = await api<AssetPage>(`/assets?${assetQuery({ kind: kindFilter.value, q: q.value, binding: binding.value, page: page.value, pageSize: pageSize.value, square: props.square }, props.canRead)}`)
     if (alive && current === generation) { result.value = data; broken.value = [] }
   } catch (reason) { if (alive && current === generation) error.value = reason instanceof Error ? reason.message : '素材读取失败，请重试。' }
   finally { if (alive && current === generation) loading.value = false }
@@ -83,14 +94,17 @@ onBeforeUnmount(() => { alive = false; generation++; referenceGeneration++ })
         <label>搜索文件名<el-input v-model="q" maxlength="120" placeholder="输入文件名" clearable /></label>
         <label v-if="!kind">素材类型<el-select v-model="kindFilter" placeholder="全部类型"><el-option label="全部类型" value="" /><el-option label="图片" value="IMAGE" /><el-option label="视频" value="VIDEO" /><el-option label="GIF" value="GIF" /></el-select></label>
         <label v-if="canRead">引用状态<el-select v-model="binding" placeholder="全部状态"><el-option label="全部状态" value="" /><el-option label="已引用" value="BOUND" /><el-option label="未引用" value="UNBOUND" /></el-select></label>
-        <el-button native-type="submit" :loading="loading">查询</el-button>
+        <el-button type="primary" native-type="submit" :loading="loading">查询</el-button><el-button :disabled="loading" @click="q='';kindFilter=kind||'';binding='';load(true)">重置</el-button>
       </form>
-      <AssetUploadQueue v-if="canUpload" :can-upload="canUpload" :kind="kind" @pending="uploadPending" @refresh="load(true)" />
+      <AssetUploadQueue v-if="canUpload && selecting" :can-upload="canUpload" :kind="kind" @pending="uploadPending" @refresh="load(true)" />
+      <div v-if="canUpload && !selecting" class="toolbar"><el-button type="primary" @click="uploadOpen=true">上传素材</el-button></div>
+      <el-dialog v-if="!selecting && uploadOpen" v-model="uploadOpen" title="上传素材" width="900px" :close-on-click-modal="false" :close-on-press-escape="!uploading" :show-close="!uploading"><AssetUploadQueue :can-upload="canUpload" :kind="kind" @pending="uploadPending" @refresh="load(true)"/><template #footer><el-button :disabled="uploading" @click="uploadOpen=false">关闭</el-button></template></el-dialog>
+      <AdminSelectionBar v-if="!selecting" :count="selection.selectedIds.value.length" :loading="loading" @clear="selection.clear"><el-button :disabled="loading || !selection.selectedIds.value.length" @click="compareOpen=true">核对所选</el-button></AdminSelectionBar>
       <p v-if="notice" role="status">{{ notice }}</p>
       <p v-if="error" class="error" role="alert">{{ error }} <el-button text @click="load()">重新读取</el-button></p>
       <p v-if="loading" role="status">正在读取素材…</p>
       <p v-else-if="!error && !result?.items.length" class="asset-empty">暂无符合条件的素材。可调整筛选{{ canUpload ? '或上传新素材' : '' }}。</p>
-      <ul v-if="result?.items.length" class="asset-grid" :aria-busy="loading">
+      <ul v-if="selecting && result?.items.length" class="asset-grid" :aria-busy="loading">
         <li v-for="asset in result.items" :key="asset.assetId" class="asset-item">
           <div class="asset-preview"><p v-if="asset.availability !== 'READY' || broken.includes(asset.assetId)">文件不可用</p><video v-else-if="asset.kind === 'VIDEO'" :src="asset.adminUrl" controls preload="metadata" :aria-label="asset.originalName" @error="broken = [...broken, asset.assetId]" /><img v-else :src="asset.adminUrl" :alt="asset.originalName" loading="lazy" @error="broken = [...broken, asset.assetId]" /></div>
           <strong class="asset-name" :title="asset.originalName">{{ asset.originalName }}</strong>
@@ -100,7 +114,11 @@ onBeforeUnmount(() => { alive = false; generation++; referenceGeneration++ })
           <small v-if="selecting && invalid(asset)" class="error">{{ invalid(asset) }}</small>
         </li>
       </ul>
-      <el-pagination v-if="result && result.total > 20" class="asset-pagination" layout="prev, pager, next" :total="result.total" :page-size="20" :current-page="page" :disabled="loading" @current-change="turnPage" />
+      <div v-if="!selecting && result?.items.length" class="table-wrap admin-list-table" tabindex="0" aria-label="素材列表，可横向滚动"><table><thead><tr><th><input type="checkbox" :checked="selection.allSelected.value" :indeterminate="selection.indeterminate.value" :disabled="loading" aria-label="选择当前页素材" @change="selection.togglePage(($event.target as HTMLInputElement).checked)"></th><th>素材</th><th>类型 / 体积</th><th>引用状态</th><th>文件状态</th><th>上传时间</th><th>操作</th></tr></thead><tbody><tr v-for="asset in result.items" :key="asset.assetId"><td><input type="checkbox" :checked="selection.selectedIds.value.includes(asset.assetId)" :disabled="loading" :aria-label="`勾选素材 ${asset.originalName}`" @change="selection.toggle(asset.assetId,($event.target as HTMLInputElement).checked)"></td><td><div class="asset-list-identity"><img v-if="asset.kind !== 'VIDEO' && asset.availability === 'READY' && !broken.includes(asset.assetId)" :src="asset.adminUrl" alt="" @error="broken=[...broken,asset.assetId]"><span v-else>{{asset.kind==='VIDEO'?'视频':'文件'}}</span><strong>{{asset.originalName}}</strong></div></td><td>{{asset.kind}}<br>{{(asset.byteSize/1024).toFixed(1)}} KiB</td><td><AdminStatusBadge :status="asset.bindingStatus" :label="asset.bindingStatus==='BOUND'?'已引用':'未引用'" :tone="asset.bindingStatus==='BOUND'?'processing':'neutral'"/></td><td><AdminStatusBadge :status="asset.availability" :label="asset.availability==='READY'?'可用':'文件不可用'" :tone="asset.availability==='READY'?'success':'danger'"/></td><td>{{new Date(asset.createdAt).toLocaleString('zh-CN')}}</td><td><el-button link type="primary" :disabled="loading" @click="previewAsset=asset">预览</el-button><el-button v-if="canRead" link type="primary" :disabled="loading" @click="loadReferences(asset)">查看引用</el-button><el-button v-if="canDelete && asset.bindingStatus==='UNBOUND'" link type="danger" :disabled="loading || uploading || deleting" @click="deleteAsset=asset;deleteError=''">删除</el-button></td></tr></tbody></table></div>
+      <AdminListPager v-if="result" :page="page" :page-size="pageSize" :total="result.total" :loading="loading" @change="changeListPage"/>
+      <AdminSelectedRowsDialog v-model="compareOpen" title="核对所选素材" :columns="compareColumns" :rows="compareRows"/>
+      <el-dialog :model-value="Boolean(previewAsset)" title="素材预览" width="900px" @update:model-value="(value:boolean)=>{if(!value)previewAsset=null}"><template v-if="previewAsset"><p>{{previewAsset.originalName}}</p><p v-if="previewAsset.availability!=='READY'">文件不可用。</p><video v-else-if="previewAsset.kind==='VIDEO'" :src="previewAsset.adminUrl" controls style="max-width:100%;max-height:60dvh"/><img v-else :src="previewAsset.adminUrl" :alt="previewAsset.originalName" style="max-width:100%;max-height:60dvh;object-fit:contain"/></template></el-dialog>
+
       <p class="help-text">引用素材会保留。未引用素材由服务端按保留期清理；移除页面或商品中的素材不等于删除文件。</p>
     </template>
     <el-dialog class="asset-dialog" :model-value="!!deleteAsset" title="删除未引用素材" width="460px" :close-on-click-modal="false" :close-on-press-escape="!deleting" :show-close="!deleting" @update:model-value="(value: boolean) => { if (!value && !deleting) deleteAsset = null }">

@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import AdminCursorPager from '../shared/list/AdminCursorPager.vue'
+import AdminStatusBadge from '../shared/list/AdminStatusBadge.vue'
+import AdminSelectionBar from '../shared/list/AdminSelectionBar.vue'
+import AdminSelectedRowsDialog from '../shared/list/AdminSelectedRowsDialog.vue'
+
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, ApiError, confirmedWrite, type Account } from '../api'
 import { canRecover, EVENT_OPTIONS, eventLabel, reasonLabel, STATUS_OPTIONS, statusLabel, taskQuery } from './notifications/task-view.mjs'
 import './notifications/tasks.css'
@@ -48,6 +53,14 @@ const recovering = ref(false)
 const recoveryError = ref('')
 const recoveryNotice = ref('')
 const uncertainTaskId = ref('')
+const pageSize = ref(20), selectedIds = ref<string[]>([]), comparisonOpen = ref(false)
+const allSelected = computed(() => rows.value.length > 0 && rows.value.every(row=>selectedIds.value.includes(row.taskId)))
+const compareRows = computed(() => rows.value.filter(row=>selectedIds.value.includes(row.taskId)).map(row=>({...row,event:eventLabel(row.eventType),state:statusLabel(row.status),reason:reasonLabel(row.reasonCode)})))
+function selectPage(){selectedIds.value=allSelected.value?[]:rows.value.map(row=>row.taskId)}
+function toggleRow(id:string){selectedIds.value=selectedIds.value.includes(id)?selectedIds.value.filter(value=>value!==id):[...selectedIds.value,id]}
+function resetFilters(){filters.value={eventType:'',status:'',createdFrom:'',createdTo:''};applyFilters()}
+function changeSize(size:number){pageSize.value=size;previousCursors.value=[];void loadList('')}
+watch(filters,()=>{selectedIds.value=[]},{deep:true})
 let listGeneration = 0
 let detailGeneration = 0
 
@@ -58,11 +71,12 @@ function formatTime(value: string | null) {
 }
 
 async function loadList(cursor = currentCursor.value) {
+  selectedIds.value=[]
   const generation = ++listGeneration
   loading.value = true
   listError.value = ''
   try {
-    const result = await api<TaskPage>(`/subscription-message-tasks${taskQuery(appliedFilters.value, cursor)}`)
+    const result = await api<TaskPage>(`/subscription-message-tasks${taskQuery(appliedFilters.value, cursor, pageSize.value)}`)
     if (generation !== listGeneration) return false
     rows.value = result.items
     nextCursor.value = result.nextCursor
@@ -161,10 +175,11 @@ async function recoverReservation() {
 }
 
 onMounted(() => { void loadList('') })
+onUnmounted(()=>{listGeneration++;detailGeneration++})
 </script>
 
 <template>
-  <section class="page-content message-tasks-page">
+  <section class="page-content admin-list-page message-tasks-page">
     <header class="page-heading">
       <div><h1>消息任务</h1><p>查询事件决策与发送尝试。模拟完成仅用于本机验证，不代表微信接收。</p></div>
       <button class="secondary-button" type="button" :disabled="loading" @click="loadList()">重新读取</button>
@@ -177,22 +192,20 @@ onMounted(() => { void loadList('') })
       <label>任务状态<select v-model="filters.status"><option value="">全部状态</option><option v-for="[code, title] in STATUS_OPTIONS" :key="code" :value="code">{{ title }}</option></select></label>
       <label>创建起始日<input v-model="filters.createdFrom" type="date"></label>
       <label>创建截止日<input v-model="filters.createdTo" type="date"></label>
-      <button class="primary-button" type="submit" :disabled="loading">查询</button>
+      <button class="primary-button" type="submit" :disabled="loading">查询</button><button class="secondary-button" type="button" :disabled="loading" @click="resetFilters">重置</button>
     </form>
-    <p class="message-tasks-scope">默认显示最近 90 天，每页最多 20 条。日期按管理台时区筛选。</p>
+    <p class="message-tasks-scope">默认显示最近 90 天。日期按管理台时区筛选；按服务端游标逐页读取，不提供任意跳页。</p>
     <p v-if="listError" class="notice" role="alert">{{ listError }} <button class="text-button" type="button" @click="loadList()">重试</button></p>
     <p v-if="loading" class="loading-inline" role="status">正在读取消息任务…</p>
     <div v-if="!loading && !listError && !rows.length" class="panel message-tasks-empty">暂无匹配的消息任务。当前模板草稿不会产生可发送任务，可调整筛选后重试。</div>
-    <div v-if="!loading && !listError && rows.length" class="message-tasks-list">
-      <article v-for="item in rows" :key="item.taskId" class="panel message-task-card">
-        <div class="message-task-primary"><div><p class="message-task-event">{{ eventLabel(item.eventType) }}</p><p class="message-task-date">事件 {{ formatTime(item.occurredAt) }} · 创建 {{ formatTime(item.createdAt) }}</p></div><span :class="['message-task-state', `message-task-state--${item.status.toLowerCase()}`]">{{ statusLabel(item.status) }}</span></div>
-        <p v-if="item.reasonCode || item.attemptCount" class="message-task-reason"><span v-if="item.reasonCode">{{ reasonLabel(item.reasonCode) }}</span><span v-if="item.attemptCount">{{ item.reasonCode ? ' · ' : '' }}{{ item.attemptCount }} 次尝试</span></p>
-        <div class="message-task-footer"><span class="message-task-id">任务 {{ item.taskId }}</span><button class="text-button" type="button" @click="openDetail(item.taskId)">查看详情</button></div>
-      </article>
-      <nav class="message-tasks-pagination" aria-label="消息任务分页"><button class="secondary-button" type="button" :disabled="loading || !previousCursors.length" @click="previousPage">上一页</button><span>每页 20 条</span><button class="secondary-button" type="button" :disabled="loading || !nextCursor" @click="nextPage">下一页</button></nav>
-    </div>
+    <template v-if="!loading && !listError">
+      <AdminSelectionBar :count="selectedIds.length" @clear="selectedIds=[]"><button class="secondary-button" :disabled="!selectedIds.length" @click="comparisonOpen=true">批量查看</button></AdminSelectionBar>
+      <div class="panel table-wrap admin-list-table"><table><thead><tr><th><input type="checkbox" aria-label="选择当前页全部记录" :checked="allSelected" @change="selectPage" /></th><th>任务 / 事件</th><th>状态</th><th>原因</th><th>尝试次数</th><th>事件时间</th><th>创建时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in rows" :key="item.taskId"><td><input type="checkbox" :aria-label="`选择任务 ${item.taskId}`" :checked="selectedIds.includes(item.taskId)" @change="toggleRow(item.taskId)" /></td><td><strong>{{eventLabel(item.eventType)}}</strong><small>{{item.taskId}}</small></td><td><AdminStatusBadge :status="item.status" :label="statusLabel(item.status)" :tone="item.status==='FAILED'?'danger':item.status==='UNKNOWN'||item.status==='READY'||item.status==='RETRY_WAIT'?'pending':item.status==='RESERVED'||item.status==='CLAIMED'?'processing':'neutral'" /></td><td>{{reasonLabel(item.reasonCode)}}</td><td>{{item.attemptCount}}</td><td>{{formatTime(item.occurredAt)}}</td><td>{{formatTime(item.createdAt)}}</td><td><button class="text-button" @click="openDetail(item.taskId)">查看详情</button></td></tr></tbody></table></div>
+      <AdminCursorPager :page="previousCursors.length+1" :page-size="pageSize" :has-previous="!!previousCursors.length" :has-next="!!nextCursor" :loading="loading" @previous="previousPage" @next="nextPage" @size="changeSize" />
+    </template>
+    <AdminSelectedRowsDialog v-model="comparisonOpen" title="所选消息任务" :rows="compareRows" :columns="[{key:'taskId',label:'任务ID'},{key:'event',label:'事件'},{key:'state',label:'状态'},{key:'reason',label:'原因'},{key:'attemptCount',label:'尝试次数'}]" />
 
-    <el-dialog v-model="detailOpen" title="消息任务详情" width="min(680px, 94vw)" destroy-on-close @closed="detailGeneration++">
+    <el-dialog v-model="detailOpen" :show-close="!recovering" :close-on-click-modal="false" :close-on-press-escape="!recovering" title="消息任务详情" width="min(680px, 94vw)" destroy-on-close @closed="detailGeneration++">
       <p v-if="detailLoading" role="status">正在读取任务详情…</p>
       <p v-if="detailError" class="message-task-error" role="alert">{{ detailError }} <button class="text-button" type="button" @click="loadDetail(selectedId)">重试</button></p>
       <div v-if="selected && !detailLoading && !detailError" class="message-task-detail">
@@ -208,7 +221,7 @@ onMounted(() => { void loadList('') })
       </div>
     </el-dialog>
 
-    <el-dialog v-model="recoveryOpen" title="确认恢复过期预留" width="min(480px, 94vw)" append-to-body :close-on-click-modal="!recovering" :close-on-press-escape="!recovering">
+    <el-dialog v-model="recoveryOpen" :show-close="!recovering" title="确认恢复过期预留" width="min(480px, 94vw)" append-to-body :close-on-click-modal="!recovering" :close-on-press-escape="!recovering">
       <p>仅将这条本次预留尚未开始发送的任务恢复为“待处理”。操作本身不会发送消息；后续工作进程仍会重新校验模板和授权。</p>
       <p class="message-task-id">{{ selected?.taskId }}</p>
 
