@@ -14,6 +14,7 @@ import PublicationHistory from '../shared/PublicationHistory.vue'
 import { keepRollbackIntent, type RollbackResult } from '../shared/publication-history'
 import { applyCurrentPublication, currentPublication, publicationIntent, matchesPublishResult, parsePublishIntent, persistPublishIntent, type PublishIntent } from '../shared/publication-sync'
 import { api, ApiError, type Account } from '../api'
+import HomeSelectionDialog from './pages/HomeSelectionDialog.vue'
 import HomePagePreview from './pages/HomePagePreview.vue'
 import EditorActions from './pages/EditorActions.vue'
 import ComponentLibrary from './pages/ComponentLibrary.vue'
@@ -40,6 +41,8 @@ const canEdit = computed(() => props.account.permissionCodes.includes('page.edit
 const canPublish = computed(() => props.account.permissionCodes.includes('page.publish'))
 const canUpload = computed(() => props.account.permissionCodes.includes('asset.upload'))
 const list = ref<MicroPageSummary[]>([])
+const homeTarget = ref<MicroPageSummary | null>(null)
+const compatibilityHomeError = ref('')
 const listPage = ref(1)
 const listPageSize=ref(20),compareOpen=ref(false),createOpen=ref(false)
 const selection=useCurrentPageSelection(()=>list.value,row=>row.pageId)
@@ -134,16 +137,28 @@ function beforeUnload(event: BeforeUnloadEvent) {
   event.preventDefault()
   event.returnValue = ''
 }
-onBeforeRouteLeave(async () => !dirty.value || await confirmAction('独立微页面有未保存修改，确定离开吗？'))
+onBeforeRouteLeave(async () => !dirty.value || await confirmAction('微页面有未保存修改，确定离开吗？'))
 onMounted(() => { void loadList(); void loadTargets(); window.addEventListener('beforeunload', beforeUnload) })
-onUnmounted(() => { detailSequence++; window.removeEventListener('beforeunload', beforeUnload) })
+onUnmounted(() => { homeRequestSequence++; detailSequence++; window.removeEventListener('beforeunload', beforeUnload) })
 
+let homeRequestSequence = 0
+async function openCurrentHome() {
+  const sequence = ++homeRequestSequence, path = route.fullPath, actor=props.account.accountId
+  compatibilityHomeError.value = ''
+  try {
+    const selection = await api<{pageId:string;revision:number}>('/pages/home-selection')
+    if (sequence!==homeRequestSequence || route.fullPath!==path || actor!==props.account.accountId) return
+    if (!selection.pageId) throw new Error('当前首页不可读取。')
+    await router.replace({path:'/pages/micro',query:{pageId:selection.pageId}})
+  } catch (reason) { if(sequence===homeRequestSequence && route.fullPath===path) compatibilityHomeError.value = message(reason) }
+}
+watch(() => route.query.editHome, value => { if(value==='1') void openCurrentHome() }, {immediate:true})
 async function loadList(page = 1) {
   const sequence = ++listSequence
   selection.clear()
   listLoading.value = true
   listError.value = ''
-  const query = new URLSearchParams({ page: String(page), pageSize: String(listPageSize.value) })
+  const query = new URLSearchParams({ page: String(page), pageSize: String(listPageSize.value), includeHome: '1' })
   if (listFilters.value.q) query.set('q', listFilters.value.q)
   if (listFilters.value.tag) query.set('tag', listFilters.value.tag)
   try {
@@ -461,10 +476,12 @@ function rolledBack(result: RollbackResult) {
 <template>
   <section class="page-content home-editor-page micro-editor-page admin-list-page">
     <header class="page-heading home-page-heading">
-      <div><h1>独立微页面</h1><p>创建页面、配置组件、预览草稿，再发布可供首页与其他微页面引用的版本。</p></div>
-      <RouterLink class="text-link" to="/pages/home">返回首页装修</RouterLink>
+      <div><h1>微页面管理</h1><p>首页与独立页面统一管理。保存草稿、检查并预览、发布后，可将页面设为首页。</p></div>
+      <button class="text-button" :disabled="Boolean(busy)||creating" @click="openCurrentHome">编辑当前首页</button>
     </header>
 
+    <p v-if="compatibilityHomeError" class="error notice" role="alert">{{ compatibilityHomeError }} <button class="text-button" @click="openCurrentHome">重试读取当前首页</button></p>
+    <HomeSelectionDialog :account="account" :target="homeTarget" :pages="list" @close="homeTarget=null" @changed="loadList(listPage)" />
     <details :key="currentPageId || 'list'" class="panel micro-page-list" :open="!currentPageId" aria-labelledby="micro-list-title">
       <summary id="micro-list-title">{{ draft ? `当前页面：${draft.name}` : '页面列表' }} <span>切换页面 / 新建 / 查询</span></summary>
       <div class="micro-list-heading"><div><h2>页面列表</h2><p>草稿不会改变已发布内容。可查看发布历史并回退线上版本。</p></div>
@@ -473,9 +490,9 @@ function rolledBack(result: RollbackResult) {
       <form class="micro-list-filters" @submit.prevent="filterList"><label>搜索页面名称<input v-model="listQuery" maxlength="80" placeholder="输入页面名称" /></label><label>筛选业务标签<input v-model="listTag" maxlength="20" placeholder="精确标签，例如 活动" /></label><button type="submit" class="secondary-button" :disabled="listLoading">查询页面</button><button type="button" class="text-button" :disabled="listLoading" @click="resetFilters">重置筛选</button></form>
       <p v-if="listError" class="error notice" role="alert">{{ listError }} <button type="button" class="text-button" @click="loadList(listPage)">重试读取列表</button></p>
       <p v-if="listLoading" class="loading-inline" role="status">正在读取微页面…</p>
-      <p v-else-if="!listError && !list.length" class="micro-empty">{{ listFilters.q || listFilters.tag ? '未找到符合条件的微页面，请调整筛选。' : '还没有独立微页面。创建第一张草稿后，可添加公告、图片或其他组件。' }}</p>
+      <p v-else-if="!listError && !list.length" class="micro-empty">{{ listFilters.q || listFilters.tag ? '未找到符合条件的微页面，请调整筛选。' : '还没有微页面。创建第一张草稿后，可添加公告、图片或其他组件。' }}</p>
       <AdminSelectionBar :count="selection.selectedIds.value.length" :loading="listLoading" @clear="selection.clear"><button class="secondary-button" :disabled="!selection.selectedIds.value.length||listLoading" @click="compareOpen=true">核对所选</button></AdminSelectionBar>
-      <div v-if="list.length" class="micro-page-rows table-wrap admin-list-table"><table><thead><tr><th><input type="checkbox" :checked="selection.allSelected.value" :disabled="listLoading" aria-label="选择当前页微页面" @change="selection.togglePage(($event.target as HTMLInputElement).checked)"></th><th>页面名称</th><th>业务标签</th><th>草稿修订</th><th>发布状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in list" :key="item.pageId"><td><input type="checkbox" :checked="selection.selectedIds.value.includes(item.pageId)" :disabled="listLoading" :aria-label="`选择页面 ${item.name}`" @change="selection.toggle(item.pageId,($event.target as HTMLInputElement).checked)"></td><td>{{item.name}}</td><td>{{item.tags?.join('、')||'—'}}</td><td>{{item.revision}}</td><td><AdminStatusBadge :status="item.publishedRevision?'ACTIVE':'DRAFT'" :label="item.publishedRevision?`线上修订 ${item.publishedRevision}`:'未发布'"/></td><td><button class="text-button" :disabled="Boolean(busy)||creating" @click="selectPage(item.pageId)">{{canEdit?'编辑页面':'查看页面'}}</button></td></tr></tbody></table></div>
+      <div v-if="list.length" class="micro-page-rows table-wrap admin-list-table"><table><thead><tr><th><input type="checkbox" :checked="selection.allSelected.value" :disabled="listLoading" aria-label="选择当前页微页面" @change="selection.togglePage(($event.target as HTMLInputElement).checked)"></th><th>页面名称</th><th>业务标签</th><th>草稿修订</th><th>发布状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in list" :key="item.pageId"><td><input type="checkbox" :checked="selection.selectedIds.value.includes(item.pageId)" :disabled="listLoading" :aria-label="`选择页面 ${item.name}`" @change="selection.toggle(item.pageId,($event.target as HTMLInputElement).checked)"></td><td>{{item.name}} <AdminStatusBadge v-if="item.isHome" status="ACTIVE" label="当前首页" /></td><td>{{item.tags?.join('、')||'—'}}</td><td>{{item.revision}}</td><td><AdminStatusBadge :status="item.publishedRevision?'ACTIVE':'DRAFT'" :label="item.publishedRevision?`线上修订 ${item.publishedRevision}`:'未发布'"/></td><td><button class="text-button" :disabled="Boolean(busy)||creating" @click="selectPage(item.pageId)">{{canEdit?'编辑页面':'查看页面'}}</button><button v-if="canPublish && !item.isHome" class="text-button" :disabled="Boolean(busy)||creating||listLoading||item.publishedRevision===null" :title="item.publishedRevision===null?'先发布页面，再设置为首页':'使用当前已发布版本'" @click="homeTarget=item">设为首页</button></td></tr></tbody></table></div>
       <AdminListPager v-if="!listError" :page="listPage" :page-size="listPageSize" :total="listTotal" :loading="listLoading" @change="changeListPage"/>
       <AdminSelectedRowsDialog v-model="compareOpen" title="核对所选微页面" :columns="compareColumns" :rows="compareRows"/>
 

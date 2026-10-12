@@ -45,7 +45,8 @@ def selected_content(domain, page_id=None, *, lock=False):
         query = StartupConfig.objects
         return query.select_for_update().get(pk=1) if lock else query.get(pk=1)
     query = MicroPage.objects.select_for_update() if lock else MicroPage.objects
-    return query.filter(pk=page_id, page_type="MICRO").first() if page_id else query.get(page_type="HOME")
+    from .home_selection import current_page_id
+    return query.filter(pk=page_id).first() if page_id else query.get(pk=current_page_id())
 
 
 def publication_for(domain, content, *, lock=False):

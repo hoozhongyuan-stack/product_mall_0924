@@ -1,0 +1,61 @@
+import { afterEach, expect, it, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import NavigationItemsEditor from '../../src/views/pages/NavigationItemsEditor.vue'
+import { api } from '../../src/api'
+vi.mock('../../src/api', async original => ({ ...await original<any>(), api: vi.fn() }))
+afterEach(()=>vi.resetAllMocks())
+const config={schemaVersion:2 as const,items:[{key:'home',label:'首页',target:{type:'HOME' as const},iconAssetId:null,selectedIconAssetId:null}]}
+it('loads real page targets, permits multiple micro entries and controlled separate icon edits',async()=>{
+ vi.mocked(api).mockResolvedValue({rows:[{pageId:'page',name:'草稿专题',publishedRevision:null}],total:1} as never)
+ const w=mount(NavigationItemsEditor,{props:{config,disabled:false,canEdit:true},global:{stubs:{AssetPicker:{template:'<button @click="$emit(\'select\',{assetId:\'image\'})">素材</button>'}}}})
+ await flushPromises()
+ expect(api).toHaveBeenCalledWith('/pages?includeHome=1&page=1&pageSize=50')
+ await w.get('[aria-label="导航名称 1"]').setValue('专题')
+ expect(w.emitted('change')!.at(-1)![0]).toMatchObject({items:[{label:'专题'}]})
+ await w.get('[data-add-navigation]').trigger('click')
+ expect((w.emitted('change')!.at(-1)![0] as any).items).toHaveLength(2)
+ expect(w.text()).toContain('未选中图标');expect(w.text()).toContain('选中图标')
+ w.unmount()
+})
+it('shows target read retry and cannot mutate or add for readonly account',async()=>{
+ vi.mocked(api).mockRejectedValue(new Error('无页面权限'))
+ const w=mount(NavigationItemsEditor,{props:{config,disabled:false,canEdit:false},global:{stubs:{AssetPicker:true}}})
+ await flushPromises();expect(w.text()).toContain('无页面权限')
+ expect(w.find('[data-add-navigation]').exists()).toBe(false)
+ expect(w.get('[aria-label="导航名称 1"]').attributes('disabled')).toBeDefined()
+ w.unmount()
+})
+it('changes page type and controlled page target, reorders/removes entries and previews each selected asset independently',async()=>{
+ vi.mocked(api).mockResolvedValue({rows:[{pageId:'page',name:'专题',publishedRevision:2}],total:60} as never)
+ const w=mount(NavigationItemsEditor,{props:{config:{schemaVersion:2,items:[config.items[0],{...config.items[0],key:'topic',label:'专题'}]},disabled:false,canEdit:true},global:{stubs:{AssetPicker:{template:'<button @click="$emit(\'select\',{assetId:\'image\'})">素材</button>'}}}})
+ await flushPromises();expect(w.text()).toContain('前 50 项')
+ const apply=async()=>w.setProps({config:w.emitted('change')!.at(-1)![0] as any})
+ await w.get('[aria-label="关联页面 2"]').setValue('MICRO');await apply()
+ await w.get('[aria-label="微页面 2"]').setValue('page');await apply()
+ expect(w.props('config').items[1]!.target!.pageId).toBe('page')
+ expect(w.find('[aria-label="微页面 ID 2"]').exists()).toBe(false)
+ expect(w.text()).not.toContain('home')
+ await w.findAll('button').find(b=>b.text()==='素材')!.trigger('click');await apply()
+ expect(w.get('img').attributes('alt')).toContain('未选中图标')
+ await w.get('img').trigger('error');expect(w.text()).toContain('图片失效')
+ await w.findAll('button').find(b=>b.text()==='恢复默认图标')!.trigger('click');await apply()
+ await w.get('[aria-label="上移导航 2"]').trigger('click');await apply();expect(w.props('config').items[0]!.key).toBe('topic')
+ await w.get('[aria-label="下移导航 1"]').trigger('click');await apply();expect(w.props('config').items[1]!.key).toBe('topic')
+ await w.findAll('button').find(b=>b.text()==='删除')!.trigger('click');await apply();expect(w.props('config').items).toHaveLength(1)
+ w.unmount()
+})
+it('retries a malformed target response without losing edited fields',async()=>{
+ vi.mocked(api).mockResolvedValueOnce({rows:null} as never).mockResolvedValue({rows:[],total:0} as never)
+ const w=mount(NavigationItemsEditor,{props:{config,disabled:false,canEdit:false},global:{stubs:{AssetPicker:true}}});await flushPromises()
+ expect(w.text()).toContain('格式不正确');await w.findAll('button').find(b=>b.text()==='重试读取页面')!.trigger('click');await flushPromises()
+ expect(w.find('[role=alert]').exists()).toBe(false);w.unmount()
+})
+
+it('searches beyond the first fifty by readable name and resets without changing linked navigation',async()=>{
+ vi.mocked(api).mockResolvedValue({rows:[],total:0} as never)
+ const w=mount(NavigationItemsEditor,{props:{config,disabled:false,canEdit:true},global:{stubs:{AssetPicker:true}}});await flushPromises()
+ await w.get('input[placeholder="输入页面名称"]').setValue('春季专题');await w.get('form').trigger('submit');await flushPromises()
+ expect(api).toHaveBeenLastCalledWith('/pages?includeHome=1&page=1&pageSize=50&q='+encodeURIComponent('春季专题'))
+ await w.findAll('button').find(b=>b.text()==='重置')!.trigger('click');await flushPromises()
+ expect(api).toHaveBeenLastCalledWith('/pages?includeHome=1&page=1&pageSize=50');expect(w.emitted('change')).toBeUndefined();w.unmount()
+})

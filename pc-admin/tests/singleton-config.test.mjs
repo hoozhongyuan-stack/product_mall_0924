@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { validateNavigation, validateCustomerService, copyConfig, updateNavigationItem, reconcileSavedConfig } from '../src/shared/singleton-config.mjs'
+import { validateNavigation, validateCustomerService, copyConfig, updateNavigationItem, reconcileSavedConfig, normalizeNavigation, moveNavigationItem, removeNavigationItem, appendNavigationItem } from '../src/shared/singleton-config.mjs'
 
 const navigation = { items: [
   { key: 'HOME', label: '首页', iconAssetId: null, selectedIconAssetId: null },
@@ -45,4 +45,28 @@ test('save result normalization does not misreport a new edit', () => {
   assert.equal(preserved.editedDuringSave, true)
   assert.deepEqual(preserved.config, newer)
   assert.equal(preserved.savedSnapshot, JSON.stringify(server))
+})
+
+test('v2 navigation migrates v1, allows custom targets and five entries immutably', () => {
+  const migrated = normalizeNavigation(navigation)
+  assert.equal(migrated.schemaVersion, 2)
+  assert.equal(migrated.items[0].target.type, 'HOME')
+  assert.equal(navigation.schemaVersion, undefined)
+  const next = appendNavigationItem(migrated, 'topic')
+  const configured = updateNavigationItem(next, 'topic', { label: '专题', target: { type: 'MICRO', pageId: 'd7367cb7-9723-4cba-bbb7-129b57158e32' } })
+  assert.equal(validateNavigation(configured), '')
+  assert.equal(appendNavigationItem(configured, 'sixth'), configured)
+  assert.equal(moveNavigationItem(configured, 'topic', -1).items[3].key, 'topic')
+  assert.equal(removeNavigationItem(configured, 'topic').items.length, 4)
+  assert.equal(removeNavigationItem({schemaVersion:2, items:[configured.items[0]]}, 'HOME').items.length, 1)
+})
+test('v2 navigation validates labels, identities, targets and media pairs', () => {
+  const base=normalizeNavigation(navigation)
+  for (const patch of [{label:''},{label:'01234567890'},{label:'坏\n标签'},{target:{type:'MICRO',pageId:''}},{target:{type:'UNKNOWN'}},{target:{type:'HOME',pageId:'p'}}]) {
+    assert.notEqual(validateNavigation(updateNavigationItem(base,'HOME',patch)), '')
+  }
+  assert.match(validateNavigation({...base,items:[base.items[0],base.items[0]]}), /唯一/)
+  assert.match(validateNavigation({...base,items:[]}), /1.*5/)
+  assert.match(validateNavigation(updateNavigationItem(base,'HOME',{iconAssetId:'icon'})), /成对/)
+  assert.equal(validateNavigation(updateNavigationItem(base,'HOME',{label:'商城',target:{type:'CART'}})), '')
 })

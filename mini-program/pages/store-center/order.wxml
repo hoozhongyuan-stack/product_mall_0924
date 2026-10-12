@@ -1,8 +1,8 @@
-<view wx:if="{{order.dining}}" class="section"><view class="section-title">餐饮联盟配送</view><view>{{order.dining.name}} · {{order.dining.tableNumber}} 桌</view><view>{{order.dining.address}}</view></view>
-<view class="store-page {{canComplete && order.deliveryMode === 'PICKUP' ? 'with-pickup-footer' : ''}}">
+<view class="store-page commerce-page {{canComplete && order.deliveryMode === 'PICKUP' ? 'with-pickup-footer' : ''}}">
  <view wx:if="{{state === 'loading'}}" class="state">正在核对订单…</view>
  <view wx:if="{{error}}" class="error" role="alert">{{error}}<button wx:if="{{uncertain}}" bindtap="send" disabled="{{busy}}">{{busy ? '正在确认结果…' : '重试确认同一操作'}}</button><button wx:elif="{{!order}}" class="secondary" bindtap="load">重新加载</button></view>
  <block wx:if="{{order}}">
+ <view wx:if="{{order.dining}}" class="section"><view class="section-title">送至餐桌</view><view>{{order.dining.name}} · {{order.dining.tableNumber}} 桌</view><view>{{order.dining.address}}</view></view>
   <view class="card order-summary"><view class="heading"><view class="title">{{order.storeName}} · {{deliveryLabel}}</view><text class="status-tag">{{deliveryStatus}}</text></view><view class="muted order-number">订单号 {{order.orderNo || order.orderId}}</view><view class="payment">{{statusLabel}}</view><view wx:if="{{order.address}}" class="muted">{{order.address.recipientName}} {{order.address.phone}} {{order.address.detail}}</view></view>
   <view wx:if="{{order.deliveryMode === 'PICKUP'}}" class="card pickup-panel">
    <view class="title">自提核销</view><view class="muted">扫描顾客订单中的二维码，核对商品后再交付。</view>

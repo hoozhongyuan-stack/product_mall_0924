@@ -1,1 +1,2 @@
-@import "./dining.wxss";
+@import "../checkout/checkout.wxss";
+.checkout-page>.secondary-button{background:#fff;color:var(--mall-brand);margin:16rpx 0;min-height:72rpx;font-size:26rpx}

@@ -42,6 +42,7 @@ ACTION_PERMISSIONS = {
     "group.create": "permission.manage",
     "group.update": "permission.manage",
     "page.publish": "page.publish",
+    "page.set_home": "page.publish",
     "startup.publish": "startup.publish",
     "page.rollback": "page.publish",
     "startup.rollback": "startup.publish",
@@ -84,6 +85,7 @@ ACTION_PERMISSIONS = {
 }
 
 ACTION_READ_PERMISSIONS = {
+    "page.set_home": "page.read",
     "page.rollback": "page.read",
     "startup.rollback": "startup.read",
     "navigation.rollback": "navigation.read",

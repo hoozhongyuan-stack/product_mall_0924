@@ -1,5 +1,5 @@
 <page-meta page-style="{{stockEditor || withdrawalConfirm ? 'overflow: hidden;' : ''}}"/>
-<view class="store-page center-page">
+<view class="store-page center-page commerce-page">
 <view wx:if="{{store}}" class="warehouse-header {{section === 'home' ? 'warehouse-banner' : 'warehouse-compact'}}">
  <image class="warehouse-symbol" src="{{storeLogoUrl || '/assets/ui/parcel.svg'}}" mode="aspectFit" data-url="{{storeLogoUrl}}" binderror="onStoreLogoError" aria-label="前置仓Logo"/>
  <view class="warehouse-heading"><view class="warehouse-name">{{store.name}}</view><view class="warehouse-hours">{{store.acceptingOrders ? '正常接单' : '暂停接单'}}<text wx:if="{{store.openingHours}}"> · {{store.openingHours}}</text></view></view>

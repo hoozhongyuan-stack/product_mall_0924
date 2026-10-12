@@ -13,12 +13,21 @@ function publicAssetUrl(value, base) {
 }
 
 function iconUrl(key, selected) {
-  const item = NAVIGATION.find((entry) => entry.key === key)
+  const item = NAVIGATION.find((entry) => entry.key === key) || { icon: 'micro' }
   return `/assets/nav/${item.icon}${selected ? '-selected' : ''}.svg`
 }
 
 function navigationItems(source, base) {
   const values = source && Array.isArray(source.items) ? source.items : []
+  if (source && source.schemaVersion === 2) {
+    const valid = values.length > 0 && values.length <= 5 && new Set(values.map(item => item && item.key)).size === values.length &&
+      values.every(item => item && typeof item.key === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(item.key) &&
+        typeof item.label === 'string' && item.label.trim().length > 0 && item.label.trim().length <= 10 &&
+        navigationPath(item.target))
+    if (valid) return values.map(item => ({ key: item.key, label: item.label.trim(), target: { ...item.target },
+      path: navigationPath(item.target), iconUrl: publicAssetUrl(item.iconUrl, base) || iconUrl(item.target.type, false),
+      selectedIconUrl: publicAssetUrl(item.selectedIconUrl, base) || iconUrl(item.target.type, true) }))
+  }
   const configured = values.length === NAVIGATION.length && values.every((item, index) =>
     item && item.key === NAVIGATION[index].key)
   return NAVIGATION.map(({ key, label, path }, index) => ({
@@ -29,6 +38,22 @@ function navigationItems(source, base) {
       publicAssetUrl(values[index].selectedIconUrl, base) ||
       iconUrl(key, true) : iconUrl(key, true),
   }))
+}
+
+function navigationPath(target) {
+  if (!target || typeof target !== 'object') return ''
+  if (target.type === 'MICRO') return typeof target.pageId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target.pageId) ?
+    `/pages/micro/detail?pageId=${encodeURIComponent(target.pageId)}` : ''
+  const item = NAVIGATION.find(entry => entry.key === target.type)
+  return item ? item.path : ''
+}
+
+function activeNavigation(items, page) {
+  if (!page) return ''
+  const route = page.route === 'pages/dining/shop' ? '/pages/home/home' : `/${page.route}`
+  const item = items.find(entry => entry.path.split('?')[0] === route &&
+    (entry.target?.type !== 'MICRO' || entry.target.pageId === (page.options || {}).pageId))
+  return item ? item.key : ''
 }
 
 function customerService(source, base) {
@@ -53,4 +78,4 @@ function presentStorefront(payload, base) {
     service: customerService(data.customerService, base) }
 }
 
-module.exports = { NAVIGATION, presentStorefront }
+module.exports = { NAVIGATION, presentStorefront, activeNavigation }

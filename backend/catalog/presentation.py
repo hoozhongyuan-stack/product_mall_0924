@@ -25,7 +25,9 @@ def category_data(item, stats=None, *, public=False):
             "name": item.name, "sortOrder": item.sort_order, "status": item.status,
             "revision": item.revision, "image": asset_data(item.image) if item.image else None,
             "banner": asset_data(item.banner) if item.banner else None,
-            "imageUrl": public_asset_url(item.image), "bannerImageUrl": public_asset_url(item.banner)}
+            "imageUrl": public_asset_url(item.image), "bannerImageUrl": public_asset_url(item.banner),
+            "imageThumbnailUrl": f"/api/v1/app/assets/{item.image_id}/thumbnail" if item.image_id else None,
+            "bannerThumbnailUrl": f"/api/v1/app/assets/{item.banner_id}/thumbnail" if item.banner_id else None}
     if public:
         data.pop("image", None)
         data.pop("banner", None)

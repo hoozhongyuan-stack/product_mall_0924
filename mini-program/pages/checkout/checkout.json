@@ -1,5 +1,8 @@
 {
   "navigationBarTitleText": "确认订单",
   "navigationBarBackgroundColor": "#FFFFFF",
-  "navigationBarTextStyle": "black"
+  "navigationBarTextStyle": "black",
+  "usingComponents": {
+    "commerce-line": "/components/commerce-line/index"
+  }
 }

@@ -1,4 +1,4 @@
-<view class="center-page">
+<view class="center-page commerce-page">
  <view wx:if="{{restaurant}}" class="restaurant-header"><view class="restaurant-heading"><view class="restaurant-name">{{restaurant.name}}</view><view class="caption">{{restaurant.address}}</view></view><picker wx:if="{{restaurants.length > 1}}" range="{{restaurants}}" range-key="name" disabled="{{busy || pending}}" bindchange="chooseRestaurant"><view class="switch-store">切换</view></picker></view>
  <view wx:if="{{restaurant}}" class="section-navigation"><button wx:for="{{sections}}" wx:key="value" class="section-tab {{section === item.value ? 'selected' : ''}}" data-section="{{item.value}}" disabled="{{busy || pending}}" bindtap="section">{{item.label}}</button></view>
  <view wx:if="{{error}}" class="feedback error" role="alert"><text>{{error}}</text><button class="text-action" disabled="{{busy}}" bindtap="load">重新加载</button></view>

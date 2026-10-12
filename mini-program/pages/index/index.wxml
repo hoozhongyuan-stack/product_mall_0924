@@ -1,6 +1,5 @@
 <view class="catalog-page">
   <view class="catalog-header">
-    <view class="catalog-title-row"><view class="catalog-title">商品分类</view><button class="cart-shortcut" bindtap="openCart">购物车</button></view>
     <view class="search-row">
       <input class="search-input" type="text" maxlength="100" placeholder="搜索商品名称" value="{{searchInput}}" focus="{{searchFocused}}" bindinput="onSearchInput" bindconfirm="submitSearch" confirm-type="search" aria-label="搜索商品名称" />
       <button wx:if="{{searchInput}}" class="search-clear" bindtap="clearSearch" aria-label="清空搜索">清空</button>
@@ -17,19 +16,20 @@
     <view class="state-title">暂时没有可浏览的分类</view><view class="state-copy">请稍后再来看看。</view>
   </view>
   <block wx:else>
-    <scroll-view wx:if="{{!keyword}}" class="root-strip" scroll-x enhanced show-scrollbar="false" aria-label="一级分类">
+    <scroll-view wx:if="{{!globalSearch}}" class="root-strip" scroll-x enhanced scroll-into-view="{{rootScrollId}}" scroll-with-animation show-scrollbar="false" aria-label="一级分类">
       <view class="root-items">
-        <button wx:for="{{roots}}" wx:key="id" class="root-item {{activeRootId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="selectRoot"><image wx:if="{{item.imageUrl && !failedCategoryImages[item.id]}}" class="root-image" src="{{item.imageUrl}}" mode="aspectFill" data-id="{{item.id}}" binderror="categoryImageError" /><view wx:else class="root-image root-fallback">{{item.name}}</view><text>{{item.name}}</text></button>
+        <button wx:for="{{roots}}" wx:key="id" id="root-{{item.id}}" class="root-item {{activeRootId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="selectRoot"><image wx:if="{{item.imageUrl && !failedCategoryImages[item.id]}}" class="root-image" src="{{categoryOriginalImages[item.id] ? item.imageOriginalUrl : item.imageUrl}}" mode="aspectFit" data-id="{{item.id}}" data-url="{{categoryOriginalImages[item.id] ? item.imageOriginalUrl : item.imageUrl}}" binderror="categoryImageError" /><view wx:else class="root-image root-fallback">{{item.name}}</view><text class="root-label">{{item.name}}</text></button>
       </view>
     </scroll-view>
     <view wx:if="{{keyword}}" class="result-heading">“{{keyword}}”的搜索结果 <text>{{total}} 件</text></view>
     <view class="catalog-body">
-      <scroll-view wx:if="{{!keyword}}" class="leaf-rail" scroll-y enhanced show-scrollbar="false" aria-label="二级分类">
+      <scroll-view wx:if="{{!globalSearch}}" class="leaf-rail" scroll-y enhanced show-scrollbar="false" aria-label="二级分类">
         <button wx:for="{{leaves}}" wx:key="id" class="leaf-item {{activeLeafId === item.id ? 'selected' : ''}}" data-id="{{item.id}}" bindtap="selectLeaf">{{item.name}}</button>
         <view wx:if="{{!leaves.length}}" class="leaf-empty">暂无二级分类</view>
       </scroll-view>
-      <view class="product-pane {{keyword ? 'full-width' : ''}}">
-        <image wx:if="{{!keyword && activeBannerUrl && !failedBannerImages[activeLeafId]}}" class="category-banner" src="{{activeBannerUrl}}" mode="widthFix" data-id="{{activeLeafId}}" binderror="bannerImageError" />
+      <view class="product-pane {{globalSearch ? 'full-width' : ''}}">
+        <image wx:if="{{!globalSearch && activeBannerUrl && !failedBannerImages[activeLeafId]}}" class="category-banner" src="{{activeBannerUrl}}" mode="aspectFill" data-id="{{activeLeafId}}" data-url="{{activeBannerUrl}}" binderror="bannerImageError" />
+        <button wx:elif="{{!globalSearch && activeBannerUrl && failedBannerImages[activeLeafId]}}" class="banner-retry" bindtap="retryBanner">分类图片加载失败 · 重试</button>
         <view wx:if="{{listState === 'loading'}}" class="list-state" role="status">正在加载商品…</view>
         <view wx:elif="{{listState === 'error'}}" class="list-state" role="alert">
           <view class="state-title">商品加载失败</view><view class="state-copy">{{listError}}</view>

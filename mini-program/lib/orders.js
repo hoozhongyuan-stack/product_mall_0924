@@ -1,6 +1,6 @@
 const { MODE_LABELS } = require('./stores')
 const {presentBenefits}=require('./benefits')
-const { money } = require('./catalog')
+const { money, discountMoney } = require('./catalog')
 const PENDING_KEY = 'mall.pendingOrder.v1'
 
 // A random request identifier is for retry deduplication, never authentication.
@@ -104,7 +104,7 @@ function present(order) {
     showPaymentInstructions: pending && offline && !isExpired && !!order.paymentInstructions,
     closeReasonLabel: order.closeReason === 'TIMEOUT' ? '超时关闭' : order.closeReason === 'CUSTOMER' ? '用户取消' : '订单关闭',
     total: isPoints ? `${order.exchangePoints} 积分` : money(order.payableFen), goodsTotal: money(order.goodsTotalFen), shippingFee: money(order.shippingFeeFen),
-    couponDiscount: money(order.couponDiscountFen), pointsDiscount: money(order.pointsDiscountFen),
+    couponDiscount: discountMoney(order.couponDiscountFen), pointsDiscount: discountMoney(order.pointsDiscountFen),
     expiresLabel: dateLabel(order.expiresAt), createdLabel: dateLabel(order.createdAt), paidLabel: dateLabel(order.paidAt),
     paymentLabel: isPoints ? '纯积分兑换' : order.payableFen === 0 ? '零现金结算' : offline ? '线下支付' : order.paymentMethod === 'WECHAT' ? '微信支付' : '支付方式待核实',
     canReport: !isPoints && pending && offline && !isExpired, canCancel: !isPoints && pending,

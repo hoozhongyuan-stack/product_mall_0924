@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "确认订单",
-  "enablePullDownRefresh": false
+  "enablePullDownRefresh": false,
+  "usingComponents": {
+    "commerce-line": "/components/commerce-line/index"
+  }
 }

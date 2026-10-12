@@ -21,7 +21,8 @@ def public_coupons_view(request, page_id=None):
             raise PageConfigError('请提供已读取的页面发布版本。')
         version_id = identifier(request.GET['versionId'], '页面版本')
         query = PagePublication.objects.select_related('current_version')
-        query = query.filter(page_id=page_id, page__page_type='MICRO') if page_id else query.filter(page__page_type='HOME')
+        from .home_selection import current_page_id
+        query = query.filter(page_id=page_id or current_page_id())
         publication = query.filter(current_version__isnull=False).first()
         if not publication:
             return error(request, 404, 'PAGE_UNPUBLISHED', '页面尚未发布。')

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>店铺与小程序共用页面 · 交互方案</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header"><div><strong>酒娃子 · 店铺与小程序</strong><span>交互方案</span></div><button id="reset" class="header-button">重置演示</button></header>
+  <main>
+    <div class="heading"><div><h1>一套店铺配置，共用商城体验</h1><p>微页面作为首页，底部导航自由配置；前置仓与餐饮使用同一套页面组件。</p></div><span class="prototype-label">待确认 HTML 原型</span></div>
+    <div class="boundary">本页为本地交互演示，所有保存仅在本次页面内有效；不连接 UAT，不创建订单、不扣库存、不发起支付。图片与金额为示例。</div>
+    <div class="workspace">
+      <section class="configuration" aria-label="后台配置">
+        <nav class="admin-tabs" aria-label="后台模块"><button data-admin="pages" class="active">微页面</button><button data-admin="navigation">底部导航</button><button data-admin="shared">共用页面</button></nav>
+        <div id="admin-content"></div>
+      </section>
+      <aside class="preview" aria-label="手机预览">
+        <div class="preview-heading"><h2>手机预览</h2><span id="preview-source">当前首页 · 已发布版本</span></div>
+        <div class="preview-controls">
+          <label>访问场景<select id="mode"><option value="store">前置仓商城</option><option value="dining">餐饮桌码商城</option></select></label>
+          <label>查看角色<select id="role"><option value="customer">用户</option><option value="store">前置仓人员</option><option value="dining">联盟店人员</option></select></label>
+        </div>
+        <div class="scenario-tabs" aria-label="预览页面"><button data-screen="home">首页</button><button data-screen="category">分类</button><button data-screen="cart">购物车</button><button data-screen="me">我的</button><button data-screen="checkout">确认订单</button><button data-screen="order">订单详情</button><button data-screen="center">角色中心</button></div>
+        <div class="phone"><div class="device-status"><span>9:41</span><span class="device-status-icons" aria-hidden="true"><svg viewBox="0 0 40 12"><path d="M1 10V8M5 10V6M9 10V4M13 10V2"/><rect x="21" y="2" width="15" height="8" rx="2"/><path d="M38 5v2"/></svg></span></div><div id="phone-screen"></div><div class="home-indicator"></div></div>
+        <p class="preview-note">可直接点击手机内按钮。右上方角色只控制示例可见操作；正式权限仍由服务端验证。</p>
+      </aside>
+    </div>
+  </main>
+  <dialog id="modal" aria-labelledby="modal-title"><div id="modal-content"></div></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>

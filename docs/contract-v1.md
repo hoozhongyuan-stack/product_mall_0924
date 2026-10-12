@@ -56,7 +56,7 @@
 | `sku_grade_price` | `sku_id`、`grade_id`、`price_fen bigint`、`effective_at` | 同一 SKU、等级和生效版本不能重复。实际成交价由服务端根据会员等级选取，历史订单保留快照。 |
 | `sku_unit_version` | `id`、`sku_id`、`base_unit`、`sale_unit`、`ratio_positive_int`、`effective_at` | 比例为正整数；启用新版本不改写历史订单和库存流水。阶段 A 建立版本结构，阶段 B 接入实际记账。 |
 | `media_asset`、`product_gallery_image`、`product.main_image_id`、`product.video_id` | 素材 ID、存储键、MIME、字节数、宽高、摘要；商品主图/视频关联与附图排序 | 商品素材支持 PNG/JPEG 图片和 MP4 视频；主图须正方形，最多主图 1 张、附图 8 张、视频 1 条。启动素材另支持至少 2 帧的 GIF，静态兜底图使用 PNG/JPEG。本机临时上传上限：图片/GIF 10 MiB、视频 50 MiB；GIF 正式体积与加载目标经目标设备验证后定稿。存储键不等于公开 URL。 |
-| `micro_page`、`page_config_version`、`page_publication` | 页面 `id`、类型 `HOME/MICRO`、草稿名称；版本 `id`、`page_id`、`revision`、发布名称快照、`config_json jsonb`、发布人/时间；每页当前发布版本指针 | 首页是唯一的 `HOME` 页面，可关联已发布微页面。草稿可改；发布时从草稿生成不可变版本，并原子切换指针。校验组件字段、素材、链接目标发布状态和权限；失败保留旧版。首页主题三色属于版本配置。历史版本在阶段 A 保存，页面回退操作在阶段 E 交付。 |
+| `micro_page`、`page_config_version`、`page_publication`、`home_selection` | 页面 `id`、类型 `HOME/MICRO`、草稿名称；版本 `id`、`page_id`、`revision`、发布名称快照、`config_json jsonb`、发布人/时间；每页当前发布版本指针；唯一首页关联及修订 | 原 `HOME` 页面与历史保留，唯一首页关联初始指向它；可切换至有效已发布页面，切换不发布草稿。草稿可改；发布时从草稿生成不可变版本，并原子切换指针。校验组件字段、素材、链接目标发布状态和权限；失败保留旧版。首页主题三色属于版本配置。历史版本在阶段 A 保存，页面回退操作在阶段 E 交付。 |
 | `startup_config`、`startup_config_version`、`startup_publication`、`startup_publish_request` | 唯一配置草稿及修订、素材 ID；不可变版本与当前指针；操作者和幂等键 | GIF 与兜底图独立引用。草稿允许暂空；预览/发布要求两项素材完整且文件可用。发布在事务中生成版本、切换指针、写幂等记录与审计，失败保留旧版。用户端只读当前发布版本。3 秒倒计时从页面实际呈现后开始，分享/扫码目标由客户端恢复。 |
 
 建议索引：`sku(product_id, sale_status)`、`product(category_id, status)`、`product_spec_selection(sku_id)`、`page_config_version(page_id, revision)`；唯一索引包括 `upper(product_no)`、`upper(sku_code)`、`member_grade(code)`、`(page_id, revision)`、`(product_id, spec_key)`，以及仅对 `kind='OWNER'` 生效的唯一约束。`product_no` 和 `sku_code` 只接受英文字母、数字、`-`、`_`；`spec_key` 由服务端按稳定规格项 ID 排序后连接所选规格值 ID，同商品内唯一，不用展示名称或顺序生成身份。无规格商品使用固定的单 SKU 键。具体索引 SQL 在首批迁移时核对。
@@ -111,7 +111,7 @@
 启动页采用自定义导航，发布图片按比例覆盖完整视口，跳过和倒计时叠加在图片上并避开微信胶囊及安全区。
 
 小程序普通冷启动完成启动页后进入首页；明确的分享、扫码或携带有效目标参数的入口仍进入其目标页面。底部“我的”页面向游客开放页面结构和公共入口，订单、积分、收货地址等私人数据须登录后读取；登录成功回到原入口并保留订单筛选，登出、登录失效或账号切换时清除本地私人展示数据。
-| `GET /api/v1/app/home`、`GET /api/v1/app/pages/{id}` | 无；微页面 ID 为 UUID | 只返回当前发布版本的可见组件。首页返回 `versionId/config`，未发布为 `404 HOME_UNPUBLISHED`；微页面返回 `pageId/versionId/name/config`，名称为发布时快照，未发布或非微页面为 `404 PAGE_UNPUBLISHED`；非 UUID 路径由路由层返回 404。`/api/v1/app/bootstrap` 仍待实现。 |
+| `GET /api/v1/app/home`、`GET /api/v1/app/pages/{id}` | 无；微页面 ID 为 UUID | 只返回当前发布版本的可见组件。首页返回 `versionId/config`，未发布为 `404 HOME_UNPUBLISHED`；微页面返回 `pageId/versionId/name/config`，名称为发布时快照，未发布或不支持的页面类型为 `404 PAGE_UNPUBLISHED`（统一方案支持原 HOME 的 UUID 链接）；非 UUID 路径由路由层返回 404。`/api/v1/app/bootstrap` 仍待实现。 |
 | `GET /api/v1/app/categories`、`GET /api/v1/app/products`、`GET /api/v1/app/products/{id}` | 商品列表支持 `categoryId`、`keyword`、`page`、`pageSize`；详情以商品 ID 获取 | 分类接口返回启用的两级分类；商品接口只返回启用分类下有主图及在售 SKU 的上架商品。列表保留最低在售 SKU 日常价 `minListPriceFen`，并给 `cartEligible` 与 `availabilityCode`；详情每个 SKU 给 `listPriceFen`、当前 `applicablePriceFen`、`priceSource`、`availableQuantity`、`cartEligible`。有效会员按等级显示适用价，游客显示日常价。库存按默认启用仓对应库存池的 `(账面－预留) ÷ 该 SKU 当前销售单位比例` 计算；共享池 SKU 的展示数量不可相加。即使有库存，`purchasable` 仍为 false，直到订单链路验收；下架后详情及素材返回 404。 |
 
 建议错误码：`AUTH_REQUIRED`、`SESSION_EXPIRED`、`PERMISSION_DENIED`、`VALIDATION_FAILED`、`REVISION_CONFLICT`、`CATEGORY_IN_USE`、`SKU_CODE_DUPLICATE`、`SKU_SPEC_IMMUTABLE`、`MEDIA_INVALID`、`PUBLISH_TARGET_INVALID`、`STOCK_NOT_READY`、`RATE_LIMITED`、`INTERNAL_ERROR`。状态码分别使用 400/401/403/404/409/422/429/500；业务错误码是客户端稳定判断依据，文案可调整。
@@ -876,3 +876,14 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 - 列表勾选限定当前页，检索、换页、重新读取清除选择。只读批量核对不增加写权限；商品批量状态/分类与订单批量发货沿用原接口、权限、修订和幂等恢复。未知发货结果保留原请求身份，禁止作为新的批量项重复提交。
 
 页面和附属详情表边界见[后台列表规范化交付清单](admin-list-standardization.md)。
+
+### 店铺与小程序统一优化增量（2026-10-12）
+
+- `GET /api/v1/admin/pages?includeHome=1` 在统一列表中包含原 HOME 与 MICRO；新增 `pageType/isHome/publicationRevision`。无参数继续只列 MICRO。`GET /api/v1/admin/pages/home-selection` 返回 `{pageId,revision,publicationRevision,targetVersionId}`。
+- `POST /api/v1/admin/pages/{pageId}/set-home` 精确接收 `{expectedHomeRevision,expectedPublicationRevision}`，需 `Idempotency-Key`、CSRF、实时 `page.read/page.publish`。目标必须有当前已发布且有效的快照；首页关联和目标发布修订同时核对。图锁、singleton 行锁、发布行锁及成功收据使重复与并发请求不覆盖后继设置。迁移初始关联原 HOME，保留旧草稿、版本和发布记录；数据库阻止删除 singleton、跳过关联修订、设置未发布页面及改写成功收据。
+- `/pages/home/*` 的草稿、预览、发布、历史、回退、发布报告以及公开 `/app/home` 与其优惠券入口均解析当前关联页面。原 HOME 仍可通过 UUID 入口维护。首页关联本身不生成页面发布版本，也不把草稿自动上线。
+- 导航新增 v2：`{schemaVersion:2,items:[{key,label,target,iconAssetId,selectedIconAssetId}]}`；1–5 项，唯一 ASCII 标识，名称最多10字，图标必须成对配置或同时使用默认值。目标限 `{type:HOME|MICRO|CATEGORY|CART|ME,pageId?:UUID}`，`pageId` 仅用于 MICRO；多个微页面入口独立选中。草稿可指向尚未发布的现存微页，预览/发布/回退必须重验发布快照与可用素材，失败保留旧线上版本。
+- 公开 `/api/v1/app/storefront?navigationVersion=2` 返回 `navigation.schemaVersion=2` 与受控 `target`、双图标 URL；无能力参数的旧客户端继续获得固定四入口的兼容数据，不把自定义 key 当作旧路由。原 v1 配置仍可读。后台保存草稿不自动升级线上导航；完整自定义导航需要安装更新的小程序体验版本。
+- 公开分类 DTO 追加 `imageThumbnailUrl/bannerThumbnailUrl`，原 `imageUrl/bannerImageUrl` 保留。缩图复用受授权的 `/api/v1/app/assets/{UUID}/thumbnail`，最长边320px、最大64KiB；分类停用后不能公开读取。客户端优先缩图，失败时回退原图；切换分类或主动重试恢复临时失败状态，迟到的旧 URL 错误事件不得覆盖当前图片。
+
+视觉、实现和分阶段验收证据见[店铺与小程序统一优化](store-mini-unification.md)。本增量不改变商品可售范围、订单金额、支付和履约权限；浏览器同源预览不是微信真机验收。

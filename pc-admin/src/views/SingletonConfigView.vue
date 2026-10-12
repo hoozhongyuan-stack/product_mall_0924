@@ -9,9 +9,9 @@ import AssetPicker from '../shared/AssetPicker.vue'
 import PublicationHistory from '../shared/PublicationHistory.vue'
 import { keepRollbackIntent, type RollbackResult } from '../shared/publication-history'
 import { applyCurrentPublication, currentPublication, matchesPublishResult, parsePublishIntent, persistPublishIntent, publicationIntent, type PublishIntent } from '../shared/publication-sync'
-import { copyConfig, reconcileSavedConfig, updateNavigationItem, validateCustomerService, validateNavigation, type CustomerServiceConfig, type NavigationConfig, type NavigationItem } from '../shared/singleton-config.mjs'
-import type { Asset } from '../shared/media'
+import { copyConfig, normalizeNavigation, reconcileSavedConfig, validateCustomerService, validateNavigation, type CustomerServiceConfig, type NavigationConfig } from '../shared/singleton-config.mjs'
 import './singleton-config.css'
+import NavigationItemsEditor from './pages/NavigationItemsEditor.vue'
 
 type Config = NavigationConfig | CustomerServiceConfig
 interface Draft { revision: number; publicationRevision: number; publishedRevision: number | null; publishedVersionId: string | null; config: Config }
@@ -36,6 +36,7 @@ const intent = ref<PublishIntent | null>(null)
 const recoveryBlocked = ref(false)
 const syncPending = ref(false)
 const failedMedia = ref<string[]>([])
+const selectedPreviewKey = ref('')
 const nav = computed(() => props.domain === 'navigation' ? config.value as NavigationConfig | null : null)
 const service = computed(() => props.domain === 'customer_service' ? config.value as CustomerServiceConfig | null : null)
 const dirty = computed(() => config.value !== null && JSON.stringify(config.value) !== savedSnapshot.value)
@@ -75,8 +76,8 @@ async function loadDraft() {
     const result = await api<Draft>(`${base.value}/draft`)
     if (current !== generation) return
     draft.value = result
-    config.value = copyConfig(result.config)
-    savedSnapshot.value = JSON.stringify(result.config)
+    config.value = props.domain === 'navigation' ? normalizeNavigation(result.config as NavigationConfig) : copyConfig(result.config)
+    savedSnapshot.value = JSON.stringify(config.value)
     preview.value = null; previewSnapshot.value = ''; failedMedia.value = []
     restoreIntent()
   } catch (reason) { if (current === generation) error.value = message(reason) }
@@ -90,11 +91,6 @@ onMounted(() => { void loadDraft(); window.addEventListener('beforeunload', befo
 onUnmounted(() => { generation++; window.removeEventListener('beforeunload', beforeUnload); })
 onBeforeRouteLeave(async () => !dirty.value || await confirmAction(`${title.value}草稿还有未保存的修改，确定离开吗？`))
 watch(() => props.domain, () => { generation++; draft.value = null; config.value = null; intent.value = null; preview.value = null; void loadDraft() })
-function setNavIcon(item: NavigationItem, role: 'iconAssetId' | 'selectedIconAssetId', assetId: string | null) {
-  if (!nav.value || !canEdit.value || busy.value) return
-  config.value = updateNavigationItem(nav.value, item.key, { [role]: assetId })
-  preview.value = null
-}
 function setService(patch: Partial<CustomerServiceConfig>) {
   if (!service.value || !canEdit.value || busy.value) return
   config.value = { ...service.value, ...patch }
@@ -132,13 +128,14 @@ async function showPreview() {
     const result = await api<Preview>(`${base.value}/preview`, { method: 'POST', body: JSON.stringify({ expectedRevision: draft.value.revision }) })
     if (current !== generation) return
     preview.value = result
+    selectedPreviewKey.value = props.domain === 'navigation' ? (result.config as NavigationConfig).items[0]?.key || '' : ''
     previewSnapshot.value = savedSnapshot.value
     notice.value = `服务端预览已生成 · 草稿修订 ${result.revision}。`
   } catch (reason) { if (current === generation) error.value = message(reason) }
   finally { if (current === generation) busy.value = '' }
 }
 function openPublish() {
-  if (busy.value || syncPending.value || recoveryBlocked.value || !draft.value) return
+  if (!canPublish.value || busy.value || syncPending.value || recoveryBlocked.value || !draft.value) return
   if (!intent.value && (dirty.value || !previewReady.value || alreadyPublished.value)) { error.value = '请先保存并预览待发布的草稿修订。'; return }
   error.value = '';  publishOpen.value = true
 }
@@ -154,7 +151,7 @@ async function syncPublication() {
   finally { busy.value = '' }
 }
 async function publish() {
-  if (!draft.value  || busy.value || syncPending.value || recoveryBlocked.value) return
+  if (!canPublish.value || !draft.value || busy.value || syncPending.value || recoveryBlocked.value) return
   if (!intent.value && (dirty.value || !previewReady.value || alreadyPublished.value)) return
   const recovering = !!intent.value
   const request = intent.value || publicationIntent(base.value, props.domain, draft.value, crypto.randomUUID())
@@ -197,7 +194,7 @@ function rolledBack(result: RollbackResult) {
 <template>
   <section class="page-content singleton-page">
     <header class="page-heading singleton-heading">
-      <div><h1>{{ title }}</h1><p>{{ domain === 'navigation' ? '固定四个入口；可替换普通与选中图标。更改草稿不会立即影响小程序。' : '设置首页与商品浏览页的客服悬浮入口。保存、预览并发布后才影响线上。' }}</p></div>
+      <div><h1>{{ title }}</h1><p>{{ domain === 'navigation' ? '最多五个自定义入口，分别配置未选中和选中图标。草稿不影响线上；完整导航由本次更新的小程序体验版本支持。' : '设置首页与商品浏览页的客服悬浮入口。保存、预览并发布后才影响线上。' }}</p></div>
       <div class="singleton-actions">
         <PublicationHistory v-if="draft" :account="account" :base="base" :object-id="domain" :domain="domain" :draft-revision="draft.revision" :disabled="loading || Boolean(busy) || Boolean(intent) || syncPending || recoveryBlocked" @rolled-back="rolledBack" />
         <el-button :disabled="loading || Boolean(busy) || !canEdit || !dirty" :loading="busy === 'save'" @click="saveDraft">保存草稿</el-button>
@@ -213,9 +210,7 @@ function rolledBack(result: RollbackResult) {
       <div class="singleton-meta"><span>草稿修订 {{ draft.revision }}</span><span>线上{{ draft.publishedRevision === null ? '尚未发布' : `修订 ${draft.publishedRevision}` }}</span><span v-if="dirty" class="singleton-dirty">有未保存修改</span><span v-else>草稿已保存</span></div>
       <p v-if="!canEdit" class="singleton-readonly">当前账号只有查看权限，不能修改草稿。</p>
       <p v-if="validation" class="singleton-error" role="alert">{{ validation }}</p>
-      <section v-if="nav" class="singleton-editor" aria-labelledby="navigation-editor-title"><div class="singleton-section-head"><h2 id="navigation-editor-title">四个固定入口</h2><p>名称和跳转目标固定。每项可选一对静态图标；不配置时使用小程序默认图标。</p></div>
-        <div class="singleton-nav-grid"><article v-for="item in nav.items" :key="item.key" class="singleton-nav-item"><div class="singleton-nav-title"><strong>{{ item.label }}</strong><small>{{ item.key }}</small></div><div class="singleton-icon-pair"><div><span>普通图标</span><img v-if="item.iconAssetId && !failedMedia.includes(item.iconAssetId)" :src="assetUrl(item.iconAssetId)" :alt="`${item.label}普通图标`" @error="mediaFailed(item.iconAssetId)" /><span v-else class="singleton-icon-empty">{{ item.iconAssetId ? '图片失效' : '默认' }}</span><AssetPicker v-if="canEdit" kind="IMAGE" square :disabled="Boolean(busy)" :target-key="JSON.stringify([draft.revision, item.key, 'normal', item.iconAssetId])" @select="setNavIcon(item, 'iconAssetId', $event.assetId)" /></div><div><span>选中图标</span><img v-if="item.selectedIconAssetId && !failedMedia.includes(item.selectedIconAssetId)" :src="assetUrl(item.selectedIconAssetId)" :alt="`${item.label}选中图标`" @error="mediaFailed(item.selectedIconAssetId)" /><span v-else class="singleton-icon-empty">{{ item.selectedIconAssetId ? '图片失效' : '默认' }}</span><AssetPicker v-if="canEdit" kind="IMAGE" square :disabled="Boolean(busy)" :target-key="JSON.stringify([draft.revision, item.key, 'selected', item.selectedIconAssetId])" @select="setNavIcon(item, 'selectedIconAssetId', $event.assetId)" /></div></div><el-button v-if="canEdit && (item.iconAssetId || item.selectedIconAssetId)" text :disabled="Boolean(busy)" @click="config = updateNavigationItem(nav, item.key, { iconAssetId: null, selectedIconAssetId: null }); preview = null">恢复默认图标</el-button></article></div>
-      </section>
+      <NavigationItemsEditor v-if="nav" :config="nav" :can-edit="canEdit" :disabled="Boolean(busy) || loading" @change="config=$event;preview=null" />
       <section v-if="service" class="singleton-editor singleton-service" aria-labelledby="service-editor-title"><div class="singleton-section-head"><h2 id="service-editor-title">展示与联系</h2><p>仅在首页及商品浏览页显示。关闭后保留已填写的草稿内容，发布关闭版本才会停止展示。</p></div>
         <label class="singleton-toggle"><input type="checkbox" :checked="service.enabled" :disabled="!canEdit || Boolean(busy)" @change="setService({ enabled: ($event.target as HTMLInputElement).checked })" />启用客服悬浮入口</label>
         <div class="singleton-form-grid"><label>联系方法<el-select :model-value="service.mode" placeholder="请选择" :disabled="!canEdit || Boolean(busy)" @update:model-value="setServiceMode($event as 'PHONE' | 'QR' | null)"><el-option label="不设置" :value="null" /><el-option label="拨打电话" value="PHONE" /><el-option label="客服二维码" value="QR" /></el-select></label><label>入口文案（最多 20 字）<el-input :model-value="service.prompt" maxlength="20" show-word-limit placeholder="例如：联系店铺" :disabled="!canEdit || Boolean(busy)" @update:model-value="setService({ prompt: $event })" /></label></div>
@@ -223,7 +218,7 @@ function rolledBack(result: RollbackResult) {
         <div v-if="service.mode === 'QR'" class="singleton-asset"><div><strong>客服二维码</strong><p>选择可用的静态图片，发布时服务端会再次检查。</p></div><img v-if="service.qrAssetId && !failedMedia.includes(service.qrAssetId)" :src="assetUrl(service.qrAssetId)" alt="当前草稿客服二维码" @error="mediaFailed(service.qrAssetId)" /><span v-else-if="service.qrAssetId" class="singleton-icon-empty">图片失效</span><AssetPicker v-if="canEdit" kind="IMAGE" :disabled="Boolean(busy)" :target-key="JSON.stringify([draft.revision, 'qr', service.qrAssetId])" @select="setService({ qrAssetId: $event.assetId })" /><el-button v-if="canEdit && service.qrAssetId" text :disabled="Boolean(busy)" @click="setService({ qrAssetId: null })">移除二维码</el-button></div>
         <div class="singleton-asset"><div><strong>悬浮入口图标（可选）</strong><p>未选择时使用小程序默认图标。</p></div><img v-if="service.iconAssetId && !failedMedia.includes(service.iconAssetId)" :src="assetUrl(service.iconAssetId)" alt="当前草稿悬浮入口图标" @error="mediaFailed(service.iconAssetId)" /><span v-else-if="service.iconAssetId" class="singleton-icon-empty">图片失效</span><AssetPicker v-if="canEdit" kind="IMAGE" square :disabled="Boolean(busy)" :target-key="JSON.stringify([draft.revision, 'icon', service.iconAssetId])" @select="setService({ iconAssetId: $event.assetId })" /><el-button v-if="canEdit && service.iconAssetId" text :disabled="Boolean(busy)" @click="setService({ iconAssetId: null })">恢复默认图标</el-button></div>
       </section>
-      <section v-if="preview" class="singleton-preview" aria-label="服务端预览"><h2>服务端预览 · 修订 {{ preview.revision }}</h2><p>发布前确认：{{ domain === 'navigation' ? '四个固定入口与图标素材' : '启用状态、联系方法及素材' }}。</p><p v-if="!previewReady" class="singleton-error">草稿已变化，请重新生成预览。</p><div v-else-if="domain === 'navigation'" class="singleton-preview-nav"><span v-for="item in (preview.config as NavigationConfig).items" :key="item.key">{{ item.label }}{{ item.iconAssetId ? ' · 自定义图标' : ' · 默认图标' }}</span></div><p v-else>{{ (preview.config as CustomerServiceConfig).enabled ? '线上将展示客服入口' : '线上将隐藏客服入口' }} · {{ (preview.config as CustomerServiceConfig).mode === 'PHONE' ? '电话' : (preview.config as CustomerServiceConfig).mode === 'QR' ? '二维码' : '未设置' }}</p></section>
+      <section v-if="preview" class="singleton-preview" aria-label="服务端预览"><h2>服务端预览 · 修订 {{ preview.revision }}</h2><p>发布前确认：{{ domain === 'navigation' ? '导航顺序、关联页面与两种图标' : '启用状态、联系方法及素材' }}。</p><p v-if="!previewReady" class="singleton-error">草稿已变化，请重新生成预览。</p><div v-else-if="domain === 'navigation'" class="singleton-preview-nav"><button v-for="item in (preview.config as NavigationConfig).items" :key="item.key" type="button" :aria-pressed="selectedPreviewKey===item.key" @click="selectedPreviewKey=item.key"><img v-if="(selectedPreviewKey===item.key?item.selectedIconAssetId:item.iconAssetId) && !failedMedia.includes((selectedPreviewKey===item.key?item.selectedIconAssetId:item.iconAssetId)!)" :src="assetUrl(selectedPreviewKey===item.key?item.selectedIconAssetId:item.iconAssetId)" :alt="`${item.label}${selectedPreviewKey===item.key?'选中':'未选中'}图标`" @error="mediaFailed(selectedPreviewKey===item.key?item.selectedIconAssetId:item.iconAssetId)" /><span v-else class="singleton-icon-empty">默认</span><span>{{ item.label }}</span></button></div><p v-else>{{ (preview.config as CustomerServiceConfig).enabled ? '线上将展示客服入口' : '线上将隐藏客服入口' }} · {{ (preview.config as CustomerServiceConfig).mode === 'PHONE' ? '电话' : (preview.config as CustomerServiceConfig).mode === 'QR' ? '二维码' : '未设置' }}</p></section>
     </template>
     <el-dialog v-model="publishOpen" :title="intent ? `恢复原${title}发布请求` : `发布${title}`" width="min(460px, calc(100vw - 24px))" :close-on-click-modal="!busy"><p>{{ intent ? '按原请求编号和原修订号重新确认，不会生成新发布。' : '确认发布已保存并预览的草稿修订。' }}</p><p v-if="error" class="singleton-error" role="alert">{{ error }}</p><template #footer><el-button :disabled="Boolean(busy)" @click="publishOpen = false">取消</el-button><el-button type="primary" :loading="busy === 'publish'" :disabled="Boolean(busy)" @click="publish">{{ intent ? '按原请求恢复' : '确认发布' }}</el-button></template></el-dialog>
   </section>

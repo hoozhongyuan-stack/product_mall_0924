@@ -2,14 +2,14 @@ const api = require('../../lib/api')
 const dining = require('../../lib/dining-alliance')
 const orders = require('../../lib/orders')
 const cart = require('../../lib/cart')
-const { money } = require('../../lib/catalog')
+const { money, discountMoney, mediaUrl, skuLabel } = require('../../lib/catalog')
 const KEY = 'mall.diningPendingOrder.v1'
 function removeOwned(pending) {
  const saved = wx.getStorageSync(KEY)
  if (wx.getStorageSync('mall.memberToken') === pending.identity && saved?.identity === pending.identity && saved.key === pending.key) wx.removeStorageSync(KEY)
 }
 Page({
- data: { state:'loading', error:'', quote:null, lines:[], total:'', goodsTotal:'', shippingFee:'', paymentChoices:[], paymentMethod:'', canSubmit:false, busy:false, pending:false },
+ data: { state:'loading', error:'', quote:null, lines:[], total:'', goodsTotal:'', shippingFee:'', couponDiscount:'', pointsDiscount:'', offlinePolicy:null, offlinePolicyError:'', paymentChoices:[], paymentMethod:'', canSubmit:false, busy:false, pending:false },
  onLoad() {
   this.identity = wx.getStorageSync('mall.memberToken'); this.active = true
   const stored = wx.getStorageSync(KEY)
@@ -40,9 +40,16 @@ Page({
   try {
    const quote = await api.post('/api/v1/app/checkout/quotes',{diningSessionId:visit.sessionId,items:cart.quoteItems(cart.selected())})
    if (!this.valid(g,identity) || dining.current()?.sessionId !== visit.sessionId) return
-   const choices = (quote.availablePaymentMethods || []).filter(v => ['WECHAT','OFFLINE'].includes(v))
+   const available = (quote.availablePaymentMethods || []).filter(v => ['WECHAT','OFFLINE'].includes(v))
+   let offlinePolicy = null, offlinePolicyError = ''
+   if (available.includes('OFFLINE')) {
+    try { offlinePolicy = await api.get('/api/v1/app/payments/offline-policy') }
+    catch (error) { offlinePolicyError = `线下付款说明读取失败：${error.message}。请重新核对报价。` }
+   }
+   if (!this.valid(g,identity) || dining.current()?.sessionId !== visit.sessionId) return
+   const choices = available.filter(value => value !== 'OFFLINE' || (offlinePolicy?.configured === true && typeof offlinePolicy.instructions === 'string' && offlinePolicy.instructions.trim()))
    const method = choices.includes(this.data.paymentMethod) ? this.data.paymentMethod : choices[0] || ''
-   this.setData({state:'ready',quote,lines:(quote.lines || []).map(l=>({...l,amount:money(l.lineAmountFen)})),total:money(quote.payableFen),goodsTotal:money(quote.goodsTotalFen),shippingFee:money(quote.shippingFeeFen),paymentChoices:choices,paymentMethod:method,canSubmit:!!method&&dining.quoteReady(quote),error:quote.confirmRequired?'价格已变化，请确认新价格。':!quote.ready?'商品缺货或已下架，请返回调整。':''})
+   this.setData({state:'ready',quote,lines:(quote.lines || []).map(l=>({...l,amount:money(l.lineAmountFen),price:money(l.unitPriceFen),specLabel:skuLabel(l),image:mediaUrl(api.baseUrl(),l.imageUrl)})),total:money(quote.payableFen),goodsTotal:money(quote.goodsTotalFen),shippingFee:money(quote.shippingFeeFen),couponDiscount:discountMoney(quote.couponDiscountFen),pointsDiscount:discountMoney(quote.pointsDiscountFen),offlinePolicy,offlinePolicyError,paymentChoices:choices,paymentMethod:method,canSubmit:!!method&&dining.quoteReady(quote),error:quote.confirmRequired?'价格已变化，请确认新价格。':!quote.ready?'商品缺货或已下架，请返回调整。':''})
   } catch (e) { if (this.valid(g,identity)) this.setData({state:'error',error:e.message,canSubmit:false}) }
  },
  choosePayment(e) { const value=e.detail.value; if(this.data.paymentChoices.includes(value)) this.setData({paymentMethod:value,canSubmit:dining.quoteReady(this.data.quote)}) },

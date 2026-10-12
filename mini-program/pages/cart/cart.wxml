@@ -1,5 +1,5 @@
 <view class="pilot-page shopping-page">
-  <view class="cart-heading"><view class="page-title">购物车</view><button class="manage-button" bindtap="toggleManaging">{{managing ? '完成' : '管理'}}</button></view>
+  <view wx:if="{{rows.length}}" class="cart-heading"><text class="muted">{{rows.length}} 件商品</text><button class="manage-button" bindtap="toggleManaging">{{managing ? '完成' : '管理'}}</button></view>
   <view wx:if="{{state === 'loading'}}" class="state" role="status">正在核对价格与库存…</view>
   <view wx:elif="{{state === 'empty'}}" class="state"><view class="empty-title">购物车还是空的</view><view class="empty-copy">选好规格，把喜欢的商品加入购物车。</view><button bindtap="shop">去逛逛</button></view>
   <view wx:elif="{{state === 'error' || state === 'auth'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>

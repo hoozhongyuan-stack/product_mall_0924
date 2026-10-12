@@ -17,7 +17,7 @@ from catalog.validation import CatalogError
 from .history import idempotency_key, pagination, publication_revision
 from .models import (StorefrontConfig, StorefrontDraftAsset, StorefrontOperation,
                      StorefrontPublication, StorefrontVersion, StorefrontVersionAsset)
-from .storefront_validation import asset_ids, defaults, normalize, validate_assets
+from .storefront_validation import asset_ids, defaults, normalize, validate_assets, validate_navigation_targets
 from .validation import PageConfigError
 
 
@@ -82,7 +82,9 @@ def _digest(values):
                                      ensure_ascii=False).encode()).hexdigest()
 
 
-def _locked_assets(domain, config):
+def _locked_assets(domain, config, *, publishing=False):
+    if domain == "navigation":
+        validate_navigation_targets(config, publishing=publishing)
     identifiers = asset_ids(domain, config)
     try:
         assets = lock_available_assets([uuid.UUID(identifier) for identifier in identifiers])
@@ -182,6 +184,9 @@ def _publish(request, domain):
     with transaction.atomic():
         config = _config(domain, lock=True)
         publication = _publication(config, lock=True)
+        if domain == "navigation":
+            from .views import _lock_publication_graph
+            _lock_publication_graph()
         actor, bad = _access(request, domain, "publish", live=True)
         if bad:
             return bad
@@ -197,7 +202,7 @@ def _publish(request, domain):
         if StorefrontVersion.objects.filter(config=config, revision=revision).exists():
             return error(request, 409, "ALREADY_PUBLISHED", "当前草稿已发布，请先修改草稿。")
         normalized = normalize(domain, config.draft_config)
-        _locked_assets(domain, normalized)
+        _locked_assets(domain, normalized, publishing=True)
         actor, bad = _access(request, domain, "publish", live=True)
         if bad:
             return bad
@@ -271,6 +276,9 @@ def _rollback(request, domain):
     with transaction.atomic():
         config = _config(domain, lock=True)
         publication = _publication(config, lock=True)
+        if domain == "navigation":
+            from .views import _lock_publication_graph
+            _lock_publication_graph()
         actor, bad = _access(request, domain, "publish", live=True)
         if bad:
             return bad
@@ -289,7 +297,7 @@ def _rollback(request, domain):
         if version.id == publication.current_version_id:
             return error(request, 409, "ALREADY_CURRENT", "目标版本已经在线。")
         normalized = normalize(domain, version.config_json)
-        _locked_assets(domain, normalized)
+        _locked_assets(domain, normalized, publishing=True)
         actor, bad = _access(request, domain, "publish", live=True)
         if bad:
             return bad
@@ -338,13 +346,24 @@ def _public_url(identifier):
     return f"/api/v1/app/assets/{identifier}/file" if identifier else None
 
 
-def _public_domain(domain):
+def _public_domain(domain, *, navigation_v2=False):
     publication = StorefrontPublication.objects.select_related("current_version").get(config_id=domain)
     version = publication.current_version
     config = version.config_json if version else defaults(domain)
     if domain == "navigation":
-        return {"versionId": str(version.id) if version else None,
+        is_v2 = config.get("schemaVersion") == 2
+        if is_v2 and not navigation_v2:
+            # A v1 client routes by fixed keys and cannot interpret arbitrary targets.
+            # Preserve its four destinations rather than leaking micro page keys.
+            config = {"items": [{**item, **next(({
+                "iconAssetId": source["iconAssetId"],
+                "selectedIconAssetId": source["selectedIconAssetId"]}
+                for source in config["items"] if source["target"]["type"] == item["key"]), {})}
+                for item in defaults("navigation")["items"]]}
+        return {**({"schemaVersion": 2} if is_v2 and navigation_v2 else {}),
+                "versionId": str(version.id) if version else None,
                 "items": [{"key": item["key"], "label": item["label"],
+                           **({"target": item["target"]} if "target" in item else {}),
                            "iconUrl": _public_url(item["iconAssetId"]),
                            "selectedIconUrl": _public_url(item["selectedIconAssetId"])}
                           for item in config["items"]]}
@@ -362,6 +381,11 @@ def public_view(request):
     bad = method(request, "GET")
     if bad:
         return bad
+    if (set(request.GET) - {"navigationVersion"} or
+            any(len(request.GET.getlist(key)) != 1 for key in request.GET) or
+            request.GET.get("navigationVersion", "1") not in ("1", "2")):
+        return error(request, 400, "VALIDATION_FAILED", "导航能力版本不正确。")
     from .filing_views import public_filing
-    return response(request, {"filing": public_filing(), "navigation": _public_domain("navigation"),
+    return response(request, {"filing": public_filing(), "navigation": _public_domain("navigation",
+                              navigation_v2=request.GET.get("navigationVersion") == "2"),
                               "customerService": _public_domain("customer_service")})

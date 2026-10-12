@@ -7,9 +7,9 @@ const startup = require('../../lib/startup')
 Page({
   data: {
     roots: [], leaves: [], activeRootId: '', activeLeafId: '',
-    categoryState: 'loading', categoryError: '', activeBannerUrl: '', failedCategoryImages: {}, failedBannerImages: {},
+    categoryState: 'loading', categoryError: '', activeBannerUrl: '', rootScrollId: '', categoryOriginalImages: {}, failedCategoryImages: {}, failedBannerImages: {},
     products: [], listState: 'idle', listError: '',
-    searchInput: '', keyword: '', searchFocused: false,
+    searchInput: '', keyword: '', searchFocused: false, globalSearch: false,
     page: 0, hasMore: false, loadingMore: false, total: 0, failedImages: {},
   },
 
@@ -21,7 +21,7 @@ Page({
     let keyword = typeof options.keyword === 'string' ? options.keyword : ''
     try { keyword = decodeURIComponent(keyword) } catch (_) { /* use the original text */ }
     keyword = keyword.trim().slice(0, 100)
-    this.setData({ keyword, searchInput: keyword, searchFocused: options.focusSearch === '1' })
+    this.setData({ keyword, searchInput: keyword, searchFocused: options.focusSearch === '1', globalSearch: !!keyword && !options.categoryId })
     return this.loadCategories()
   },
 
@@ -55,7 +55,7 @@ Page({
         leaves.find((item) => item.id === this.requestedCategoryId) || leaves[0]
       this.requestedCategoryId = ''
       this.setData({ roots, leaves, activeRootId: activeRoot ? activeRoot.id : '',
-        activeLeafId: activeLeaf ? activeLeaf.id : '', activeBannerUrl: activeLeaf ? activeLeaf.bannerImageUrl : '', failedCategoryImages: {}, failedBannerImages: {}, categoryState: roots.length ? 'ready' : 'empty' })
+        activeLeafId: activeLeaf ? activeLeaf.id : '', activeBannerUrl: activeLeaf ? activeLeaf.bannerImageUrl : '', rootScrollId: activeRoot ? `root-${activeRoot.id}` : '', categoryOriginalImages: {}, failedCategoryImages: {}, failedBannerImages: {}, categoryState: roots.length ? 'ready' : 'empty' })
       if (roots.length || this.data.keyword) await this.loadProducts(true)
       else this.setData({ products: [], listState: 'empty', hasMore: false, total: 0 })
     } catch (error) {
@@ -72,7 +72,7 @@ Page({
       { loadingMore: true, listError: '' })
     try {
       const query = { page, pageSize: 20, keyword: this.data.keyword, ...stores.query() }
-      if (!this.data.keyword) query.categoryId = this.data.activeLeafId || this.data.activeRootId
+      if (!this.data.globalSearch && (this.data.activeLeafId || this.data.activeRootId)) query.categoryId = this.data.activeLeafId || this.data.activeRootId
       const result = await api.get('/api/v1/app/products', query)
       if (token !== this.listToken) return
       const rows = (result.rows || []).map((item) => catalog.productCard(item, api.baseUrl()))
@@ -90,8 +90,10 @@ Page({
     const root = this.data.roots.find((item) => item.id === event.currentTarget.dataset.id)
     if (!root || root.id === this.data.activeRootId) return
     const leaf = root.children[0]
-    this.setData({ activeRootId: root.id, activeLeafId: leaf ? leaf.id : '',
-      leaves: root.children, activeBannerUrl: leaf ? leaf.bannerImageUrl : '', keyword: '', searchInput: '' })
+    const failedBannerImages = { ...this.data.failedBannerImages }
+    if (leaf) delete failedBannerImages[leaf.id]
+    this.setData({ activeRootId: root.id, rootScrollId: `root-${root.id}`, activeLeafId: leaf ? leaf.id : '',
+      leaves: root.children, activeBannerUrl: leaf ? leaf.bannerImageUrl : '', failedBannerImages, keyword: '', searchInput: '', globalSearch: false })
     return this.loadProducts(true)
   },
 
@@ -100,7 +102,9 @@ Page({
     if (id === this.data.activeLeafId) return
     const leaf = this.data.leaves.find(item => item.id === id)
     if (!leaf) return
-    this.setData({ activeLeafId: id, activeBannerUrl: leaf.bannerImageUrl, keyword: '', searchInput: '' })
+    const failedBannerImages = { ...this.data.failedBannerImages }
+    delete failedBannerImages[id]
+    this.setData({ activeLeafId: id, activeBannerUrl: leaf.bannerImageUrl, failedBannerImages, keyword: '', searchInput: '', globalSearch: false })
     return this.loadProducts(true)
   },
 
@@ -111,12 +115,38 @@ Page({
     if (keyword || this.data.activeRootId) return this.loadProducts(true)
   },
   clearSearch() {
-    this.setData({ keyword: '', searchInput: '' })
+    this.setData({ keyword: '', searchInput: '', globalSearch: false })
     if (this.data.activeRootId) return this.loadProducts(true)
   },
 
-  categoryImageError(event) { this.setData({ failedCategoryImages: { ...this.data.failedCategoryImages, [event.currentTarget.dataset.id]: true } }) },
-  bannerImageError(event) { this.setData({ failedBannerImages: { ...this.data.failedBannerImages, [event.currentTarget.dataset.id]: true } }) },
+  categoryImageError(event) {
+    const id = event.currentTarget.dataset.id
+    const root = this.data.roots.find(item => item.id === id)
+    if (!root) return
+    const shownUrl = this.data.categoryOriginalImages[id] ? root.imageOriginalUrl : root.imageUrl
+    if (event.currentTarget.dataset.url && event.currentTarget.dataset.url !== shownUrl) return
+    if (root.imageOriginalUrl && root.imageOriginalUrl !== root.imageUrl && !this.data.categoryOriginalImages[id]) {
+      this.setData({ categoryOriginalImages: { ...this.data.categoryOriginalImages, [id]: true } }); return
+    }
+    this.setData({ failedCategoryImages: { ...this.data.failedCategoryImages, [id]: true } })
+  },
+  bannerImageError(event) {
+    const id = event.currentTarget.dataset.id
+    if (id !== this.data.activeLeafId) return
+    if (event.currentTarget.dataset.url && event.currentTarget.dataset.url !== this.data.activeBannerUrl) return
+    const leaf = this.data.leaves.find(item => item.id === id)
+    if (leaf && leaf.bannerOriginalUrl && this.data.activeBannerUrl !== leaf.bannerOriginalUrl) {
+      this.setData({ activeBannerUrl: leaf.bannerOriginalUrl }); return
+    }
+    this.setData({ failedBannerImages: { ...this.data.failedBannerImages, [id]: true } })
+  },
+  retryBanner() {
+    const leaf = this.data.leaves.find(item => item.id === this.data.activeLeafId)
+    if (!leaf) return
+    const failedBannerImages = { ...this.data.failedBannerImages }
+    delete failedBannerImages[leaf.id]
+    this.setData({ activeBannerUrl: leaf.bannerImageUrl, failedBannerImages })
+  },
   onImageError(event) {
     this.setData({ failedImages: { ...this.data.failedImages, [event.currentTarget.dataset.id]: true } })
   },

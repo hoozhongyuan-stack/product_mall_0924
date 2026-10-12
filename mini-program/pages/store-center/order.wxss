@@ -4,3 +4,5 @@
 .with-pickup-footer{padding-bottom:calc(160rpx + env(safe-area-inset-bottom))}.pickup-footer{position:fixed;left:0;right:0;bottom:0;z-index:10;background:#fff;border-top:1rpx solid #e7e9eb;padding:16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));box-sizing:border-box}.pickup-footer button{width:100%;min-height:88rpx;margin:0;display:flex;align-items:center;justify-content:center;font-size:28rpx}
 
 .store-page{font-size:max(28rpx,14px)}.muted,.order-number,.status-tag,.product-spec{font-size:max(24rpx,12px)}.pickup-footer button{min-height:44px}
+
+@import "../../styles/commerce.wxss";

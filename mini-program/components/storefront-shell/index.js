@@ -1,12 +1,10 @@
 const api = require('../../lib/api')
 const dining = require('../../lib/dining-alliance')
-const { NAVIGATION, presentStorefront } = require('../../lib/storefront')
+const { presentStorefront, activeNavigation } = require('../../lib/storefront')
 
-function currentKey() {
+function currentKey(items) {
   const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
-  const route = pages.length ? `/${pages[pages.length - 1].route}` : ''
-  if (route === '/pages/dining/shop') return 'home'
-  return NAVIGATION.find((item) => item.path === route)?.key || ''
+  return activeNavigation(items, pages[pages.length - 1])
 }
 
 Component({
@@ -35,21 +33,21 @@ Component({
   methods: {
     async loadStorefront() {
       const token = this.requestToken = (this.requestToken || 0) + 1
-      this.setData({ activeKey: currentKey() })
+      this.setData({ activeKey: currentKey(this.data.items) })
       try {
-        const result = presentStorefront(await api.get('/api/v1/app/storefront'), api.baseUrl())
+        const result = presentStorefront(await api.get('/api/v1/app/storefront', { navigationVersion: 2 }), api.baseUrl())
         if (token !== this.requestToken) return
-        this.setData({ items: result.navigation, service: result.service, recordNo: result.recordNo,
+        this.setData({ items: result.navigation, activeKey: currentKey(result.navigation), service: result.service, recordNo: result.recordNo,
           qrOpen: false, qrFailed: false, serviceIconFailed: false, failedNavIcons: {} })
       } catch (_) {
         if (token !== this.requestToken) return
         const fallback = presentStorefront(null, '')
-        this.setData({ items: fallback.navigation, service: null, recordNo: '', qrOpen: false })
+        this.setData({ items: fallback.navigation, activeKey: currentKey(fallback.navigation), service: null, recordNo: '', qrOpen: false })
       }
     },
     changeTab(event) {
       const key = event.currentTarget.dataset.key
-      const item = NAVIGATION.find((entry) => entry.key === key)
+      const item = this.data.items.find((entry) => entry.key === key)
       if (!item || key === this.data.activeKey) return
       dining.navigate(item.path, 'reLaunch')
     },

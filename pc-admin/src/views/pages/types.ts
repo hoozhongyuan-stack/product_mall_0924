@@ -62,7 +62,7 @@ export interface HomeDraft {
 }
 export interface HomePreview { revision: number; config: PageConfig; componentData?: ComponentData; couponData?: CouponData }
 export interface HomePublication { versionId: string; revision: number; config: PageConfig }
-export interface MicroPageSummary { pageId: string; name: string; revision: number; publishedRevision: number | null; updatedAt: string; tags?: string[] }
+export interface MicroPageSummary { pageType?: 'HOME' | 'MICRO'; isHome?: boolean; publicationRevision?: number; pageId: string; name: string; revision: number; publishedRevision: number | null; updatedAt: string; tags?: string[] }
 export interface MicroPageList { rows: MicroPageSummary[]; page: number; pageSize: number; total: number }
 export interface MicroDraft extends HomeDraft { name: string }
 export interface UploadedAssetBinding {

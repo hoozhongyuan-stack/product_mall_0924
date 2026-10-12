@@ -3,7 +3,7 @@ const deliveryAddress = require('../../lib/delivery-address')
 const api = require('../../lib/api')
 const cart = require('../../lib/cart')
 const session = require('../../lib/session')
-const { money } = require('../../lib/catalog')
+const { money, discountMoney } = require('../../lib/catalog')
 const orders = require('../../lib/orders')
 
 function expiryLabel(value) {
@@ -24,8 +24,8 @@ function settlementAmounts(quote) {
     settlementReady: complete,
     goodsTotal: validFen(goodsTotalFen) ? money(goodsTotalFen) : '待核算',
     shippingFee: validFen(shippingFeeFen) ? money(shippingFeeFen) : '待核算',
-    couponDiscount: validFen(couponDiscountFen) ? `−${money(couponDiscountFen)}` : '待核算',
-    pointsDiscount: validFen(pointsDiscountFen) ? `−${money(pointsDiscountFen)}` : '待核算',
+    couponDiscount: discountMoney(couponDiscountFen),
+    pointsDiscount: discountMoney(pointsDiscountFen),
     total: complete ? money(payableFen) : '待核算',
   }
 }

@@ -1,5 +1,4 @@
-<view class="member-page profile-page">
-  <view class="page-title">我的</view>
+<view class="member-page profile-page commerce-page">
   <view wx:if="{{state === 'loading'}}" class="state" role="status">正在加载个人信息…</view>
   <view wx:if="{{state === 'auth'}}" class="guest-prompt"><view class="guest-title">欢迎来到我的页面</view><view class="muted">登录后查看订单、积分和专属权益。</view><button bindtap="login">登录 / 注册</button></view>
   <view wx:if="{{state === 'error'}}" class="state" role="alert"><view>{{error}}</view><button bindtap="refresh">重新加载</button></view>

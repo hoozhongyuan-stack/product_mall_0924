@@ -75,14 +75,24 @@ class CrossClientFlowTests(TransactionTestCase):
         self.assertEqual(prepare.status_code, 201, prepare.content)
         intent = prepare.json()["data"]
         confirm_path = f"/api/v1/admin/payments/offline-reconciliations/{intent['reconciliationId']}/confirm"
-        self.assertEqual(self._post(self.client, confirm_path, {}).status_code, 403)
-        authorize = self._post(self.client, "/api/v1/admin/auth/confirm", {
-            "action": "payment.offline.confirm", "objectId": intent["reconciliationId"],
-            "revision": 1, "password": "Long test password 2026!"})
-        self.assertEqual(authorize.status_code, 200, authorize.content)
-        confirmation = authorize.json()["data"]["confirmationToken"]
-        confirmed = self._post(self.client, confirm_path, {},
-                               HTTP_X_ACTION_CONFIRMATION=confirmation)
+        # A live session with read permission cannot confirm funds. The old
+        # operator-password header is no longer an authorization requirement.
+        from accounts.models import AdminAccount, GroupPermission, PermissionGroup
+        reader = AdminAccount.objects.create_user('c42-order-reader',
+            'Long test password 2026!', kind=AdminAccount.Kind.STAFF)
+        group = PermissionGroup.objects.create(code='c42-order-reader', name='订单只读')
+        GroupPermission.objects.create(group=group, code='order.read')
+        reader.permission_groups.add(group)
+        reader_client = Client()
+        self.assertEqual(self._post(reader_client, '/api/v1/admin/auth/login', {
+            'loginName': reader.login_name, 'password': 'Long test password 2026!'}).status_code, 200)
+        self.assertEqual(reader_client.get(f'/api/v1/admin/orders/{order_id}').status_code, 200)
+        denied = self._post(reader_client, confirm_path, {},
+            HTTP_X_ACTION_CONFIRMATION='legacy-header-cannot-grant-finance-authority')
+        self.assertEqual(denied.status_code, 403, denied.content)
+        self.assertEqual(Order.objects.get(pk=order_id).status, 'PENDING_PAYMENT')
+        self.assertEqual(PaymentReceipt.objects.count(), 0)
+        confirmed = self._post(self.client, confirm_path, {})
         self.assertEqual(confirmed.status_code, 200, confirmed.content)
         self.assertEqual(confirmed.json()["data"]["outcome"], "PAID")
         self.assertEqual(self._post(self.client, confirm_path, {}).json()["data"]["outcome"], "PAID")

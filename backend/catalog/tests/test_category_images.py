@@ -47,11 +47,15 @@ class CategoryUploadTests(AssetFixture, TestCase):
         public = self.client.get('/api/v1/app/categories').json()['data']
         self.assertTrue(public[0]['imageUrl'].endswith('/file'))
         self.assertTrue(public[1]['bannerImageUrl'].endswith('/file'))
+        self.assertEqual(public[0]['imageThumbnailUrl'], f'/api/v1/app/assets/{square}/thumbnail')
+        self.assertEqual(public[1]['bannerThumbnailUrl'], f'/api/v1/app/assets/{wide}/thumbnail')
+        self.assertEqual(self.client.get(f'/api/v1/app/assets/{wide}/thumbnail').status_code, 200)
         self.assertNotIn('image', public[0])
         self.assertEqual(self.client.get(f'/api/v1/app/assets/{wide}/file').status_code, 200)
         response = self.client.patch(f'/api/v1/admin/categories/{root_id}', data=json.dumps({'expectedRevision': 1,'status':'INACTIVE'}), content_type='application/json', HTTP_X_CSRFTOKEN=self.client.cookies['csrftoken'].value)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.client.get(f'/api/v1/app/assets/{wide}/file').status_code, 404)
+        self.assertEqual(self.client.get(f'/api/v1/app/assets/{wide}/thumbnail').status_code, 404)
         self.assertFalse(orphan_assets().filter(pk=wide).exists())
 
     def test_wrong_aspect_and_missing_asset_rejected(self):

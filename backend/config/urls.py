@@ -1,3 +1,4 @@
+from pages.home_selection import selection_view as home_selection_view
 from customers.location_views import location_view
 from django.urls import path, re_path, include
 
@@ -253,6 +254,8 @@ urlpatterns = [
     path("api/v1/admin/pages/home/preview", page_views.home_preview_view),
     path("api/v1/admin/pages/home/publish", page_views.home_publish_view),
     path("api/v1/admin/pages", page_views.pages_view),
+    path("api/v1/admin/pages/home-selection", home_selection_view),
+    path("api/v1/admin/pages/<uuid:page_id>/set-home", home_selection_view),
     path("api/v1/admin/pages/capabilities", editor_views.capabilities_view),
     path("api/v1/admin/pages/templates", editor_views.templates_view),
     path("api/v1/admin/pages/coupon-preview", page_coupon_views.coupon_preview_view),

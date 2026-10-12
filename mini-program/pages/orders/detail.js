@@ -23,7 +23,8 @@ Page({
     paying: false, querying: false, canPayWechat: false, showWechatPayment: false, paymentUncertain: false,
     confirmingReceipt: false, shipment: null, canConfirmReceipt: false, failedVoucherImages: {},
     pickupCode: '', pickupQrPath: '', pickupQrLoading: false, pickupQrFailed: false, isPickup: false,
-    voucherQrPaths: {}, voucherQrLoading: {}, trackingState: 'idle', trackingEvents: [] },
+    voucherQrPaths: {}, voucherQrLoading: {}, trackingState: 'idle', trackingEvents: [], detailsOpen: false },
+  toggleDetails() { this.setData({ detailsOpen: !this.data.detailsOpen }) },
   onLoad(options) {
     this.hidden = false
     this.orderId = options.id || ''

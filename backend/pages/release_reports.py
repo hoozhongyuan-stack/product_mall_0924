@@ -158,7 +158,8 @@ def release_report_view(request, page_id=None):
         with transaction.atomic():
             _lock_publication_graph()
             query = MicroPage.objects.select_for_update()
-            page = query.filter(pk=page_id, page_type='MICRO').first() if page_id else query.filter(page_type='HOME').first()
+            from .home_selection import current_page_id
+            page = query.filter(pk=page_id or current_page_id()).first()
             if not page:
                 return error(request, 404, 'NOT_FOUND', '页面不存在。')
             publication = PagePublication.objects.select_for_update().get(page=page)

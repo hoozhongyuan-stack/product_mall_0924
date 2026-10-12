@@ -31,4 +31,4 @@
     <template is="published-content" data="{{components: components, keyword: keyword, failedAssets: failedAssets, couponState: couponState, couponData: couponData, couponError: couponError, couponClaim: couponClaim}}" />
   </block>
 </view>
-<storefront-shell show-service="{{true}}" />
+<storefront-shell show-service="{{true}}" show-navigation="{{true}}" />

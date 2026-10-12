@@ -30,3 +30,5 @@
 .pickup-store .muted { margin-top:8rpx; }
 .pickup-store-actions { display:flex; gap:16rpx; }
 .orders-page .pickup-store-actions button { flex:1; min-width:0; min-height:88rpx; }
+
+@import "../../styles/commerce.wxss";

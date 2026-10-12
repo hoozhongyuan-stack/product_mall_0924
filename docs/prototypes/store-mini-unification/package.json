@@ -1,0 +1,6 @@
+{
+  "name": "store-mini-unification-prototype",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test --experimental-test-coverage state.test.mjs" }
+}

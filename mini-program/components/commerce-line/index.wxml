@@ -1,0 +1,5 @@
+<view class="commerce-line">
+  <image wx:if="{{line.image && !failedImage}}" class="commerce-image" src="{{line.image}}" data-url="{{line.image}}" mode="aspectFit" binderror="imageError" />
+  <view wx:else class="commerce-image commerce-placeholder">暂无图片</view>
+  <view class="commerce-body"><view class="commerce-name">{{line.name}}</view><view class="commerce-spec">{{line.specLabel || '默认规格'}}<text wx:if="{{line.saleUnit}}"> · {{line.saleUnit}}</text></view><view class="commerce-price-row"><text class="commerce-price">{{line.price}}</text><text class="commerce-count">× {{line.quantity}}</text></view><slot name="status" /></view>
+</view>

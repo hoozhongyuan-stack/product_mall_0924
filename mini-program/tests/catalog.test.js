@@ -114,7 +114,7 @@ test('category page loads real filters, list, search and detail navigation', asy
   assert.equal(page.data.listState, 'empty')
   assert.equal(page.data.keyword, '未找到')
   assert.ok(requests.at(-1).includes('keyword=%E6%9C%AA%E6%89%BE%E5%88%B0'))
-  assert.ok(!requests.at(-1).includes('categoryId='))
+  assert.ok(requests.at(-1).includes('categoryId=leaf'))
 })
 
 test('home links open a selected category or prefilled cross-category search', async () => {

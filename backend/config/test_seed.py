@@ -20,7 +20,9 @@ def restore_migration_seed_rows(alias):
     from accounts.models import GroupPermission, PermissionGroup
     from catalog.models import MemberGrade
     from fulfillment.models import FulfillmentPolicy
-    from pages.models import MicroPage, PagePublication, StartupConfig, StartupPublication
+    from pages.models import (HomeSelection, MicroPage, PagePublication, StartupConfig, StartupPublication,
+                              StorefrontConfig, StorefrontPublication)
+    from pages.storefront_validation import defaults
     from payments.models import OfflinePaymentPolicy
     from shipping.models import ShippingPolicy
 
@@ -29,6 +31,8 @@ def restore_migration_seed_rows(alias):
     home_config = import_module("pages.migrations.0002_seed_home").DEFAULT_CONFIG
     extra_permissions = {
         "inventory_operator": ("inventory.read", "inventory.manage"),
+        "member_marketing": ("navigation.read", "navigation.edit",
+                             "customer_service.read", "customer_service.edit"),
         "order_service": ("order.read", "fulfillment.read", "fulfillment.ship", "fulfillment.redeem"),
     }
     with transaction.atomic(using=alias):
@@ -44,8 +48,13 @@ def restore_migration_seed_rows(alias):
         home, _ = MicroPage.objects.using(alias).get_or_create(
             page_type="HOME", defaults={"name": "首页", "draft_config": home_config})
         PagePublication.objects.using(alias).get_or_create(page=home)
+        HomeSelection.objects.using(alias).get_or_create(pk=1, defaults={"page": home})
         startup, _ = StartupConfig.objects.using(alias).get_or_create(pk=1)
         StartupPublication.objects.using(alias).get_or_create(config=startup)
+        for domain in ("navigation", "customer_service"):
+            config, _ = StorefrontConfig.objects.using(alias).get_or_create(
+                domain=domain, defaults={"draft_config": defaults(domain)})
+            StorefrontPublication.objects.using(alias).get_or_create(config=config)
         ShippingPolicy.objects.using(alias).get_or_create(pk=1)
         OfflinePaymentPolicy.objects.using(alias).get_or_create(pk=1)
         FulfillmentPolicy.objects.using(alias).get_or_create(pk=1)

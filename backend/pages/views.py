@@ -20,11 +20,12 @@ from .editor_v3 import sharing
 
 
 def _page():
-    return MicroPage.objects.get(page_type="HOME")
+    from .home_selection import current_page_id
+    return MicroPage.objects.get(pk=current_page_id())
 
 
 def _micro_page(page_id):
-    return MicroPage.objects.filter(pk=page_id, page_type="MICRO").first()
+    return MicroPage.objects.filter(pk=page_id).first()
 
 
 def _name(value):
@@ -260,7 +261,7 @@ def public_home_view(request):
     except DiningError as exc:
         return _failure(request, exc)
     publication = PagePublication.objects.select_related("current_version").filter(
-        page__page_type="HOME", current_version__isnull=False).first()
+        page_id=_page().id, current_version__isnull=False).first()
     if not publication:
         return error(request, 404, "HOME_UNPUBLISHED", "首页尚未发布。")
     full_config = publication.current_version.config_json
@@ -269,7 +270,9 @@ def public_home_view(request):
         products = component_data(visible_config, request.GET.get('storeId'), dining_context=dining)
     except PageConfigError as exc:
         return _failure(request, exc)
-    return response(request, {"versionId": str(publication.current_version_id),
+    return response(request, {"pageId": str(publication.page_id),
+                              "name": publication.current_version.name,
+                              "versionId": str(publication.current_version_id),
                               "config": visible_config, "componentData": products, "share": sharing(full_config)})
 
 
@@ -288,7 +291,12 @@ def pages_view(request):
             return error(request, 400, "VALIDATION_FAILED", "分页参数不正确。")
         if not 1 <= page_no <= 100000 or not 1 <= page_size <= 100:
             return error(request, 400, "VALIDATION_FAILED", "分页参数不正确。")
-        queryset = MicroPage.objects.filter(page_type="MICRO").select_related(
+        include_home = request.GET.get("includeHome", "0")
+        if include_home not in ("0", "1"):
+            return error(request, 400, "VALIDATION_FAILED", "includeHome 参数不正确。")
+        from .home_selection import current_page_id
+        home_id = current_page_id()
+        queryset = (MicroPage.objects.all() if include_home == "1" else MicroPage.objects.filter(page_type="MICRO")).select_related(
             "pagepublication__current_version").order_by("-updated_at", "-id")
         query = request.GET.get("q", "").strip()
         tag = request.GET.get("tag", "").strip()
@@ -300,6 +308,8 @@ def pages_view(request):
             queryset = queryset.filter(draft_config__metadata__tags__contains=[tag])
         total = queryset.count()
         rows = [{"pageId": str(page.id), "name": page.name, "revision": page.draft_revision,
+                 "pageType": page.page_type, "isHome": page.id == home_id,
+                 "publicationRevision": page.pagepublication.revision,
                  "publishedRevision": page.pagepublication.current_version.revision
                  if page.pagepublication.current_version else None,
                  "updatedAt": page.updated_at.isoformat(),
@@ -370,7 +380,7 @@ def public_micro_view(request, page_id):
     except DiningError as exc:
         return _failure(request, exc)
     publication = PagePublication.objects.select_related("page", "current_version").filter(
-        page_id=page_id, page__page_type="MICRO", current_version__isnull=False).first()
+        page_id=page_id, current_version__isnull=False).first()
     if not publication:
         return error(request, 404, "PAGE_UNPUBLISHED", "微页面尚未发布。")
     full_config = publication.current_version.config_json

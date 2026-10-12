@@ -48,6 +48,32 @@ class PagePublication(models.Model):
         db_table = "page_publication"
 
 
+class HomeSelection(models.Model):
+    """Homepage identity; page versions and the original HOME remain independent."""
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    page = models.ForeignKey(MicroPage, on_delete=models.PROTECT)
+    revision = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "home_selection"
+        constraints = [models.CheckConstraint(condition=Q(id=1), name="one_home_selection")]
+
+
+class HomeSelectionRequest(models.Model):
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    key = models.CharField(max_length=128)
+    request_digest = models.CharField(max_length=64)
+    page = models.ForeignKey(MicroPage, on_delete=models.PROTECT)
+    version = models.ForeignKey(PageConfigVersion, on_delete=models.PROTECT)
+    result = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "home_selection_request"
+        constraints = [models.UniqueConstraint(fields=["actor", "key"], name="unique_home_selection_key")]
+
+
 class PageDraftAsset(models.Model):
     page = models.ForeignKey(MicroPage, on_delete=models.CASCADE)
     asset = models.ForeignKey("catalog.Asset", on_delete=models.PROTECT)

@@ -1,5 +1,6 @@
-export interface NavigationItem { key: 'HOME' | 'CATEGORY' | 'CART' | 'ME'; label: string; iconAssetId: string | null; selectedIconAssetId: string | null }
-export interface NavigationConfig { items: NavigationItem[] }
+export interface NavigationTarget { type: 'HOME' | 'MICRO' | 'CATEGORY' | 'CART' | 'ME'; pageId?: string }
+export interface NavigationItem { key: string; target?: NavigationTarget; label: string; iconAssetId: string | null; selectedIconAssetId: string | null }
+export interface NavigationConfig { schemaVersion?: 2; items: NavigationItem[] }
 export interface CustomerServiceConfig { enabled: boolean; mode: 'PHONE' | 'QR' | null; phone: string | null; qrAssetId: string | null; prompt: string; iconAssetId: string | null }
 export const NAV_ITEMS: ReadonlyArray<Readonly<{ key: NavigationItem['key']; label: string }>>
 export function copyConfig<T>(config: T): T
@@ -7,3 +8,8 @@ export function reconcileSavedConfig<T>(current: T, submitted: T, server: T): { 
 export function updateNavigationItem(config: NavigationConfig, key: NavigationItem['key'], patch: Partial<NavigationItem>): NavigationConfig
 export function validateNavigation(config: NavigationConfig): string
 export function validateCustomerService(config: CustomerServiceConfig): string
+
+export function normalizeNavigation(config: NavigationConfig): NavigationConfig
+export function appendNavigationItem(config: NavigationConfig, key: string): NavigationConfig
+export function moveNavigationItem(config: NavigationConfig, key: string, direction: number): NavigationConfig
+export function removeNavigationItem(config: NavigationConfig, key: string): NavigationConfig

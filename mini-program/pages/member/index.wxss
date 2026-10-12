@@ -34,3 +34,7 @@
 .profile-actions { display: flex; gap: 20rpx; }
 .profile-actions button { flex: 1; }
 .logout-entry { width: 100%; margin-bottom: 24rpx; }
+
+@import "../../styles/commerce.wxss";
+
+.profile-page{padding-top:20rpx}.profile-page .profile-hero{margin-top:0}.profile-page .order-entry-section{padding-top:24rpx}

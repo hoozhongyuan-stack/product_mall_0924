@@ -9,6 +9,61 @@ from .validation import PageConfigError
 NAVIGATION = (("HOME", "首页"), ("CATEGORY", "分类"),
               ("CART", "购物车"), ("ME", "我的"))
 PHONE_PATTERN = re.compile(r"^1[3-9][0-9]{9}$")
+ENTRY_KEY = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+
+
+def navigation_v2(value):
+    if set(value) != {"schemaVersion", "items"} or type(value["schemaVersion"]) is not int or value["schemaVersion"] != 2:
+        raise PageConfigError("导航配置版本不正确。")
+    if not isinstance(value["items"], list) or not 1 <= len(value["items"]) <= 5:
+        raise PageConfigError("底部导航须配置 1—5 个入口。")
+    items, keys = [], set()
+    for item in value["items"]:
+        if not isinstance(item, dict) or set(item) != {"key", "label", "target", "iconAssetId", "selectedIconAssetId"}:
+            raise PageConfigError("导航项参数不正确。")
+        key, label, target = item["key"], item["label"], item["target"]
+        if not isinstance(key, str) or not ENTRY_KEY.fullmatch(key) or key in keys:
+            raise PageConfigError("导航标识须为唯一的 1—40 位字母、数字、下划线或短横线。")
+        if not isinstance(label, str) or not 1 <= len(label.strip()) <= 10 or any(ord(c) < 32 or ord(c) == 127 for c in label):
+            raise PageConfigError("导航名称须为 1—10 个字符。")
+        keys.add(key)
+        if not isinstance(target, dict) or target.get("type") not in ("HOME", "MICRO", "CATEGORY", "CART", "ME"):
+            raise PageConfigError("导航仅支持首页、微页面、分类、购物车和我的。")
+        if target["type"] == "MICRO":
+            if set(target) != {"type", "pageId"} or not target["pageId"]:
+                raise PageConfigError("请选择关联微页面。")
+            target = {"type": "MICRO", "pageId": _asset_id(target["pageId"])}
+        elif set(target) != {"type"}:
+            raise PageConfigError("固定导航目标不得包含其他链接参数。")
+        icon, selected = _asset_id(item["iconAssetId"]), _asset_id(item["selectedIconAssetId"])
+        if bool(icon) != bool(selected):
+            raise PageConfigError("导航图标和选中图标须成对配置。")
+        items.append({"key": key, "label": label.strip(), "target": target,
+                      "iconAssetId": icon, "selectedIconAssetId": selected})
+    return {"schemaVersion": 2, "items": items}
+
+
+def validate_navigation_targets(config, *, publishing=False):
+    if config.get("schemaVersion") != 2:
+        return
+    from .models import MicroPage, PagePublication
+    identifiers = {item["target"]["pageId"] for item in config["items"] if item["target"]["type"] == "MICRO"}
+    existing = set(map(str, MicroPage.objects.filter(pk__in=identifiers).values_list("id", flat=True)))
+    if existing != identifiers:
+        raise PageConfigError("导航关联页面不存在。", "NAVIGATION_TARGET_INVALID", 422)
+    if publishing:
+        publications = list(PagePublication.objects.filter(page_id__in=identifiers,
+            current_version__isnull=False).select_related("page", "current_version"))
+        published = {str(item.page_id) for item in publications}
+        if published != identifiers:
+            raise PageConfigError("导航关联页面尚未发布，请先发布页面。", "NAVIGATION_TARGET_UNPUBLISHED", 422)
+        from .validation import validate_config
+        from .runtime import check_runtime
+        for publication in publications:
+            config_json = publication.current_version.config_json
+            validate_config(config_json, publishing=True, page_type=publication.page.page_type,
+                            page_id=publication.page_id)
+            check_runtime(config_json)
 
 
 def defaults(domain):
@@ -34,6 +89,8 @@ def normalize(domain, value):
     if not isinstance(value, dict):
         raise PageConfigError("配置须为对象。")
     if domain == "navigation":
+        if "schemaVersion" in value:
+            return navigation_v2(value)
         if set(value) != {"items"} or not isinstance(value["items"], list) or len(value["items"]) != 4:
             raise PageConfigError("底部导航须保留四个固定入口。")
         items = []

@@ -4,6 +4,10 @@ function money(fen) {
   return `¥${yuan.endsWith('.00') ? yuan.slice(0, -3) : yuan}`
 }
 
+function discountMoney(fen) {
+  return Number.isSafeInteger(fen) && fen >= 0 ? `−${money(fen)}` : '待核算'
+}
+
 function mediaUrl(baseUrl, path) {
   if (!path || typeof path !== 'string' || !path.startsWith('/api/v1/app/assets/')) return ''
   return `${baseUrl.replace(/\/$/, '')}${path}`
@@ -23,7 +27,10 @@ function descriptionMedia(value, baseUrl) {
 }
 
 function categoryTree(items, baseUrl = '') {
-  const active = (Array.isArray(items) ? items : []).filter((item) => item.status === 'ACTIVE').map((item) => ({ ...item, imageUrl: mediaUrl(baseUrl, item.imageUrl), bannerImageUrl: mediaUrl(baseUrl, item.bannerImageUrl) }))
+  const active = (Array.isArray(items) ? items : []).filter((item) => item.status === 'ACTIVE').map((item) => ({ ...item,
+    imageOriginalUrl: mediaUrl(baseUrl, item.imageUrl), bannerOriginalUrl: mediaUrl(baseUrl, item.bannerImageUrl),
+    imageUrl: mediaUrl(baseUrl, item.imageThumbnailUrl) || mediaUrl(baseUrl, item.imageUrl),
+    bannerImageUrl: mediaUrl(baseUrl, item.bannerThumbnailUrl) || mediaUrl(baseUrl, item.bannerImageUrl) }))
   return active.filter((item) => !item.parentId).map((parent) => ({
     ...parent,
     children: active.filter((item) => item.parentId === parent.id)
@@ -79,4 +86,4 @@ function productDetail(item, baseUrl) {
   }
 }
 
-module.exports = { money, mediaUrl, categoryTree, productCard, productDetail, skuLabel }
+module.exports = { money, discountMoney, mediaUrl, categoryTree, productCard, productDetail, skuLabel }

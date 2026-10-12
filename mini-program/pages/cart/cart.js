@@ -6,13 +6,14 @@ const { money } = require('../../lib/catalog')
 
 Page({
   data: { rows: [], state: 'loading', error: '', quote: null, total: '¥0', allSelected: false, selectedCount: 0, managing: false, failedImages: {} },
-  onShow() { return this.refresh() },
+  onShow() { this.setData({ managing: false }); return this.refresh() },
   async refresh() {
     const token = this.refreshToken = (this.refreshToken || 0) + 1
     const rows = cart.read()
     this.setData({ allSelected: rows.length > 0 && rows.every((row) => row.selected !== false),
       selectedCount: rows.filter((row) => row.selected !== false).reduce((total, row) => total + row.quantity, 0),
-      rows: rows.map((row) => ({ ...row, price: Number.isSafeInteger(row.seenPriceFen) ? money(row.seenPriceFen) : '待核价', priceCached: true })), state: rows.length ? 'loading' : 'empty', error: '', quote: null })
+      rows: rows.map((row) => ({ ...row, price: Number.isSafeInteger(row.seenPriceFen) ? money(row.seenPriceFen) : '待核价', priceCached: true })), state: rows.length ? 'loading' : 'empty', error: '', quote: null,
+      ...(!rows.length ? { managing: false, total: '¥0' } : {}) })
     if (!rows.length) return
     const selected = cart.selected()
     if (!selected.length) { this.setData({ state: 'ready', total: '¥0' }); return }
@@ -31,7 +32,7 @@ Page({
           priceCached: !lines.has(row.skuId) })) })
     } catch (error) { if (token === this.refreshToken) this.setData({ state: 'ready', error: error.message, total: '¥0' }) }
   },
-  toggleManaging() { this.setData({ managing: !this.data.managing }) },
+  toggleManaging() { if (this.data.rows.length) this.setData({ managing: !this.data.managing }) },
   reselectSku(event) {
     const row = this.data.rows.find((item) => item.skuId === event.currentTarget.dataset.id)
     const id = row && row.live && row.live.productId

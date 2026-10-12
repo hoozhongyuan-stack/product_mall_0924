@@ -1,4 +1,5 @@
 {
+  "navigationBarTitleText": "分类",
   "usingComponents": {
     "storefront-shell": "/components/storefront-shell/index"
   }

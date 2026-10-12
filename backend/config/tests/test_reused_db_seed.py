@@ -20,7 +20,7 @@ class ReusedDatabaseSeedTests(TestCase):
         from catalog.models import MemberGrade
         from config.test_seed import restore_migration_seed_rows
         from fulfillment.models import FulfillmentPolicy
-        from pages.models import MicroPage, PagePublication, StartupConfig, StartupPublication
+        from pages.models import HomeSelection, MicroPage, PagePublication, StartupConfig, StartupPublication
         from payments.models import OfflinePaymentPolicy
         from shipping.models import ShippingPolicy
         from django.db import connection
@@ -30,7 +30,7 @@ class ReusedDatabaseSeedTests(TestCase):
         # Simulate Django's test-database flush, which uses TRUNCATE. Normal
         # DELETE is deliberately forbidden so live publication epochs survive.
         with connection.cursor() as cursor:
-            cursor.execute("TRUNCATE page_publication, startup_publication")
+            cursor.execute("TRUNCATE home_selection, page_publication, startup_publication")
         MicroPage.objects.filter(page_type="HOME").delete()
         StartupConfig.objects.filter(pk=1).delete()
         ShippingPolicy.objects.filter(pk=1).delete()
@@ -45,6 +45,7 @@ class ReusedDatabaseSeedTests(TestCase):
         self.assertTrue(GroupPermission.objects.filter(group=group, code="catalog.read").exists())
         self.assertTrue(MemberGrade.objects.filter(code="normal").exists())
         self.assertTrue(PagePublication.objects.filter(page__page_type="HOME").exists())
+        self.assertEqual(HomeSelection.objects.get(pk=1).page_id, MicroPage.objects.get(page_type="HOME").id)
         self.assertTrue(StartupPublication.objects.filter(config_id=1).exists())
         self.assertEqual(ShippingPolicy.objects.get(pk=1).fee_fen, custom.fee_fen)
         self.assertTrue(OfflinePaymentPolicy.objects.filter(pk=1).exists())
