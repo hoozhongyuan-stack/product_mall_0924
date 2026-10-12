@@ -249,9 +249,15 @@ def submit_order(member, body, key):
             raise OrderError(str(exc), getattr(exc, 'code', 'STORE_UNAVAILABLE'), getattr(exc, 'status', 409)) from exc
         if store_snapshot != quote.store_snapshot:
             raise OrderError('前置仓或配送规则已变化，请重新报价。', 'STORE_POLICY_CHANGED', 409)
-        current = _current_lines(quote, member)
         try:
             policy = current_shipping_policy(lock=True)
+            # Exchange submission locks benefit policy before catalog rows.
+            # Preserve that shared order while keeping SKU units stable for weight pricing.
+            from benefits.policy import current_policy
+            benefit_policy = current_policy(lock=True)
+            if quote.benefit_policy_snapshot != benefit_policy:
+                raise OrderError("等级或积分规则已变化，请重新报价。", "BENEFIT_POLICY_CHANGED", 409)
+            current = _current_lines(quote, member)
             shipping_snapshot = quote_shipping(quote.lines, store, delivery_mode,
                 shipping_address(member, quote.address_id, store_snapshot.get('dining'), lock=True),
                 quote.goods_total_fen-quote.coupon_discount_fen, policy=policy)
@@ -263,10 +269,6 @@ def submit_order(member, body, key):
         if (policy.revision != quote.shipping_policy_revision or shipping_snapshot != quote.shipping_snapshot
                 or shipping_fee != quote.shipping_fee_fen):
             raise OrderError("配送规则或费用已变化，请重新报价。", "SHIPPING_CHANGED", 409)
-        from benefits.policy import current_policy
-        benefit_policy = current_policy(lock=True)
-        if quote.benefit_policy_snapshot != benefit_policy:
-            raise OrderError("等级或积分规则已变化，请重新报价。", "BENEFIT_POLICY_CHANGED", 409)
         warehouse = store.warehouse if store else Warehouse.objects.filter(is_default=True, enabled=True).first()
         if not warehouse:
             raise OrderError("默认仓不可用。", "WAREHOUSE_UNAVAILABLE", 409)
