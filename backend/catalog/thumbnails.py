@@ -4,6 +4,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from contextlib import contextmanager
@@ -84,8 +85,8 @@ def source_state(asset):
 
 
 def source_bytes(asset, source):
-    # Bounded input is piped to the decoder: it cannot follow embedded URLs,
-    # reopen a swapped source pathname, or read any other private media file.
+    # Validate bounded bytes before passing a pipe or private seekable copy to
+    # the fixed decoder; it never reopens a potentially swapped asset pathname.
     with source.open("rb") as stream:
         data = stream.read(MAX_SOURCE_BYTES + 1)
     if len(data) != asset.byte_size or hashlib.sha256(data).hexdigest() != asset.sha256:
@@ -120,6 +121,22 @@ def valid_thumbnail(path):
         return False
 
 
+@contextmanager
+def decoder_input(data, image_format):
+    if image_format != "gif":
+        yield "pipe", "pipe:0", {"input": data}
+        return
+    # GIF demuxers can seek while probing/replaying multi-frame input. Use an
+    # unlinked private copy of the verified bytes, never the original pathname.
+    with tempfile.TemporaryFile() as source:
+        source.write(data)
+        source.flush()
+        source.seek(0)
+        descriptor = source.fileno()
+        prefix = "/proc/self/fd" if sys.platform.startswith("linux") else "/dev/fd"
+        yield "file", f"{prefix}/{descriptor}", {"pass_fds": (descriptor,)}
+
+
 def generate_thumbnail(asset, source, destination):
     binary = shutil.which(settings.PRODUCT_MEDIA_FFMPEG_BIN)
     if not binary:
@@ -129,14 +146,18 @@ def generate_thumbnail(asset, source, destination):
     # protocols; the existing deployment image already contains ffmpeg.
     arguments = [binary, "-hide_banner", "-nostdin", "-v", "error", "-xerror",
                  "-max_alloc", "67108864", "-threads", "1", "-filter_threads", "1",
-                 "-protocol_whitelist", "pipe", "-f", image_format, "-i", "pipe:0",
                  "-map", "0:v:0", "-frames:v", "1", "-an", "-sn", "-dn",
                  "-vf", f"scale=w='min({EDGE},iw)':h='min({EDGE},ih)':force_original_aspect_ratio=decrease",
                  "-c:v", "mjpeg", "-pix_fmt", "yuvj420p", "-threads", "1", "-q:v", "8", "-fs", str(MAX_BYTES + 1),
                  "-f", "image2", "-y", str(destination)]
     try:
-        result = subprocess.run(arguments, input=data, stdout=subprocess.DEVNULL,
-                                stderr=subprocess.PIPE, timeout=8, check=False)
+        with decoder_input(data, image_format) as (protocol, input_path, input_options):
+            input_arguments = ["-protocol_whitelist", protocol, "-f", image_format, "-i", input_path]
+            # Input options must precede output options (map/frame/scale/etc.).
+            position = arguments.index("-map")
+            invocation = [*arguments[:position], *input_arguments, *arguments[position:]]
+            result = subprocess.run(invocation, **input_options, stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.PIPE, timeout=8, check=False)
     except subprocess.TimeoutExpired as exc:
         raise unavailable() from exc
     if result.returncode or result.stderr.strip() or not valid_thumbnail(destination):
