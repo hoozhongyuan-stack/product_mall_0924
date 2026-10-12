@@ -107,24 +107,24 @@ class GrossOrderSplitTests(TestCase):
         class Lines:
             def select_related(self,*args):return self
             def order_by(self,*args):return lines
-        return SimpleNamespace(lines=Lines(),shipping_fee_fen=freight,payable_fen=sum(line.payable_fen for line in lines)+freight)
+        return SimpleNamespace(lines=Lines(),shipping_fee_fen=freight,shipping_snapshot=dict(eligible=True,costFen=freight,customerFeeFen=freight,warehouseBearsFen=0,platformBearsFen=0),payable_fen=sum(line.payable_fen for line in lines)+freight)
     def line(self,paid,cost,ratio,identity=1,qty=1):
         from types import SimpleNamespace
         import uuid
         return SimpleNamespace(id=uuid.UUID(int=identity),sku_id=uuid.UUID(int=identity),payable_fen=paid,quantity=qty,store_finance=SimpleNamespace(configured=True,purchase_cost_fen=cost,platform_share_bps=ratio))
-    def test_shipping_is_in_gross_profit_basis_then_deducted_from_store(self):
+    def test_customer_shipping_is_pass_through_and_excluded_from_goods_profit(self):
         from payments.store_finance import order_split
         result=order_split(self.order([self.line(9000,6000,2000)],1000))
-        self.assertEqual((result['paid_fen'],result['platform_fen'],result['store_fen']),(10000,800,8200))
+        self.assertEqual((result['paid_fen'],result['platform_fen'],result['store_fen']),(10000,600,8400))
         result=order_split(self.order([self.line(10000,6000,2000)],1000))
-        self.assertEqual((result['paid_fen'],result['platform_fen'],result['store_fen']),(11000,1000,9000))
+        self.assertEqual((result['paid_fen'],result['platform_fen'],result['store_fen']),(11000,800,9200))
     def test_mixed_sku_ratios_largest_remainder_and_floor_conserve_money(self):
         from payments.store_finance import order_split
         order=self.order([self.line(101,50,3333,1),self.line(100,60,1000,2)],3)
         result=order_split(order)
-        # Freight 2 and 1; gross line bases 103 and 101, platform floors 17+4.
-        self.assertEqual(result['platform_fen'],21)
-        self.assertEqual(result['store_fen'],180)
+        # Goods bases 101 and 100; customer freight does not change platform profit.
+        self.assertEqual(result['platform_fen'],20)
+        self.assertEqual(result['store_fen'],181)
         self.assertEqual(result['store_fen']+result['platform_fen']+result['freight_fen'],result['paid_fen'])
 
 
@@ -168,3 +168,28 @@ class WithdrawalConcurrencyTests(TransactionTestCase):
         self.assertEqual(statuses.count('PAID'),1)
         self.wallet.refresh_from_db();self.assertEqual(self.wallet.paid_fen,5000)
         self.assertEqual(StoreWalletEvent.objects.filter(kind='OFFLINE_PAY').count(),1)
+
+class ShippingFundingSplitTests(GrossOrderSplitTests):
+    def test_business_free_warehouse_cost_only_once(self):
+        from payments.store_finance import order_split
+        order=self.order([self.line(10000,6000,2000)],0)
+        order.shipping_snapshot=dict(eligible=True,costFen=1000,customerFeeFen=0,warehouseBearsFen=1000,platformBearsFen=0)
+        result=order_split(order)
+        self.assertEqual((result['platform_fen'],result['store_fen'],result['freight_fen']),(800,8200,1000))
+        self.assertEqual(result['paid_fen'],result['platform_fen']+result['store_fen']+result['freight_fen'])
+
+    def test_platform_free_does_not_reduce_warehouse_and_can_exceed_commission(self):
+        from payments.store_finance import order_split
+        order=self.order([self.line(10000,6000,2000)],0)
+        order.shipping_snapshot=dict(eligible=True,costFen=1000,customerFeeFen=0,warehouseBearsFen=0,platformBearsFen=1000)
+        result=order_split(order)
+        self.assertEqual((result['platform_fen'],result['store_fen'],result['freight_fen']),(-200,9200,1000))
+        self.assertEqual(result['paid_fen'],result['platform_fen']+result['store_fen']+result['freight_fen'])
+
+    def test_warehouse_can_fund_shipping_from_positive_settlement_below_procurement_cost(self):
+        from payments.store_finance import order_split
+        order=self.order([self.line(10000,6000,2000)],0)
+        order.shipping_snapshot=dict(eligible=True,costFen=4000,customerFeeFen=0,warehouseBearsFen=4000,platformBearsFen=0)
+        result=order_split(order)
+        self.assertEqual(result['store_fen'],5200)
+        self.assertLess(result['store_fen'],result['cost_fen'])

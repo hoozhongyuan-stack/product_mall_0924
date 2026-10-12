@@ -107,7 +107,7 @@ class RemainingShippingTests(TransactionTestCase):
         from inventory.models import InventoryBalance
         from orders.models import Order
         from orders.service import submit_order
-        from checkout.service import create_quote
+        from shipping.tests.helpers import selected_physical_quote as create_quote
         from payments.service import record_verified_payment
         from aftersales.guards import assert_shippable_locked
         product=self.sku.product;product.fulfillment_kind='SHIP';product.save(update_fields=['fulfillment_kind'])

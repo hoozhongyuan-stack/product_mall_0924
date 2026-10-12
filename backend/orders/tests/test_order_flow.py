@@ -56,6 +56,8 @@ class OrderFlowTests(TestCase):
 
     def _quote(self, items=None, token=None, **extra):
         body = {"items": items or [{"skuId": str(self.skus[0].id), "quantity": 2}], **extra}
+        from shipping.tests.helpers import physical_selection
+        body=physical_selection(body)
         response = self.client.post("/api/v1/app/checkout/quotes", data=json.dumps(body),
                                     content_type="application/json",
                                     HTTP_AUTHORIZATION=f"Bearer {token or self.token}")

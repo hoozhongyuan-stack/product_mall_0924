@@ -53,6 +53,8 @@ class StoreDeliveryFlowTests(TransactionTestCase):
         flow.FulfillmentFlowTests.setUp(self)
         self.store = Store.objects.create(warehouse=self.balance.warehouse, name='测试前置仓', contact_name='店长', contact_phone='13800000000', address='测试路', supported_modes=['PICKUP','DELIVERY','EXPRESS'],latitude=30,longitude=120,delivery_radius_meters=5000,delivery_fee_fen=0)
         StoreStaff.objects.create(store=self.store, member=self.member, permissions=['orders'])
+        from shipping.tests.helpers import configure_zone
+        configure_zone(self.store,fee=0,radius=5000)
 
     def local_order(self, mode, paid=True):
         from checkout.service import create_quote

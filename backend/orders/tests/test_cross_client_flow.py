@@ -29,6 +29,9 @@ class CrossClientFlowTests(TransactionTestCase):
         self.assertEqual(login.status_code, 200)
 
     def _post(self, client, path, body, key=None, **headers):
+        if path=='/api/v1/app/checkout/quotes':
+            from shipping.tests.helpers import physical_selection
+            body=physical_selection(body)
         if key:
             headers["HTTP_IDEMPOTENCY_KEY"] = key
         return client.post(path, data=json.dumps(body), content_type="application/json", **headers)

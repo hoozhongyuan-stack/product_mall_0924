@@ -17,7 +17,7 @@ export interface WechatRefund {
 export interface AfterSaleCase {
   storeNotes?: {id:string;kind:string;note:string;receivedQuantity:number;salableQuantity:number;occurredAt:string;platformReviewRequired:boolean}[]
   orderKind?:'CASH'|'POINTS';exchangePoints?:number;requestedRefundPoints?:number;pointsToReturn?:number;effectiveRefundPoints?:number;refundablePoints?:number;returnedPoints?:number
-  caseId: string; orderId: string; orderNo: string; lineId: string; title: string; kind: string; redemptionScope: string
+  caseId: string; caseNo?: string; orderId: string; orderNo: string; lineId: string; title: string; kind: string; redemptionScope: string
   quantity: number; amountFen: number; reason: string; status: string; revision: number; createdAt: string; updatedAt: string
   memberName?: string; paymentMethod: string; events: AfterSaleEvent[]; eventCount?: number
   returnShipment?: {carrierName:string;trackingNo:string;revision:number;submittedAt:string} | null

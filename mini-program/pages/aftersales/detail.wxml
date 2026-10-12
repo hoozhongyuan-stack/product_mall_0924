@@ -10,6 +10,8 @@
     <view class="status-panel"><view class="title">{{saleCase.statusLabel}}</view><view class="status-copy">{{saleCase.statusCopy}}</view></view>
     <view class="section">
       <view class="section-title">原申请内容</view><view class="strong">{{saleCase.title}}</view>
+      <view wx:if="{{saleCase.caseNo}}" class="row"><text>售后单号</text><text user-select>{{saleCase.caseNo}}</text></view>
+      <view wx:if="{{saleCase.refundNo}}" class="row"><text>退款单号</text><text user-select>{{saleCase.refundNo}}</text></view>
       <view class="row"><text>订单号</text><text user-select>{{saleCase.orderNo}}</text></view>
       <view class="row"><text>售后类型</text><text>{{saleCase.kindLabel}}</text></view>
       <view class="row"><text>申请范围</text><text>{{saleCase.scopeLabel}}</text></view>

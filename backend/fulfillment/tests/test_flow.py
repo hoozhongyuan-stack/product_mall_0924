@@ -14,7 +14,7 @@ from notifications.models import MessageTask
 from orders.models import OrderLine
 from payments.service import record_verified_payment
 from payments.tests import test_payment_flow as payment_flow
-from checkout.service import create_quote
+from shipping.tests.helpers import selected_physical_quote as create_quote
 from orders.service import submit_order
 from customers.models import CustomerAddress
 from customers.models import Member, MemberSession

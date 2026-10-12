@@ -277,3 +277,11 @@ class StoreApiTests(StoreAccessTests):
         for body in [{'revision':1,'onSale':'bad'},{'revision':1,'stock':False},{'revision':999},{'revision':1,'stock':[{}]}]:
             with self.assertRaises(StoreError):update_product(self.store,self.product.id,body,self.member)
         self.assertAlmostEqual(distance_meters(0,0,0,0),0)
+
+
+class DeliveryConfigurationTests(TestCase):
+    def test_delivery_store_no_longer_requires_legacy_radius_or_fee_fields(self):
+        row=save_store(dict(name='围栏配置店',contactName='店长',contactPhone='13800000000',address='测试路',latitude=22.5,longitude=114.1,supportedModes=['DELIVERY']))
+        self.assertEqual(row.supported_modes,['DELIVERY'])
+        self.assertNotIn('deliveryRadiusMeters',store_data(row))
+        self.assertNotIn('deliveryFeeFen',store_data(row))

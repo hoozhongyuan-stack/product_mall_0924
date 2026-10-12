@@ -1,13 +1,13 @@
 <import src="./published-content.wxml" />
 
 <view class="home-page" style="background-color: {{theme.pageBackgroundColor}};">
-  <view class="home-header store-home-header" style="background-color: {{theme.headerBackgroundColor}}; color: {{theme.brandTextColor}}; padding-top: {{headerPadding}}px;">
+  <view wx:if="{{state === 'ready'}}" class="home-header store-home-header" style="background-color: {{theme.headerBackgroundColor}}; color: {{theme.brandTextColor}}; padding-top: {{headerPadding}}px;">
     <view class="store-brand-row" style="padding-right: {{capsuleRight}}px;">
       <view class="store-logo"><image src="{{storeLogoUrl || '/assets/ui/parcel.svg'}}" mode="aspectFit" data-url="{{storeLogoUrl}}" binderror="onStoreLogoError" aria-label="前置仓Logo"/></view><view class="store-brand-body"><view class="store-name-line"><text class="brand">{{diningVisit ? diningVisit.restaurant.name : (store ? store.name : '请选择前置仓')}}</text><button wx:if="{{!diningVisit}}" class="store-switch" bindtap="chooseStore">⇄ 切换</button></view><view class="store-hours">{{diningVisit ? diningVisit.table.number + ' 桌 · 送至本店餐桌' : (store ? (store.acceptingOrders ? '营业接单 · ' : '暂停接单 · ') + store.openingHours : '选择前置仓，查看商品与库存')}}</view></view>
     </view><view wx:if="{{diningVisit}}" class="restaurant-address">{{diningVisit.restaurant.address}}</view><view wx:if="{{storeError}}" class="store-location-help" bindtap="chooseStore">{{storeError}}</view>
   </view>
 
-  <view wx:if="{{state === 'loading'}}" class="home-state" role="status">正在加载首页…</view>
+  <view wx:if="{{state === 'loading'}}" class="home-skeleton" role="status" aria-label="正在准备首页"><view class="skeleton-header"><view class="skeleton-logo"/><view class="skeleton-copy"><view class="skeleton-title"/><view class="skeleton-subtitle"/></view></view><view class="skeleton-search"/><view class="skeleton-banner"/><view class="skeleton-content"/><view class="skeleton-caption">正在准备首页…</view></view>
   <view wx:elif="{{state === 'unpublished'}}" class="home-state">
     <view class="state-title">首页内容准备中</view>
     <view class="state-copy">商品分类仍可浏览，欢迎先去看看。</view>
@@ -23,4 +23,4 @@
     <template is="published-content" data="{{components: components, keyword: keyword, failedAssets: failedAssets, couponState: couponState, couponData: couponData, couponError: couponError, couponClaim: couponClaim}}" />
   </block>
 </view>
-<storefront-shell show-navigation="{{true}}" show-service="{{true}}" />
+<storefront-shell wx:if="{{state !== 'loading'}}" show-navigation="{{true}}" show-service="{{true}}" />

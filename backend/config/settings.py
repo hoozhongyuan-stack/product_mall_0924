@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "wechat_open_platform",
     "checkout",
     "orders",
+    "business_numbers",
     "fulfillment",
     "payments",
     "aftersales",

@@ -22,6 +22,8 @@ class DiningCheckoutTests(TestCase):
         store.delivery_fee_fen = 0
         store.delivery_radius_meters = 5000
         store.save()
+        from shipping.tests.helpers import configure_zone
+        configure_zone(store,fee=0,radius=5000)
         restaurant = Restaurant.objects.create(name='餐饮小馆', address='示例街 8 号', contact_name='店长', contact_phone='13800000000', latitude='28.200001', longitude='112.900001', assigned_store=store)
         table = DiningTable.objects.create(restaurant=restaurant, number='包间01')
         RestaurantProduct.objects.create(restaurant=restaurant, product=self.product, on_sale=True)

@@ -12,7 +12,7 @@ from django.utils import timezone
 from aftersales.service import apply_case, review_case, withdraw_case
 from benefits.service import grant_points
 from catalog.models import Product, Sku, SkuUnitVersion
-from checkout.service import create_quote
+from shipping.tests.helpers import selected_physical_quote as create_quote
 from customers.models import CustomerAddress, Member, MemberSession
 from fulfillment.models import Carrier, RedeemVoucher
 from fulfillment.service import confirm_receipt, redeem, ship_order

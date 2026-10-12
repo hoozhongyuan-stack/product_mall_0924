@@ -10,7 +10,7 @@ export const adminSections = [
   { name: '餐饮联盟', paths: ['/dining-alliance', '/dining-alliance/product-ratios', '/dining-alliance/finance'] },
   { name: '会员', paths: ['/members', '/members/rules'] },
   { name: '营销', paths: ['/coupons', '/exchange-offers'] },
-  { name: '店铺', paths: ['/store/info', '/pages/micro', '/store/navigation', '/assets', '/store/customer-service'] },
+  { name: '店铺', paths: ['/store/info', '/pages/micro', '/store/navigation', '/assets', '/store/customer-service', '/shipping-rules'] },
   { name: '小程序', paths: ['/store/wechat-integration', '/subscription-messages', '/subscription-message-tasks', '/store/code-versions'] },
   { name: '系统管理', paths: ['/accounts', '/permission-groups', '/audit-logs'] },
 ]

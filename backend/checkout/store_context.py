@@ -29,8 +29,6 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
             raise ValueError('扫码访问编号格式不正确，请重新扫码。') from exc
         from dining_alliance.access import checkout_context
         store, dining = checkout_context(session_id, member, lock=lock)
-        if store.delivery_fee_fen is None:
-            raise ValueError('服务前置仓配送费尚未配置。')
         return store, 'DELIVERY', {**_store_snapshot(store), 'dining': dining}
     store_id, mode = body.get('storeId'), body.get('deliveryMode', '')
     if store_id is None:
@@ -51,8 +49,6 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
         raise ValueError('请选择该前置仓支持的交付方式。')
     snapshot = _store_snapshot(store)
     if mode == 'DELIVERY':
-        if store.delivery_fee_fen is None or not store.delivery_radius_meters:
-            raise ValueError('前置仓配送费用或范围尚未配置。')
         if store.latitude is None or store.longitude is None:
             raise ValueError('前置仓定位尚未配置，无法验证配送范围。')
         addresses = CustomerAddress.objects.select_for_update() if lock else CustomerAddress.objects
@@ -60,8 +56,7 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
         pending_reason = ''
         if not address or address.latitude is None or address.longitude is None:
             pending_reason = '配送到家需要选择已定位的收货地址。'
-        elif distance_meters(store.latitude, store.longitude, address.latitude, address.longitude) > store.delivery_radius_meters:
-            pending_reason = '收货地址不在该前置仓配送范围内，请更换地址或交付方式。'
+
         if pending_reason:
             if not allow_address_pending:
                 raise ValueError(pending_reason)
@@ -72,10 +67,6 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
         snapshot['addressLatitude'] = str(address.latitude)
         snapshot['addressLongitude'] = str(address.longitude)
     return store, mode, snapshot
-
-
-def store_shipping_fee(store, mode, express_fee):
-    return 0 if mode == 'PICKUP' else store.delivery_fee_fen if mode == 'DELIVERY' else express_fee
 
 
 def _store_snapshot(store):

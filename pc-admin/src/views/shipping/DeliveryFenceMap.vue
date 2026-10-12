@@ -1,0 +1,20 @@
+<script setup lang="ts">
+import {ref,onMounted,onBeforeUnmount,watch} from 'vue'
+import {api} from '../../api'
+import {loadAMap,type AMapSDK,type MapInstance,type MapEvent,type MapRuntime} from '../../shared/maps/amap-runtime'
+import {ElButton} from 'element-plus'
+import type {Point,Zone} from './types'
+interface Overlay {setMap(map:MapInstance|null):void}
+type FenceSDK=AMapSDK&{Circle:new(options:Record<string,unknown>)=>Overlay;Polygon:new(options:Record<string,unknown>)=>Overlay}
+const props=defineProps<{modelValue:Zone;warehouse:Point|null;disabled:boolean;contextKey:string}>(),emit=defineEmits<{'update:modelValue':[Zone]}>()
+const canvas=ref<HTMLElement>(),loading=ref(false),error=ref('');let sdk:FenceSDK|undefined,map:MapInstance|undefined,overlay:Overlay|undefined,marker:Overlay|undefined,generation=0
+function draw(){if(!sdk||!map)return;overlay?.setMap(null);overlay=undefined;const z=props.modelValue,strokeColor=z.kind==='EXCLUDE'?'#9d6b1c':'#a82432';if(z.kind==='CIRCLE'&&z.center)overlay=new sdk.Circle({center:[z.center.longitude,z.center.latitude],radius:z.radiusMeters||0,strokeColor,fillColor:strokeColor,fillOpacity:0.12,strokeWeight:2});else if(z.polygon.length)overlay=new sdk.Polygon({path:z.polygon.map(p=>[p.longitude,p.latitude]),strokeColor,fillColor:strokeColor,fillOpacity:0.14,strokeWeight:2});overlay?.setMap(map)}
+function click(event:MapEvent){if(props.disabled||!event.lnglat)return;const p={latitude:event.lnglat.getLat(),longitude:event.lnglat.getLng()},z=props.modelValue;if(!Number.isFinite(p.latitude)||!Number.isFinite(p.longitude))return;emit('update:modelValue',z.kind==='CIRCLE'?{...z,center:p}:{...z,polygon:[...z.polygon,p]})}
+function destroy(){overlay?.setMap(null);marker?.setMap(null);map?.destroy();map=undefined;sdk=undefined;overlay=undefined;marker=undefined}
+async function init(){const current=++generation;destroy();loading.value=true;error.value='';try{const runtime=await api<MapRuntime>('/stores/map-runtime'),result=await loadAMap(runtime);if(current!==generation||!canvas.value)return;if(!('Circle' in result)||!('Polygon' in result))throw new Error('地图绘图组件不可用。');sdk=result as FenceSDK;const center=props.warehouse||props.modelValue.center;map=new sdk.Map(canvas.value,{zoom:14,resizeEnable:true,...(center?{center:[center.longitude,center.latitude]}:{})});map.on('click',click);if(props.warehouse){marker=new sdk.Marker({position:[props.warehouse.longitude,props.warehouse.latitude],title:'前置仓'}) as Overlay;marker.setMap(map)}draw()}catch(e){if(current===generation)error.value=e instanceof Error?e.message:'地图加载失败，请重试。'}finally{if(current===generation)loading.value=false}}
+watch(()=>JSON.stringify([props.modelValue.kind,props.modelValue.center,props.modelValue.radiusMeters,props.modelValue.polygon]),draw)
+watch(()=>props.contextKey,init)
+onMounted(init);onBeforeUnmount(()=>{generation++;destroy()})
+</script>
+<template><section aria-label="地图绘制配送围栏"><p>{{modelValue.kind==='CIRCLE'?'点击地图选择圆心，调整半径后查看覆盖范围。':'按顺序点击地图绘制边界，至少选择三个点。排除区优先于所有服务区。'}}</p><p v-if="loading" role="status">正在加载地图…</p><div ref="canvas" class="fence-map" :aria-busy="loading" aria-label="配送围栏地图"></div><p v-if="error" role="alert">{{error}} <ElButton :loading="loading" @click="init">重新加载地图</ElButton></p><div class="inline-fields" style="margin-top:12px"><ElButton :disabled="disabled||!modelValue.polygon.length" @click="emit('update:modelValue',{...modelValue,polygon:modelValue.polygon.slice(0,-1)})">撤销最后一个点</ElButton><ElButton :disabled="disabled" @click="emit('update:modelValue',{...modelValue,center:null,polygon:[]})">重新绘制</ElButton><span>{{modelValue.kind==='CIRCLE'?(modelValue.center?`圆心 ${modelValue.center.latitude.toFixed(6)}, ${modelValue.center.longitude.toFixed(6)}`:'尚未选择圆心'):`已选 ${modelValue.polygon.length} 个点`}}</span></div></section></template>
+<style scoped>.fence-map{height:400px;width:100%;background:var(--mall-color-background,#f4f5f7);border-radius:8px;border:1px solid var(--mall-color-border)}@media(max-width:600px){.fence-map{height:320px}}</style>

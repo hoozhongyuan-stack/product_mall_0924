@@ -51,8 +51,10 @@ def checkout_context(session_id, member, lock=False):
         raise DiningError("店铺设置已变化，请重新扫码。", "DINING_SCAN_REQUIRED", 409)
     if not restaurant.enabled or not table.enabled or not store.enabled or not store.accepting_orders or not store.warehouse.enabled or 'DELIVERY' not in store.supported_modes:
         raise DiningError('该餐桌或服务前置仓暂不可下单。', 'DINING_UNAVAILABLE', 409)
-    if store.latitude is None or store.longitude is None or store.delivery_radius_meters is None or distance_meters(float(restaurant.latitude), float(restaurant.longitude), float(store.latitude), float(store.longitude)) > store.delivery_radius_meters:
-        raise DiningError('餐饮店不在服务前置仓配送范围内。', 'DINING_OUT_OF_RANGE', 409)
+    from shipping.service import delivery_point_eligibility
+    message = delivery_point_eligibility(store, {'latitude':float(restaurant.latitude),'longitude':float(restaurant.longitude)})
+    if message:
+        raise DiningError(message, 'DINING_OUT_OF_RANGE', 409)
     return store, {'sessionId': str(session.id), 'restaurantId': str(restaurant.id), 'tableId': str(table.id), 'tableNumber': table.number, 'name': restaurant.name, 'contactPhone': restaurant.contact_phone, 'address': restaurant.address, 'latitude': float(restaurant.latitude), 'longitude': float(restaurant.longitude), 'revision': restaurant.revision, 'tableRevision': table.revision, 'storeRevision': store.revision}
 
 

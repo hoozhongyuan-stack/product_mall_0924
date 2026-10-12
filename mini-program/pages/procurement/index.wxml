@@ -20,4 +20,15 @@
  <view wx:if="{{panel === 'products'}}" class="bottom-bar"><view><text class="muted">已选 {{selected.length}} 个规格</text><view class="amount">{{goodsLabel}}</view></view><button bindtap="confirm" disabled="{{!selected.length || busy || uncertain}}">核对进货单</button></view>
  </block>
 </view>
-<view wx:if="{{specEditor}}" class="overlay"><view class="dialog" role="dialog" aria-modal="true" aria-label="选择进货规格"><view class="row"><view class="title">{{specEditor.name}}</view><button class="text-button" bindtap="closeSpecs">关闭</button></view><view class="muted">按每个规格的销售单位填写进货数量。</view><scroll-view scroll-y class="spec-scroll"><view wx:for="{{specEditor.skus}}" wx:key="id" class="spec-row"><view><view>{{item.specLabel}}</view><view class="muted">{{item.costLabel}} / {{item.saleUnit}}</view></view><input type="number" value="{{item.draft}}" data-id="{{item.id}}" bindinput="quantity" disabled="{{!item.selectable}}" aria-label="{{item.specLabel}}进货数量" maxlength="3"/></view></scroll-view><view wx:if="{{specError}}" class="error">{{specError}}</view><button bindtap="saveSpecs">确定数量</button></view></view>
+<view wx:if="{{specEditor}}" class="overlay quantity-overlay" style="bottom:{{keyboardHeight}}px;" catchtouchmove="noop">
+ <view class="dialog quantity-dialog" role="dialog" aria-modal="true" aria-label="选择进货规格">
+  <view class="quantity-heading"><view class="row"><view class="title">{{specEditor.name}}</view><button class="text-button" bindtap="closeSpecs">关闭</button></view><view class="muted">按销售单位填写数量，0 表示不选。</view></view>
+  <scroll-view scroll-y class="spec-scroll" scroll-into-view="{{specFocusId}}" scroll-with-animation="{{true}}">
+   <view wx:for="{{specEditor.skus}}" wx:key="id" id="sku-{{item.id}}" class="spec-row {{!item.selectable ? 'spec-disabled' : ''}}">
+    <view class="spec-summary"><view>{{item.specLabel}}</view><view class="muted">{{item.costLabel}} / {{item.saleUnit}}</view><view wx:if="{{!item.selectable}}" class="muted">暂不可采购，请联系平台配置进货价与销售单位。</view></view>
+    <view class="quantity-stepper"><button data-id="{{item.id}}" data-step="-1" bindtap="stepQuantity" disabled="{{!item.selectable || item.draft <= 0}}" aria-label="减少{{item.specLabel}}数量">−</button><input type="number" value="{{item.draft}}" data-id="{{item.id}}" bindinput="quantity" bindfocus="quantityFocus" bindblur="quantityBlur" bindkeyboardheightchange="keyboardHeight" adjust-position="{{false}}" cursor-spacing="20" disabled="{{!item.selectable}}" aria-label="{{item.specLabel}}进货数量" maxlength="3" confirm-type="done"/><button data-id="{{item.id}}" data-step="1" bindtap="stepQuantity" disabled="{{!item.selectable || item.draft >= 999}}" aria-label="增加{{item.specLabel}}数量">＋</button></view>
+   </view>
+  </scroll-view>
+  <view class="quantity-footer"><view wx:if="{{specError}}" class="error" role="alert">{{specError}}</view><button bindtap="saveSpecs">确定数量</button></view>
+ </view>
+</view>

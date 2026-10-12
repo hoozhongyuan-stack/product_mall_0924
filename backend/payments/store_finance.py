@@ -38,25 +38,26 @@ def snapshot_lines(order,lines):
 
 
 def order_split(order):
-    """Allocate gross paid amount including buyer freight across SKU lines."""
+    """Split goods profit; customer freight passes to delivery rather than profit."""
     lines=list(order.lines.select_related('store_finance').order_by('sku_id'))
     if not lines:raise StoreError('订单缺少商品财务快照。','SETTLEMENT_HELD',409)
-    total=sum(line.payable_fen for line in lines)
-    if order.shipping_fee_fen and total==0:raise StoreError('零商品实付订单的运费分配待处理。','SETTLEMENT_HELD',409)
-    freight=order.shipping_fee_fen
-    allocated={line.id:(freight*line.payable_fen//total if total else 0) for line in lines}
-    remainder=freight-sum(allocated.values())
-    ranked=sorted(lines,key=lambda line:(-(freight*line.payable_fen%total) if total else 0,str(line.sku_id)))
-    for line in ranked[:remainder]:allocated[line.id]+=1
-    platform=cost=0
+    snapshot=order.shipping_snapshot
+    if not snapshot or not snapshot.get('eligible'):
+        raise StoreError('订单缺少有效配送成本快照。','SETTLEMENT_HELD',409)
+    fields=['costFen','customerFeeFen','warehouseBearsFen','platformBearsFen']
+    if any(type(snapshot.get(key)) is not int or snapshot[key]<0 for key in fields) or snapshot['costFen']!=sum(snapshot[key] for key in fields[1:]) or snapshot['customerFeeFen']!=order.shipping_fee_fen:
+        raise StoreError('配送成本快照不一致。','SETTLEMENT_HELD',409)
+    freight=snapshot['costFen'];platform=cost=0
     for line in lines:
-        try:snapshot=line.store_finance
+        try:finance=line.store_finance
         except StoreOrderLineFinance.DoesNotExist:raise StoreError('历史订单缺少财务快照，不自动补算。','SETTLEMENT_HELD',409)
-        if not snapshot.configured:raise StoreError('下单时商品规格未配置分润规则。','SETTLEMENT_HELD',409)
-        split=calculate_split(line.payable_fen+allocated[line.id],snapshot.purchase_cost_fen*line.quantity,snapshot.platform_share_bps,0)
+        if not finance.configured:raise StoreError('下单时商品规格未配置分润规则。','SETTLEMENT_HELD',409)
+        split=calculate_split(line.payable_fen,finance.purchase_cost_fen*line.quantity,finance.platform_share_bps,0)
         platform+=split['platformFen'];cost+=split['costFen']
-    store=order.payable_fen-platform-freight
-    if store<0:raise StoreError('前置仓结算金额不足承担运费。','SETTLEMENT_HELD',409)
+    store=sum(line.payable_fen for line in lines)-platform-snapshot['warehouseBearsFen']
+    # The platform funds its own campaign; never reduce warehouse income again.
+    platform-=snapshot['platformBearsFen']
+    if store<0:raise StoreError('前置仓结算金额不足承担经营包邮成本，等待平台处理。','SETTLEMENT_HELD',409)
     dining=0
     if getattr(order,'store_snapshot',{}).get('dining'):
         from dining_alliance.models import DiningOrderSnapshot

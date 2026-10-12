@@ -45,7 +45,7 @@ def listing(request, rows, admin=False):
     page,size,start=page_bounds(request)
     q=request.GET.get('q','').strip()
     if len(q)>120: raise StoreError('检索内容过长。')
-    if q: rows=rows.filter(Q(store__name__icontains=q)|Q(note__icontains=q)|Q(id__icontains=q.replace('JH','')))
+    if q: rows=rows.filter(Q(store__name__icontains=q)|Q(note__icontains=q)|Q(order_no__icontains=q))
     status=request.GET.get('status')
     if status: rows=rows.filter(status=status)
     store=request.GET.get('storeId')

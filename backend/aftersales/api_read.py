@@ -171,7 +171,7 @@ def case_data(case, admin=False, actor=None, detail=True):
         "pointsToReturn":effective_quantity*line.points_unit_price,
         "refundablePoints":max(0,line.quantity-refunded_qty-reserved_qty)*line.points_unit_price,
         "returnedPoints":refunded_qty*line.points_unit_price,
-        "caseId": str(case.id),
+        "caseId": str(case.id), "caseNo": case.case_no,
         "orderId": str(order.id),
         "orderNo": order.order_no,
         "lineId": str(line.id),

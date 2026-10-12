@@ -29,7 +29,7 @@ class StoreIncome(models.Model):
     store = models.ForeignKey('stores.Store',on_delete=models.PROTECT)
     paid_fen = models.PositiveBigIntegerField(default=0)
     cost_fen = models.PositiveBigIntegerField(default=0)
-    platform_fen = models.PositiveBigIntegerField(default=0)
+    platform_fen = models.BigIntegerField(default=0)
     freight_fen = models.PositiveBigIntegerField(default=0)
     store_fen = models.PositiveBigIntegerField(default=0)
     dining_commission_fen = models.PositiveBigIntegerField(default=0)

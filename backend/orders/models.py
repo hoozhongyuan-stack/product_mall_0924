@@ -32,6 +32,7 @@ class Order(models.Model):
     address_snapshot = models.JSONField(default=dict)
     goods_total_fen = models.BigIntegerField()
     shipping_fee_fen = models.BigIntegerField()
+    shipping_snapshot = models.JSONField(default=dict)
     shipping_policy_revision = models.PositiveIntegerField(default=1)
     coupon_id = models.UUIDField(null=True, blank=True)
     coupon_discount_fen = models.BigIntegerField(default=0)

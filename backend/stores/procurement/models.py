@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from django.db.models import Q
+from business_numbers.service import procurement_number
 
 
 class ProcurementSettings(models.Model):
@@ -25,6 +26,7 @@ class ProcurementProof(models.Model):
 
 class ProcurementOrder(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    order_no = models.CharField(max_length=24, unique=True, default=procurement_number, editable=False)
     store = models.ForeignKey('stores.Store', on_delete=models.PROTECT)
     member = models.ForeignKey('customers.Member', on_delete=models.PROTECT)
     request_key = models.UUIDField(unique=True)

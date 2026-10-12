@@ -2,6 +2,7 @@
 import uuid
 from django.db import models
 from django.db.models import F, Q
+from business_numbers.service import aftersale_number
 
 class AfterSalePolicy(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=1)
@@ -46,6 +47,7 @@ class AfterSaleCase(models.Model):
         REFUND_ONLY = "REFUND_ONLY"
         RETURN_REFUND = "RETURN_REFUND"
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    case_no = models.CharField(max_length=24, unique=True, default=aftersale_number, editable=False)
     order_line = models.ForeignKey("orders.OrderLine", on_delete=models.PROTECT, related_name="aftersale_cases")
     member = models.ForeignKey("customers.Member", on_delete=models.PROTECT)
     request_key = models.UUIDField()

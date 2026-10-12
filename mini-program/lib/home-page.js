@@ -12,15 +12,16 @@ module.exports = {
   data: {
     couponState: 'idle', couponData: {}, couponError: '', couponClaim: { busy: false, pending: null, message: '', claimError: '' },
     share: { title: '商城首页', imageUrl: '' }, state: 'loading', error: '', components: [], versionId: '',
-    theme: { pageBackgroundColor: '#FFF5E8', headerBackgroundColor: '#B63F32',
-      brandTextColor: '#FFF8EF' },
+    theme: { pageBackgroundColor: '#F4F5F5', headerBackgroundColor: '#FFFFFF',
+      brandTextColor: '#20252A' },
     keyword: '', failedAssets: {}, store: null, storeLogoUrl: '', storeError: '', capsuleTop: 30, capsuleRight: 190, headerPadding: 52,
   },
 
   onLoad() {
-    if (startup.redirectIfPending(() => this.onLoad())) return
+    startup.completeLaunch()
     dining.leave()
     this.homeToken = 0
+    this.hidden = false
     this.shown = false
     return this.loadStore().then(() => this.loadHome())
   },
@@ -47,25 +48,30 @@ module.exports = {
   onStoreLogoError(event) { if (event.currentTarget.dataset.url === this.data.storeLogoUrl) this.setData({ storeLogoUrl: '' }) },
   chooseStore() { wx.navigateTo({ url: '/pages/stores/list' }) },
   onShow() {
-    if (startup.redirectIfPending()) return
-    if (this.shown) return this.loadStore().then(() => this.loadHome())
+    this.hidden = false
+    if (this.shown) { this.beginHomeLoad(); return this.loadStore().then(() => this.loadHome()) }
     this.shown = true
   },
 
-  onHide() { this.storeGeneration = (this.storeGeneration || 0) + 1; this.homeToken += 1; pageCoupons.discard(this) },
+  onHide() { this.hidden = true; this.storeGeneration = (this.storeGeneration || 0) + 1; this.homeToken += 1; pageCoupons.discard(this) },
   onUnload() { this.onHide() },
 
   onPullDownRefresh() {
     this.loadHome().finally(() => wx.stopPullDownRefresh())
   },
 
+  beginHomeLoad() {
+    this.setData({state:'loading',error:'',components:[],theme:{pageBackgroundColor:'#F4F5F5',headerBackgroundColor:'#FFFFFF',brandTextColor:'#20252A'},versionId:'',share:{title:'商城首页',imageUrl:''}})
+  },
+
   async loadHome() {
+    if (this.hidden) return
     this.homeToken = Number.isFinite(this.homeToken) ? this.homeToken : 0
     const token = ++this.homeToken
     if (!dining.scoped() && !this.data.store && stores.selected()) { this.setData({ state: 'error', error: this.data.storeError || '所选前置仓暂不可用，请重新选择前置仓。', components: [] }); return }
     sharing.hide()
     pageCoupons.discard(this)
-    this.setData({ state: 'loading', error: '', versionId: '', share: { title: '商城首页', imageUrl: '' } })
+    this.beginHomeLoad()
     try {
       const data = await api.get('/api/v1/app/home', { schemaVersion: 4, ...stores.query() })
       if (token !== this.homeToken) return

@@ -72,9 +72,9 @@ class QuoteApiTests(TestCase):
         self.product.save(update_fields=["fulfillment_kind"])
         result = self.quote().json()["data"]
         self.assertEqual(result["goodsTotalFen"], 2400)
-        self.assertEqual(result["shippingFeeFen"], 1000)
-        self.assertEqual(result["payableFen"], 3400)
-        self.assertFalse(result["shippingFeePending"])
+        self.assertEqual(result["shippingFeeFen"], 0)
+        self.assertEqual(result["payableFen"], 2400)
+        self.assertTrue(result["shippingFeePending"])
         self.assertTrue(result["addressRequired"])
         self.assertEqual(result["couponDiscountFen"], 0)
         self.assertEqual(result["pointsDiscountFen"], 0)

@@ -11,7 +11,7 @@ from benefits.service import BenefitError, quote_benefits
 from inventory.availability import default_available_base_units
 from inventory.pool_access import resolve_anchor_ids
 from payments.availability import enabled_payment_methods
-from shipping.service import current_shipping_policy, shipping_fee_for_lines
+from shipping.service import current_shipping_policy, quote_shipping, shipping_address
 
 from .models import CheckoutQuote
 
@@ -92,7 +92,7 @@ def create_quote(body, member, source_digest=""):
         raise QuoteValidationError('餐桌订单不能混用个人地址或交付方式。')
     address_id = _address_id(body, member)
     ids = [item[0] for item in requested]
-    from .store_context import store_context, store_shipping_fee
+    from .store_context import store_context
     try:
         store, delivery_mode, store_snapshot = store_context(body, member, address_id, allow_address_pending=True)
     except ValueError as exc:
@@ -121,6 +121,7 @@ def create_quote(body, member, source_digest=""):
     short_pools = {anchor for anchor, demand in pool_demand.items()
                    if demand > pool_available[anchor]}
 
+    mixed_physical=any(row.get('fulfillmentKind')=='SHIP' for row in skus.values())
     lines, goods_total, ready, changed = [], 0, True, False
     for sku_id, quantity, seen in requested:
         sku = skus.get(sku_id)
@@ -139,7 +140,7 @@ def create_quote(body, member, source_digest=""):
         status = "OK"
         if not sku["onSale"]:
             status = "OFF_SALE"
-        elif store and (sku['productId'] not in sale_ids or sku['fulfillmentKind'] != 'SHIP'):
+        elif store and ((sku['fulfillmentKind']=='SHIP' and sku['productId'] not in sale_ids) or (sku['fulfillmentKind']!='SHIP' and not mixed_physical)):
             status = 'STORE_NOT_SELLING'
         elif (sku["fulfillmentKind"] == "REDEEM" and
                 (not sku["redeemValidUntil"] or sku["redeemValidUntil"] < timezone.localdate().isoformat())):
@@ -169,9 +170,6 @@ def create_quote(body, member, source_digest=""):
             "priceChanged": line_changed, "status": status,
         })
     policy = current_shipping_policy()
-    shipping_fee = shipping_fee_for_lines(lines, policy) if delivery_mode not in ('PICKUP', 'DELIVERY') else 0
-    if store:
-        shipping_fee = store_shipping_fee(store, delivery_mode, shipping_fee)
     if ready:
         benefit_lines = sorted([{"skuId": line["skuId"], "productId": line["productId"],
                                  "fulfillmentKind": line["fulfillmentKind"],
@@ -193,6 +191,8 @@ def create_quote(body, member, source_digest=""):
     benefit_policy = benefits.get("benefitPolicySnapshot") or current_policy()
     coupon_discount = benefits["couponDiscountFen"]
     points_discount = benefits["pointsDiscountFen"]
+    shipping_snapshot = quote_shipping(lines, store, delivery_mode, shipping_address(member, address_id, store_snapshot.get('dining')), goods_total-coupon_discount, policy=policy)
+    shipping_fee = shipping_snapshot['customerFeeFen']
     payable = goods_total + shipping_fee - coupon_discount - points_discount
     if not 0 <= payable <= MAX_TOTAL_FEN:
         raise QuoteValidationError("结算总额超过上限，请减少选购数量。")
@@ -204,6 +204,7 @@ def create_quote(body, member, source_digest=""):
                                              address_id=address_id, lines=lines,
                                              goods_total_fen=goods_total,
                                              shipping_fee_fen=shipping_fee,
+                                             shipping_snapshot=shipping_snapshot,
                                              shipping_policy_revision=policy.revision,
                                              coupon_id=coupon_id,
                                              coupon_discount_fen=coupon_discount,
@@ -219,7 +220,7 @@ def create_quote(body, member, source_digest=""):
             'storeId': str(store.id) if store else None, 'storeName': store.name if store else None,
             'deliveryMode': delivery_mode or None, 'dining': store_snapshot.get('dining'),
             "goodsTotalFen": goods_total, "payableFen": payable,
-            "shippingFeeFen": shipping_fee, "shippingFeePending": False,
+            "shippingFeeFen": shipping_fee, "shippingFeePending": shipping_snapshot["pending"], "shippingSnapshot": shipping_snapshot,
             "shippingPolicyRevision": policy.revision,
             "couponDiscountFen": coupon_discount, "pointsDiscountFen": points_discount,
             "selectedCouponId": benefits["selectedCouponId"],
@@ -228,9 +229,9 @@ def create_quote(body, member, source_digest=""):
             "availablePoints": benefits["availablePoints"],
             "availableCoupons": benefits["availableCoupons"],
             "ready": ready, "confirmRequired": changed,
-            'deliveryEligibilityPending': bool(store_snapshot.get('deliveryEligibilityPending')),
-            'deliveryMessage': store_snapshot.get('deliveryMessage', ''),
-            "addressRequired": not bool(store_snapshot.get("dining")) and needs_shipping and (address_id is None or bool(store_snapshot.get('deliveryEligibilityPending'))),
+            'deliveryEligibilityPending': bool(shipping_snapshot['pending']),
+            'deliveryMessage': shipping_snapshot['message'],
+            "addressRequired": not bool(store_snapshot.get("dining")) and needs_shipping and (address_id is None or bool(shipping_snapshot['pending'])),
             "availablePaymentMethods": available_methods,
-            "orderSubmissionAvailable": bool(available_methods) and not bool(store_snapshot.get('deliveryEligibilityPending')),
+            "orderSubmissionAvailable": bool(available_methods) and shipping_snapshot['eligible'],
             "message": "报价仅供核对，不预留库存；可用支付方式以服务端结果为准。"}

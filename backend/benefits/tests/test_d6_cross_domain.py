@@ -90,7 +90,7 @@ class D6CrossDomainTests(TransactionTestCase):
         self.assertEqual(RefundEvidence.objects.filter(intent=intent).count(), 1)
 
     def test_cash_coupon_and_points_partial_unshipped_refund_then_return_acceptance(self):
-        from checkout.service import create_quote
+        from shipping.tests.helpers import selected_physical_quote as create_quote
         from orders.service import submit_order
         from payments.service import record_verified_payment
         from aftersales.service import apply_case, review_case

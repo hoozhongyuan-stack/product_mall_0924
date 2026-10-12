@@ -1,3 +1,4 @@
+const { shippingPresentation } = require('../../lib/shipping-presentation')
 const stores = require('../../lib/stores')
 const deliveryAddress = require('../../lib/delivery-address')
 const api = require('../../lib/api')
@@ -103,7 +104,7 @@ Page({
       })
       if (!current()) return
       if (!Array.isArray(quote.lines)) throw new Error('报价内容不完整，请重新获取。')
-      const amounts = settlementAmounts(quote)
+      const amounts = {...settlementAmounts(quote),...shippingPresentation(quote)}
       const options = couponOptions(quote)
       const selectedId = quote.selectedCouponId === undefined ? this.couponId : quote.selectedCouponId
       const couponIndex = Math.max(0, options.findIndex((item) => item.id === selectedId))
@@ -126,7 +127,7 @@ Page({
           line.specs.map((spec) => `${spec.name}：${spec.value}`).join(' · ') : '默认规格',
         image: line.imageUrl ? `${api.baseUrl()}${line.imageUrl}` : '' })),
       ...amounts, offlinePolicy, paymentChoices, paymentMethod, canSubmit: !!paymentMethod && session.loggedIn() &&
-        quote.orderSubmissionAvailable === true && quote.deliveryEligibilityPending !== true && amounts.settlementReady &&
+        amounts.shippingAllowed && quote.orderSubmissionAvailable === true && quote.deliveryEligibilityPending !== true && amounts.settlementReady &&
         quote.ready === true && quote.confirmRequired !== true &&
         (!quote.addressRequired || !!address) && (this.data.deliveryMode!=='DELIVERY'||deliveryAddress.allowed(address,'DELIVERY')),
       expiresLabel: expiryLabel(quote.expiresAt), address,
@@ -137,7 +138,7 @@ Page({
         Number.isSafeInteger(availablePoints) && availablePoints >= 0 ?
           `可用 ${availablePoints} 积分` : '积分暂不可用',
       pointsInput: String(pointsToUse),
-      quoteWarning: quote.deliveryEligibilityPending ? (quote.deliveryMessage || '请选择准确的配送地址后重新报价。') : !quote.ready ? '有商品不可售或库存不足，请返回购物车调整。' :
+      quoteWarning: !amounts.shippingAllowed ? amounts.shippingMessage : quote.deliveryEligibilityPending ? (quote.deliveryMessage || '请选择准确的配送地址后重新报价。') : !quote.ready ? '有商品不可售或库存不足，请返回购物车调整。' :
         quote.confirmRequired ? '适用价格已变化，请确认后继续。' :
           !amounts.settlementReady ? '结算金额尚未核算完整，请稍后重试。' : '' })
     } catch (error) {
@@ -219,7 +220,7 @@ Page({
     if (this.data.submitting || !this.data.paymentChoices.some((choice) => choice.value === method)) return
     const quote = this.data.quote
     this.setData({ paymentMethod: method, canSubmit: session.loggedIn() && quote.orderSubmissionAvailable === true &&
-      this.data.settlementReady && quote.deliveryEligibilityPending !== true && quote.ready === true && quote.confirmRequired !== true && (!quote.addressRequired || !!this.data.address) && (this.data.deliveryMode!=='DELIVERY'||deliveryAddress.allowed(this.data.address,'DELIVERY')) })
+      this.data.settlementReady && this.data.shippingAllowed !== false && quote.deliveryEligibilityPending !== true && quote.ready === true && quote.confirmRequired !== true && (!quote.addressRequired || !!this.data.address) && (this.data.deliveryMode!=='DELIVERY'||deliveryAddress.allowed(this.data.address,'DELIVERY')) })
   },
   openOrders() { wx.navigateTo({ url: '/pages/orders/list' }) },
   selectCoupon(event) {

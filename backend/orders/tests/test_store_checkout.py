@@ -23,6 +23,8 @@ class StoreCheckoutTests(TestCase):
                                      latitude='28.200000', longitude='112.900000')
         StoreProduct.objects.create(store=store, product=self.product, on_sale=True)
         InventoryBalance.objects.create(warehouse=warehouse, sku=self.skus[0], on_hand_base_units=stock)
+        from shipping.tests.helpers import configure_zone
+        configure_zone(store)
         return store
 
     def quote(self, store, mode='PICKUP', **extra):
@@ -69,8 +71,9 @@ class StoreCheckoutTests(TestCase):
 
     def test_delivery_requires_configured_fee_radius_and_address_location(self):
         store = self.make_store()
-        with self.assertRaises(QuoteValidationError):
-            self.quote(store, 'DELIVERY')
+        quote=self.quote(store,'DELIVERY')
+        self.assertTrue(quote['shippingSnapshot']['pending'])
+        self.assertFalse(quote['orderSubmissionAvailable'])
 
     def test_store_context_rejects_rights_goods_and_invalid_mode(self):
         store = self.make_store()
@@ -97,8 +100,9 @@ class StoreCheckoutTests(TestCase):
         with self.assertRaises(OrderError):
             submit_order(self.member, {'quoteId': quote['quoteId'], 'paymentMethod': 'OFFLINE'}, uuid4())
         pending = self.quote(store, 'DELIVERY', addressId=str(address.id))
-        self.assertTrue(pending['addressRequired'])
-        self.assertTrue(pending['deliveryEligibilityPending'])
+        self.assertFalse(pending['addressRequired'])
+        self.assertFalse(pending['shippingSnapshot']['eligible'])
+        self.assertIn('超出配送范围', pending['shippingSnapshot']['message'])
 
     def test_delivery_only_store_can_quote_goods_before_choosing_address_but_cannot_submit(self):
         store = self.make_store()
@@ -121,7 +125,8 @@ class StoreCheckoutTests(TestCase):
     def test_express_needs_shipping_address(self):
         store = self.make_store()
         quote = self.quote(store, 'EXPRESS')
-        self.assertEqual(quote['shippingFeeFen'], 1000)
+        self.assertEqual(quote['shippingFeeFen'], 0)
+        self.assertTrue(quote['shippingSnapshot']['pending'])
         self.assertTrue(quote['addressRequired'])
         with self.assertRaises(OrderError):
             submit_order(self.member, {'quoteId': quote['quoteId'], 'paymentMethod': 'OFFLINE'}, uuid4())

@@ -1,3 +1,4 @@
+const { shippingPresentation } = require('../../lib/shipping-presentation')
 const api = require('../../lib/api')
 const dining = require('../../lib/dining-alliance')
 const orders = require('../../lib/orders')
@@ -49,10 +50,11 @@ Page({
    if (!this.valid(g,identity) || dining.current()?.sessionId !== visit.sessionId) return
    const choices = available.filter(value => value !== 'OFFLINE' || (offlinePolicy?.configured === true && typeof offlinePolicy.instructions === 'string' && offlinePolicy.instructions.trim()))
    const method = choices.includes(this.data.paymentMethod) ? this.data.paymentMethod : choices[0] || ''
-   this.setData({state:'ready',quote,lines:(quote.lines || []).map(l=>({...l,amount:money(l.lineAmountFen),price:money(l.unitPriceFen),specLabel:skuLabel(l),image:mediaUrl(api.baseUrl(),l.imageUrl)})),total:money(quote.payableFen),goodsTotal:money(quote.goodsTotalFen),shippingFee:money(quote.shippingFeeFen),couponDiscount:discountMoney(quote.couponDiscountFen),pointsDiscount:discountMoney(quote.pointsDiscountFen),offlinePolicy,offlinePolicyError,paymentChoices:choices,paymentMethod:method,canSubmit:!!method&&dining.quoteReady(quote),error:quote.confirmRequired?'价格已变化，请确认新价格。':!quote.ready?'商品缺货或已下架，请返回调整。':''})
+   const shipping=shippingPresentation(quote)
+   this.setData({...shipping,state:'ready',quote,lines:(quote.lines || []).map(l=>({...l,amount:money(l.lineAmountFen),price:money(l.unitPriceFen),specLabel:skuLabel(l),image:mediaUrl(api.baseUrl(),l.imageUrl)})),total:money(quote.payableFen),goodsTotal:money(quote.goodsTotalFen),shippingFee:money(quote.shippingFeeFen),couponDiscount:discountMoney(quote.couponDiscountFen),pointsDiscount:discountMoney(quote.pointsDiscountFen),offlinePolicy,offlinePolicyError,paymentChoices:choices,paymentMethod:method,canSubmit:!!method&&shipping.shippingAllowed&&dining.quoteReady(quote),error:!shipping.shippingAllowed?shipping.shippingMessage:quote.confirmRequired?'价格已变化，请确认新价格。':!quote.ready?'商品缺货或已下架，请返回调整。':''})
   } catch (e) { if (this.valid(g,identity)) this.setData({state:'error',error:e.message,canSubmit:false}) }
  },
- choosePayment(e) { const value=e.detail.value; if(this.data.paymentChoices.includes(value)) this.setData({paymentMethod:value,canSubmit:dining.quoteReady(this.data.quote)}) },
+ choosePayment(e) { const value=e.detail.value; if(this.data.paymentChoices.includes(value)) this.setData({paymentMethod:value,canSubmit:this.data.shippingAllowed !== false&&dining.quoteReady(this.data.quote)}) },
  confirmPrices() { for(const l of this.data.quote.lines) { const old=dining.items().find(x=>x.skuId===l.skuId); if(old)dining.select({...old,seenPriceFen:l.unitPriceFen}) } return this.refresh() },
  async submit() {
   if(this.data.busy || (!this.pending && !this.data.canSubmit)) return

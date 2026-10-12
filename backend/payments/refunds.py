@@ -8,6 +8,7 @@ import json
 import logging
 import re
 import uuid
+from business_numbers.service import next_number
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -88,7 +89,7 @@ def prepare_refund(case_id, actor, request_key):
         if receipt is None:
             raise RefundError("订单缺少已结算收款凭证。", "PAYMENT_EVIDENCE_MISSING", 409)
         intent = RefundIntent.objects.create(case=case, receipt=receipt,
-            refund_no="R" + uuid.uuid4().hex.upper(), channel=receipt.channel,
+            refund_no=next_number('TK'), channel=receipt.channel,
             merchant_account_id=receipt.merchant_account_id, original_trade_no=receipt.external_trade_no,
             amount_fen=amount, created_by=actor, request_key=request_key)
         RefundHistory.objects.create(intent=intent, action="PREPARED")

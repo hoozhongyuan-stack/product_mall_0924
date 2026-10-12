@@ -19,7 +19,8 @@ from inventory.reservations import (ReservationError, assert_order_reservations,
                                     consume_order_reservations, release_order_reservations,
                                     reserve_order_lines)
 from payments.availability import payment_method_enabled
-from shipping.service import ShippingUnavailable, current_shipping_policy, shipping_fee_for_lines
+from business_numbers.service import next_number
+from shipping.service import ShippingUnavailable, current_shipping_policy, quote_shipping, shipping_address
 
 from .attribution import attribution_data
 from .models import Order, OrderIdempotency, OrderLine
@@ -68,6 +69,7 @@ def _business_digest(quote, method):
         "addressId": str(quote.address_id) if quote.address_id else None,
         "shippingFeeFen": quote.shipping_fee_fen,
         "shippingPolicyRevision": quote.shipping_policy_revision,
+        "shippingSnapshot": quote.shipping_snapshot,
         "couponId": str(quote.coupon_id) if quote.coupon_id else None,
         "couponDiscountFen": quote.coupon_discount_fen,
         "benefitPolicySnapshot": quote.benefit_policy_snapshot,
@@ -107,6 +109,7 @@ def order_data(order, *, include_voucher_code=False):
                            for report in order.payment_reports.order_by("reported_at")[:20]],
         "paymentMethod": order.payment_method, "goodsTotalFen": order.goods_total_fen,
         "shippingFeeFen": order.shipping_fee_fen, "payableFen": order.payable_fen,
+        "shippingSnapshot": order.shipping_snapshot,
         "couponId": str(order.coupon_id) if order.coupon_id else None,
         "couponDiscountFen": order.coupon_discount_fen,
         "pointsToUse": order.points_to_use,
@@ -236,7 +239,7 @@ def submit_order(member, body, key):
             raise OrderError("该支付方式的收款确认尚未开放，暂不能提交订单。", "SETTLEMENT_NOT_READY", 503)
         if quote.expires_at <= timezone.now():
             raise OrderError("报价已过期，请重新核对。", "QUOTE_EXPIRED", 409)
-        from checkout.store_context import store_context, store_shipping_fee
+        from checkout.store_context import store_context
         try:
             store, delivery_mode, store_snapshot = store_context(
                 {'diningSessionId': quote.store_snapshot['dining']['sessionId']} if quote.store_snapshot.get('dining') else
@@ -246,16 +249,20 @@ def submit_order(member, body, key):
             raise OrderError(str(exc), getattr(exc, 'code', 'STORE_UNAVAILABLE'), getattr(exc, 'status', 409)) from exc
         if store_snapshot != quote.store_snapshot:
             raise OrderError('前置仓或配送规则已变化，请重新报价。', 'STORE_POLICY_CHANGED', 409)
+        current = _current_lines(quote, member)
         try:
             policy = current_shipping_policy(lock=True)
-            shipping_fee = shipping_fee_for_lines(quote.lines, policy) if delivery_mode not in ('PICKUP', 'DELIVERY') else 0
-            if store:
-                shipping_fee = store_shipping_fee(store, delivery_mode, shipping_fee)
+            shipping_snapshot = quote_shipping(quote.lines, store, delivery_mode,
+                shipping_address(member, quote.address_id, store_snapshot.get('dining'), lock=True),
+                quote.goods_total_fen-quote.coupon_discount_fen, policy=policy)
+            shipping_fee = shipping_snapshot['customerFeeFen']
         except ShippingUnavailable as exc:
             raise OrderError(str(exc), "SHIPPING_UNAVAILABLE", 503) from exc
-        if ((delivery_mode not in ('PICKUP', 'DELIVERY') and policy.revision != quote.shipping_policy_revision) or
-                shipping_fee != quote.shipping_fee_fen):
-            raise OrderError("运费已变化，请重新报价。", "SHIPPING_CHANGED", 409)
+        if not shipping_snapshot['eligible']:
+            raise OrderError(shipping_snapshot['message'], 'ADDRESS_REQUIRED' if shipping_snapshot['pending'] else 'SHIPPING_UNAVAILABLE', 409)
+        if (policy.revision != quote.shipping_policy_revision or shipping_snapshot != quote.shipping_snapshot
+                or shipping_fee != quote.shipping_fee_fen):
+            raise OrderError("配送规则或费用已变化，请重新报价。", "SHIPPING_CHANGED", 409)
         from benefits.policy import current_policy
         benefit_policy = current_policy(lock=True)
         if quote.benefit_policy_snapshot != benefit_policy:
@@ -265,12 +272,11 @@ def submit_order(member, body, key):
             raise OrderError("默认仓不可用。", "WAREHOUSE_UNAVAILABLE", 409)
         needs_shipping = delivery_mode != 'PICKUP' and any(line.get("fulfillmentKind") == "SHIP" for line in quote.lines)
         address = _address_snapshot(quote, member, needs_shipping)
-        current = _current_lines(quote, member)
         if store:
             from stores.models import StoreProduct
             selling = set(StoreProduct.objects.select_for_update().filter(
                 store=store, on_sale=True, product_id__in=[sku.product_id for sku, *_ in current]).values_list('product_id', flat=True))
-            if any(sku.product_id not in selling or row['fulfillmentKind'] != 'SHIP' for sku, _, row, _, _ in current):
+            if any((row['fulfillmentKind']=='SHIP' and sku.product_id not in selling) or (row['fulfillmentKind']!='SHIP' and not any(item[2]['fulfillmentKind']=='SHIP' for item in current)) for sku, _, row, _, _ in current):
                 raise OrderError('该前置仓已停止销售部分商品，请重新报价。', 'STORE_NOT_SELLING', 409)
         if store_snapshot.get('dining'):
             from dining_alliance.access import assert_products
@@ -321,9 +327,10 @@ def submit_order(member, body, key):
         order = Order.objects.create(
             payment_instructions=payment_snapshot,
             store=store, delivery_mode=delivery_mode, store_snapshot=store_snapshot,
-            order_no=f"O{uuid4().hex.upper()}", member=member, quote_id=quote_id,
+            order_no=next_number('CY' if store_snapshot.get('dining') else 'XS'), member=member, quote_id=quote_id,
             payment_method=method, address_snapshot=address,
             goods_total_fen=total, shipping_fee_fen=shipping_fee,
+            shipping_snapshot=shipping_snapshot,
             shipping_policy_revision=policy.revision, coupon_id=quote.coupon_id,
             coupon_discount_fen=quote.coupon_discount_fen,
             benefit_policy_snapshot=benefit_policy,

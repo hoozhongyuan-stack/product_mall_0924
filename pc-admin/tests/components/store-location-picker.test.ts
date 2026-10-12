@@ -1,10 +1,10 @@
 import {afterEach,describe,it,expect,vi} from 'vitest'
 import {mount,flushPromises} from '@vue/test-utils'
-import Picker from '../../src/views/stores/StoreLocationPicker.vue'
+import Picker from '../../src/shared/maps/StoreLocationPicker.vue'
 import {api} from '../../src/api'
-import {loadAMap} from '../../src/views/stores/amap-runtime'
+import {loadAMap} from '../../src/shared/maps/amap-runtime'
 vi.mock('../../src/api',()=>({api:vi.fn()}))
-vi.mock('../../src/views/stores/amap-runtime',()=>({loadAMap:vi.fn()}))
+vi.mock('../../src/shared/maps/amap-runtime',()=>({loadAMap:vi.fn()}))
 const events:Record<string,(e:unknown)=>void>={}
 const destroyed=vi.fn(),position=vi.fn()
 const Map=vi.fn(function(){return {on:vi.fn((name,fn)=>{events[name]=fn}),destroy:destroyed,setCenter:vi.fn(),add:vi.fn()}})

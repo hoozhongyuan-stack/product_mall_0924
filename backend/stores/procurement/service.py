@@ -68,7 +68,7 @@ def data(row, admin=False, summary=False):
     if row.proof_id:
         prefix = '/api/v1/admin/stores' if admin else f'/api/v1/app/store-center/stores/{row.store_id}'
         proof = {'assetId': str(row.proof_id), 'previewUrl': f'{prefix}/procurement/proofs/{row.proof_id}/file'}
-    return {'id': str(row.pk), 'orderNo': 'JH'+row.pk.hex.upper(), 'storeId': str(row.store_id), 'storeName': row.store.name,
+    return {'id': str(row.pk), 'orderNo': row.order_no, 'storeId': str(row.store_id), 'storeName': row.store.name,
             'status': row.status, 'revision': row.revision, 'unitsChanged':changed,'unitReviewRequired':review_required, 'goodsAmountFen': row.goods_amount_fen, 'freightFen': row.freight_fen,
             'payableFen': row.goods_amount_fen+row.freight_fen, 'note': row.note, 'paymentProof': proof,
             'paymentInstructions': instructions(row.encrypted_instructions) if not summary and row.status not in ['REVIEW','QUOTE','CANCELLED'] else '',

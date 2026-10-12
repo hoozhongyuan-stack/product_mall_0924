@@ -149,7 +149,8 @@ class DiningWithdrawalConcurrencyTests(TransactionTestCase):
         with transaction.atomic():
             DiningFinanceTests.setUp(self)
             from shipping.models import ShippingPolicy
-            ShippingPolicy.objects.update_or_create(pk=1,defaults={'fee_fen':0})
+            from shipping.tests.helpers import configure_courier_fee
+            configure_courier_fee(0)
     _sku=DiningFinanceTests._sku
     make_store=DiningFinanceTests.make_store
     scene=DiningFinanceTests.scene

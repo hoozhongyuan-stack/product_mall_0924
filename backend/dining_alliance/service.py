@@ -22,11 +22,12 @@ def restaurant_data(row):
 
 def nearest_store(latitude, longitude):
     ranked = []
-    for store in Store.objects.select_related('warehouse').filter(enabled=True, accepting_orders=True, warehouse__enabled=True, latitude__isnull=False, longitude__isnull=False, delivery_radius_meters__isnull=False):
+    for store in Store.objects.select_related('warehouse').filter(enabled=True, accepting_orders=True, warehouse__enabled=True, latitude__isnull=False, longitude__isnull=False):
         if 'DELIVERY' not in store.supported_modes:
             continue
         distance = distance_meters(float(latitude),float(longitude),float(store.latitude),float(store.longitude))
-        if distance <= store.delivery_radius_meters:
+        from shipping.service import delivery_point_eligibility
+        if not delivery_point_eligibility(store, {'latitude':float(latitude),'longitude':float(longitude)}, check_time=False):
             ranked.append((distance, str(store.id), store))
     if not ranked:
         raise DiningError('餐饮店地址附近没有支持配送的前置仓，请先配置前置仓坐标和配送范围。', 'DINING_NO_WAREHOUSE', 409)

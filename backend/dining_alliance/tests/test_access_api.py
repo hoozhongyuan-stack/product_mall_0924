@@ -33,7 +33,8 @@ class DiningAccessTests(TestCase):
             old=getattr(target,field);setattr(target,field,value);target.save()
             with self.assertRaises(DiningError):checkout_context(identity,self.member)
             setattr(target,field,old);target.save()
-        store.delivery_radius_meters=0;store.save()
+        from shipping.models import ShippingPolicy
+        policy=ShippingPolicy.objects.get(pk=1);policy.zones=[];policy.save()
         with self.assertRaises(DiningError):checkout_context(identity,self.member)
 
     def test_inventory_never_changes_and_only_listed_goods_available(self):

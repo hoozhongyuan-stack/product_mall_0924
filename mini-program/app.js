@@ -2,7 +2,7 @@ const startup = require('./lib/startup')
 const dining = require('./lib/dining-alliance')
 
 App({
-  onLaunch(options) { startup.captureLaunch(options) },
+  onLaunch() { startup.completeLaunch() },
   onHide() { dining.close() },
   globalData: {
     // Local simulator only. Replace with an approved HTTPS API domain for device/release builds.

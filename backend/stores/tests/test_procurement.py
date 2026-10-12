@@ -57,10 +57,12 @@ class ProcurementTests(ProcurementFixture,TestCase):
     def test_create_snapshot_idempotent_down_store_listing_allowed(self):
         StoreProduct.objects.create(store=self.store,product=self.product,on_sale=False)
         body=self.body();row=create_order(self.store,self.member,body)
+        self.assertRegex(row.order_no, r"^JH[0-9]{20}$")
         self.assertEqual(row.goods_amount_fen,120)
         self.assertEqual(row.lines.get().ratio,1)
         self.assertFalse(InventoryLedger.objects.exists())
         self.assertEqual(create_order(self.store,self.member,body).pk,row.pk)
+        self.assertEqual(data(create_order(self.store,self.member,body))["orderNo"], row.order_no)
         self.cost.purchase_cost_fen=99;self.cost.save()
         self.assertEqual(row.lines.get().purchase_cost_fen,60)
         changed={**body,'note':'changed'}

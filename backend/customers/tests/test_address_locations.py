@@ -67,6 +67,8 @@ class AddressLocationTests(TestCase):
         from stores.models import Store
         store=Store.objects.create(warehouse=Warehouse.objects.create(code='ADDR',name='地址仓'),name='地址仓',
             supported_modes=['DELIVERY'],latitude='22.61',longitude='114.26',delivery_radius_meters=3000,delivery_fee_fen=10)
+        from shipping.tests.helpers import configure_zone
+        configure_zone(store,fee=10)
         for lat,expected in [('22.61','ELIGIBLE'),('23.61','OUT_OF_RANGE'),(None,'UNLOCATED')]:
             args={'storeId':str(store.id)}
             if lat: args.update(latitude=lat,longitude='114.26')

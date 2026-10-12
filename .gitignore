@@ -15,3 +15,4 @@ dist/
 media/
 mini-program/project.private.config.json
 .DS_Store
+output/procurement-delivery/

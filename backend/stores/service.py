@@ -12,7 +12,7 @@ from inventory.store_access import available_base_units, set_available_stock, sh
 from .access import StoreError
 from .models import Store, StoreProduct
 
-FIELD_MAP = {'name':'name','contactName':'contact_name','contactPhone':'contact_phone','address':'address','city':'city','latitude':'latitude','longitude':'longitude','openingHours':'opening_hours','enabled':'enabled','acceptingOrders':'accepting_orders','supportedModes':'supported_modes','deliveryRadiusMeters':'delivery_radius_meters','deliveryFeeFen':'delivery_fee_fen'}
+FIELD_MAP = {'name':'name','contactName':'contact_name','contactPhone':'contact_phone','address':'address','city':'city','latitude':'latitude','longitude':'longitude','openingHours':'opening_hours','enabled':'enabled','acceptingOrders':'accepting_orders','supportedModes':'supported_modes'}
 
 
 def store_data(store,admin=False,latitude=None,longitude=None):
@@ -50,9 +50,6 @@ def validated_fields(body,update=False):
         elif key == 'supportedModes':
             if not isinstance(value,list) or not value or len(value)>3 or any(not isinstance(item,str) or item not in ('PICKUP','DELIVERY','EXPRESS') for item in value) or len(set(value))!=len(value):
                 raise StoreError('请选择有效的履约方式。')
-        elif key in ('deliveryRadiusMeters','deliveryFeeFen'):
-            if value is not None and (type(value) is not int or value<0 or value>1000000):
-                raise StoreError('配送范围和配送费须为非负整数。')
         elif key in ('latitude','longitude'):
             if value is not None:
                 try:

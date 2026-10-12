@@ -14,12 +14,6 @@ import type { Asset } from '../shared/media'
 import { applyStartupUpload, type StartupDraft, type StartupPreview, type StartupPublication, type StartupSelection } from './startup/editor'
 import './startup/store.css'
 
-interface ShippingPolicy {
-  feeFen: number
-  deliveryScope: 'NATIONWIDE'
-  revision: number
-}
-
 const props = defineProps<{ account: Account }>()
 const canEdit = computed(() => props.account.permissionCodes.includes('startup.edit'))
 const canPublish = computed(() => props.account.permissionCodes.includes('startup.publish'))
@@ -44,29 +38,7 @@ const previewStale = computed(() => !!preview.value && (dirty.value || previewSn
 const previewReady = computed(() => !!preview.value && !previewStale.value && preview.value.revision === draft.value?.revision)
 const alreadyPublished = computed(() => !!draft.value && draft.value.publishedRevision === draft.value.revision)
 const fileUrl = (id: string | null | undefined) => id ? `/api/v1/admin/assets/${encodeURIComponent(id)}/file` : ''
-const shippingPolicy = ref<ShippingPolicy | null>(null)
-const shippingFeeInput = ref('')
-const shippingLoading = ref(false)
-const shippingSaving = ref(false)
-const shippingError = ref('')
-const shippingNotice = ref('')
-const shippingConflict = ref(false)
-const shippingDirty = computed(() => {
-  if (!shippingPolicy.value) return false
-  const parsed = feeFenFromYuan(shippingFeeInput.value)
-  return parsed === null ? shippingFeeInput.value !== (shippingPolicy.value.feeFen / 100).toFixed(2)
-    : parsed !== shippingPolicy.value.feeFen
-})
-const hasUnsavedChanges = computed(() => dirty.value || shippingDirty.value)
-
-function feeFenFromYuan(value: string): number | null {
-  if (!/^(?:0|[1-9]\d{0,4})(?:\.\d{1,2})?$/.test(value)) return null
-  const [yuan, cents = ''] = value.split('.')
-  const feeFen = Number(yuan) * 100 + Number(cents.padEnd(2, '0'))
-  return feeFen <= 1_000_000 ? feeFen : null
-}
-const shippingValidationError = computed(() =>
-  feeFenFromYuan(shippingFeeInput.value) === null ? '请输入 0 至 10000 元的金额，最多两位小数。' : '')
+const hasUnsavedChanges = computed(() => dirty.value)
 
 function message(reason: unknown) {
   if (reason instanceof ApiError && ['PAGE_ALREADY_PUBLISHED', 'STARTUP_ALREADY_PUBLISHED'].includes(reason.code)) return '该草稿已有发布版本，请通过版本历史切换线上内容，或修改草稿后再发布。'
@@ -87,51 +59,8 @@ async function loadDraft() {
   } catch (reason) { error.value = message(reason) }
   finally { loading.value = false }
 }
-async function loadShippingPolicy() {
-  if (!canManageShipping.value) return
-  shippingLoading.value = true
-  shippingError.value = ''
-  shippingNotice.value = ''
-  shippingConflict.value = false
-  try {
-    const result = await api<ShippingPolicy>('/settlement/shipping-policy')
-    shippingPolicy.value = result
-    shippingFeeInput.value = (result.feeFen / 100).toFixed(2)
-  } catch (reason) { shippingError.value = message(reason) }
-  finally { shippingLoading.value = false }
-}
-async function reloadShippingPolicy() {
-  if (!shippingDirty.value || await confirmAction('放弃未保存的运费修改并重新读取配置？')) void loadShippingPolicy()
-}
-async function saveShippingPolicy() {
-  const current = shippingPolicy.value
-  const feeFen = feeFenFromYuan(shippingFeeInput.value)
-  if (!current || !canManageShipping.value || shippingSaving.value || shippingConflict.value || feeFen === null) return
-  shippingSaving.value = true
-  shippingError.value = ''
-  shippingNotice.value = ''
-  const inputAtSave = shippingFeeInput.value
-  try {
-    const result = await api<ShippingPolicy>('/settlement/shipping-policy', {
-      method: 'PUT',
-      body: JSON.stringify({ feeFen, deliveryScope: 'NATIONWIDE', expectedRevision: current.revision }),
-    })
-    shippingPolicy.value = result
-    if (shippingFeeInput.value === inputAtSave) shippingFeeInput.value = (result.feeFen / 100).toFixed(2)
-    shippingNotice.value = shippingFeeInput.value === (result.feeFen / 100).toFixed(2)
-      ? `运费已保存，当前修订 ${result.revision}。`
-      : `运费修订 ${result.revision} 已保存；保存期间的新修改仍待保存。`
-    ElMessage.success('运费配置已保存')
-  } catch (reason) {
-    shippingConflict.value = reason instanceof ApiError && reason.status === 409
-    shippingError.value = shippingConflict.value
-      ? '配置已被其他操作修改。请重新读取最新版本后再编辑。'
-      : message(reason)
-  } finally { shippingSaving.value = false }
-}
 onMounted(() => {
   void loadDraft()
-  if (canManageShipping.value) void loadShippingPolicy()
   window.addEventListener('beforeunload', beforeUnload)
 })
 onUnmounted(() => window.removeEventListener('beforeunload', beforeUnload))
@@ -363,45 +292,9 @@ function rolledBack(result: RollbackResult) {
       </div>
       <div class="panel startup-note"><h2>当前线上版本</h2><p>{{ draft.publishedRevision !== null ? `修订 ${draft.publishedRevision} 正在生效。编辑草稿不会改变它。` : '尚未发布启动内容。小程序会使用内置静态品牌图继续进入目标页。' }}</p><p>通过发布历史可查看与回退线上版本；回退保留当前草稿。</p></div>
     </template>
-    <section v-if="canManageShipping" class="panel shipping-policy" aria-labelledby="shipping-policy-title">
-      <div class="shipping-policy-head">
-        <div>
-          <h2 id="shipping-policy-title">配送与运费</h2>
-          <p>快递订单按单收取固定运费；纯到店核销订单不收运费，混合订单只收一次。</p>
-        </div>
-        <span v-if="shippingPolicy" class="badge badge-muted">修订 {{ shippingPolicy.revision }}</span>
-      </div>
-      <p v-if="shippingLoading" class="loading-inline" role="status">正在读取运费配置…</p>
-      <div v-if="shippingError" class="notice startup-error" role="alert">
-        {{ shippingError }}
-        <button type="button" class="text-button" :disabled="shippingLoading || shippingSaving" @click="reloadShippingPolicy">重新读取</button>
-      </div>
-      <template v-if="shippingPolicy && !shippingLoading">
-        <div class="shipping-policy-fields">
-          <label class="shipping-policy-field" for="shipping-fee">
-            <span>每单固定运费</span>
-            <el-input id="shipping-fee" v-model="shippingFeeInput" inputmode="decimal" autocomplete="off" placeholder="例如 10.00" aria-describedby="shipping-fee-help shipping-fee-error">
-              <template #append>元</template>
-            </el-input>
-            <small id="shipping-fee-help">0 至 10000 元，最多两位小数。</small>
-            <small v-if="shippingDirty && shippingValidationError" id="shipping-fee-error" class="shipping-policy-invalid" role="alert">{{ shippingValidationError }}</small>
-          </label>
-          <div class="shipping-policy-field">
-            <span>配送范围</span>
-            <strong class="shipping-policy-scope">全国地址</strong>
-            <small>首版固定为全国配送；提交订单时由服务端校验地址。</small>
-          </div>
-        </div>
-        <div class="shipping-policy-footer">
-          <span v-if="shippingDirty" class="startup-unsaved">● 运费修改尚未保存</span>
-          <span v-else>当前配置已保存</span>
-          <button type="button" class="text-button" :disabled="shippingSaving" @click="reloadShippingPolicy">重新读取</button>
-          <button type="button" class="primary-button" :disabled="!shippingDirty || Boolean(shippingValidationError) || shippingSaving || shippingConflict" @click="saveShippingPolicy">
-            {{ shippingSaving ? '保存中…' : '保存运费配置' }}
-          </button>
-        </div>
-        <p v-if="shippingNotice" class="startup-success shipping-policy-notice" role="status">{{ shippingNotice }}</p>
-      </template>
+    <section v-if="canManageShipping" class="panel shipping-policy">
+      <h2>配送与运费</h2><p>快递模板、包邮门槛和平台活动统一在快递与包邮中配置；前置仓配送范围在对应仓详情中配置。</p>
+      <RouterLink class="primary-button" to="/shipping-rules">管理快递与包邮</RouterLink>
     </section>
     <FilingSettingsPanel :account="account" />
     <el-dialog v-model="publishOpen" title="确认发布启动页" width="min(480px, 92vw)" >

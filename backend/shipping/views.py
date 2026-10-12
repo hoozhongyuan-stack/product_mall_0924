@@ -45,10 +45,11 @@ def shipping_policy_view(request):
         if policy.fee_fen == fee and policy.delivery_scope == scope:
             return response(request, _data(policy))
         before = _data(policy)
+        policy.templates = [{**row,"firstFeeFen":fee} if not row["productIds"] and row["mode"]=="FIXED" else row for row in policy.templates]
         policy.fee_fen = fee
         policy.delivery_scope = scope
         policy.revision += 1
-        policy.save(update_fields=["fee_fen", "delivery_scope", "revision", "updated_at"])
+        policy.save(update_fields=["fee_fen", "delivery_scope", "templates", "revision", "updated_at"])
         audit(request, "shipping.policy.update", "shipping_policy", 1, actor,
               before=before, after=_data(policy))
         return response(request, _data(policy))

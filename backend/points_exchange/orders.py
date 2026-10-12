@@ -1,6 +1,7 @@
 """Pure points quote and atomic order coordination. No money provider calls."""
 import hashlib,json
 from datetime import timedelta
+from business_numbers.service import next_number
 from uuid import UUID,uuid4
 from django.conf import settings
 from django.db import transaction
@@ -115,7 +116,7 @@ def _revalidate(member,quote):
 
 def _create_order(member,quote,row,warehouse,policy):
     snapshot=quote.snapshot;qty=snapshot['quantity'];unit=row['unit']
-    order=Order.objects.create(order_kind='POINTS',order_no='P'+uuid4().hex.upper(),member=member,quote_id=quote.id,
+    order=Order.objects.create(order_kind='POINTS',order_no=next_number('JF'),member=member,quote_id=quote.id,
         payment_method='POINTS',address_snapshot=_address_dto(snapshot['address']),goods_total_fen=0,shipping_fee_fen=0,
         benefit_policy_snapshot=policy,points_to_use=snapshot['totalPoints'],points_discount_fen=0,payable_fen=0,
         expires_at=quote.expires_at)

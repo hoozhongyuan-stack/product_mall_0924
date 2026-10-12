@@ -35,14 +35,15 @@ def eligibility(store_id, latitude, longitude):
         store = get_store(identifier, for_sale=True)
     except StoreError:
         return {'code': 'UNAVAILABLE', 'message': '该前置仓当前无法配送，请更换前置仓。'}
-    if ('DELIVERY' not in store.supported_modes or store.latitude is None or store.longitude is None
-            or not store.delivery_radius_meters or store.delivery_fee_fen is None):
+    if ('DELIVERY' not in store.supported_modes or store.latitude is None or store.longitude is None):
         return {'code': 'UNAVAILABLE', 'message': '该前置仓配送服务暂不可用，请更换交付方式。'}
     if latitude is None or longitude is None:
         return {'code': 'UNLOCATED', 'message': '需补全收货位置后确认配送范围。'}
     distance = distance_meters(store.latitude, store.longitude, latitude, longitude)
-    if distance > store.delivery_radius_meters:
-        return {'code': 'OUT_OF_RANGE', 'message': '超出当前前置仓配送范围，请更换地址或交付方式。', 'distanceMeters': round(distance)}
+    from shipping.service import delivery_point_eligibility
+    message=delivery_point_eligibility(store,dict(latitude=float(latitude),longitude=float(longitude)))
+    if message:
+        return {'code':'OUT_OF_RANGE','message':message,'distanceMeters':round(distance)}
     return {'code': 'ELIGIBLE', 'message': '当前前置仓可配送', 'distanceMeters': round(distance)}
 
 

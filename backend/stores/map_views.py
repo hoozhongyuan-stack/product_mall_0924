@@ -8,11 +8,19 @@ from wechat_integration.credentials import CredentialsUnavailable
 from .map_configuration import effective_configuration
 from common.http import response,error,method
 from django.views.decorators.debug import sensitive_variables
-from accounts.security import require
+from accounts.security import require, permissions
 from .views import guarded
 from .access import StoreError
 from django.views.decorators.cache import cache_control
 from django.views.decorators.vary import vary_on_headers
+
+
+def map_permission(request):
+    actor,denied=require(request)
+    if denied:return actor,denied
+    if not set(permissions(actor)) & {'stores.manage','dining.manage','settlement.shipping.manage'}:
+        return require(request,'stores.manage')
+    return actor,None
 
 
 @cache_control(private=True, no_store=True)
@@ -22,7 +30,7 @@ from django.views.decorators.vary import vary_on_headers
 def map_search(request):
     bad=method(request,'GET')
     if bad:return bad
-    actor,bad=require(request,'stores.manage')
+    actor,bad=map_permission(request)
     if bad:return bad
     try:
         web_key = effective_configuration()['webServiceKey']
@@ -69,7 +77,7 @@ def map_item(item):
 def map_reverse(request):
     bad = method(request, 'GET')
     if bad: return bad
-    actor, bad = require(request, 'stores.manage')
+    actor, bad = map_permission(request)
     if bad: return bad
     if set(request.GET) != {'latitude', 'longitude'} or any(len(request.GET.getlist(k)) != 1 for k in request.GET):
         raise StoreError('请提供完整的地图坐标。')
@@ -88,7 +96,7 @@ def map_reverse(request):
 def map_runtime(request):
     bad = method(request, 'GET')
     if bad: return bad
-    actor, bad = require(request, 'stores.manage')
+    actor, bad = map_permission(request)
     if bad: return bad
     try:
         values = effective_configuration()
@@ -113,7 +121,7 @@ def amap_proxy(request, service_path):
     """Only known SDK services; no arbitrary URLs, redirects or client credentials."""
     bad = method(request, 'GET')
     if bad: return bad
-    actor, bad = require(request, 'stores.manage')
+    actor, bad = map_permission(request)
     if bad: return bad
     target = PROXY_TARGETS.get(service_path)
     if target is None:

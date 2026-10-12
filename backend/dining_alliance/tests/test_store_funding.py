@@ -80,12 +80,14 @@ class WarehouseFundingTests(TestCase):
                 self.assertEqual(income_data(snapshot)['status'],'PENDING')
                 self.assertEqual(account_data(restaurant)['availableFen'],0)
 
-    def test_freight_preserves_existing_platform_basis_and_money(self):
+    def test_customer_freight_excluded_from_goods_profit_and_money_conserved(self):
         original=self.scene
         def freight_scene(*args,**kwargs):
             from stores.models import StoreProductProfitRule
             result=original(*args,**kwargs)
-            store=result[0];store.delivery_fee_fen=200;store.revision+=1;store.save()
+            store=result[0];store.revision+=1;store.save()
+            from shipping.tests.helpers import configure_zone
+            configure_zone(store,fee=200)
             StoreProductProfitRule.objects.create(product=self.product,platform_share_bps=2000)
             from dining_alliance.service import scan
             return (*result[:3],scan(self.member,result[2].code)['sessionId'])
@@ -93,16 +95,18 @@ class WarehouseFundingTests(TestCase):
         order,restaurant,session=self.order()
         amounts=order_split(order)
         # Twice the confirmed 100/60/20% example, including 10 shipping.
-        self.assertEqual((amounts['paid_fen'],amounts['platform_fen'],amounts['dining_commission_fen'],amounts['store_fen'],amounts['freight_fen']),(2200,200,160,1640,200))
+        self.assertEqual((amounts['paid_fen'],amounts['platform_fen'],amounts['dining_commission_fen'],amounts['store_fen'],amounts['freight_fen']),(2200,160,160,1680,200))
         self.assertEqual(amounts['store_fen']+amounts['dining_commission_fen']+amounts['platform_fen']+amounts['freight_fen'],2200)
         self.complete(order)
-        self.assertEqual(StoreWallet.objects.get(store=order.store).available_fen,1640)
+        self.assertEqual(StoreWallet.objects.get(store=order.store).available_fen,1680)
 
-    def test_high_freight_freezes_even_zero_dining_ratio(self):
+    def test_high_warehouse_sponsored_freight_freezes_even_zero_dining_ratio(self):
         original=self.scene
         def freight_scene(*args,**kwargs):
             result=original(*args,**kwargs)
-            store=result[0];store.delivery_fee_fen=10000;store.revision+=1;store.save()
+            store=result[0];store.revision+=1;store.save()
+            from shipping.tests.helpers import configure_zone
+            configure_zone(store,fee=10000,freeThresholdFen=0)
             ProductCommissionRule.objects.filter(product=self.product).update(commission_bps=0)
             from dining_alliance.service import scan
             return (*result[:3],scan(self.member,result[2].code)['sessionId'])

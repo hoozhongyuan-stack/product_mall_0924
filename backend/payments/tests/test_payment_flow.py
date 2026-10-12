@@ -13,7 +13,7 @@ from accounts.models import AdminAccount
 from benefits.models import CouponCampaign, MemberCoupon, PointsAccount
 from benefits.service import grant_points
 from catalog.models import Asset, Category, MemberGrade, Product, Sku, SkuUnitVersion
-from checkout.service import create_quote
+from shipping.tests.helpers import selected_physical_quote as create_quote
 from customers.models import Member
 from inventory.models import InventoryBalance, InventoryLedger, InventoryReservation, Warehouse
 from notifications.models import MessageTask

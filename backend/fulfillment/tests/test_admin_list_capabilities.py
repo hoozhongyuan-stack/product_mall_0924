@@ -8,7 +8,7 @@ from django.utils import timezone
 from unittest.mock import patch
 from catalog.models import Product, Sku, SkuUnitVersion
 from inventory.models import InventoryBalance
-from checkout.service import create_quote
+from shipping.tests.helpers import selected_physical_quote as create_quote
 from orders.models import Order
 from orders.service import submit_order
 from orders.queries import list_orders

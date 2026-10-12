@@ -14,7 +14,8 @@ class D3SettlementTests(TransactionTestCase):
     refund_evidence = refund_flow.RefundFlowTests.refund_evidence
     def test_full_unshipped_refund_includes_shipping_once(self):
         from shipping.models import ShippingPolicy
-        ShippingPolicy.objects.update(fee_fen=600)
+        from shipping.tests.helpers import configure_courier_fee
+        configure_courier_fee(600)
         order,line=self._paid_order("SHIP")
         self.assertEqual(order.shipping_fee_fen,600)
         case=apply_case(self.member,line.id,"REFUND_ONLY",2,"合成整项退款",uuid.uuid4())
@@ -27,7 +28,8 @@ class D3SettlementTests(TransactionTestCase):
 
     def test_partial_unshipped_has_no_shipping(self):
         from shipping.models import ShippingPolicy
-        ShippingPolicy.objects.update(fee_fen=600)
+        from shipping.tests.helpers import configure_courier_fee
+        configure_courier_fee(600)
         order,line=self._paid_order("SHIP")
         case=apply_case(self.member,line.id,"REFUND_ONLY",1,"合成部分退款",uuid.uuid4())
         review_case(case.id,self.owner,True,"合成同意退款",case.revision)
@@ -153,7 +155,7 @@ class D3SettlementTests(TransactionTestCase):
         from catalog.models import Sku,SkuUnitVersion
         from inventory.models import InventoryBalance,InventoryLedger
         from customers.models import CustomerAddress
-        from checkout.service import create_quote
+        from shipping.tests.helpers import selected_physical_quote as create_quote
         from orders.service import submit_order
         from orders.models import Order
         from payments.service import record_verified_payment
@@ -219,7 +221,7 @@ class D3SettlementTests(TransactionTestCase):
         from django.utils import timezone
         from datetime import timedelta
         from customers.models import CustomerAddress
-        from checkout.service import create_quote
+        from shipping.tests.helpers import selected_physical_quote as create_quote
         from orders.service import submit_order
         from orders.models import Order,OrderLine
         from payments.service import record_verified_payment

@@ -1,6 +1,7 @@
 <template name="commerce-amounts">
   <view class="row"><text>商品金额</text><text>{{goodsTotal}}</text></view>
-  <view wx:if="{{source.shippingFeeFen > 0}}" class="row"><text>运费</text><text>{{shippingFee}}</text></view>
+  <view wx:if="{{source.shippingFeeFen > 0 || source.shippingSnapshot}}" class="row"><text>运费</text><text>{{shippingFee}}</text></view>
+  <view wx:if="{{source.shippingSnapshot && source.shippingSnapshot.freeSource !== 'NONE'}}" class="row"><text class="muted">{{source.shippingSnapshot.freeSource === 'PLATFORM' ? '平台活动包邮' : source.shippingSnapshot.freeSource === 'MIXED' ? '部分商品包邮' : '前置仓包邮'}}</text><text class="muted">{{source.shippingSnapshot.freeSource === 'MIXED' ? '部分运费减免' : '顾客免运费'}}</text></view>
   <view wx:if="{{source.couponDiscountFen > 0}}" class="row"><text>优惠券</text><text>{{couponDiscount}}</text></view>
   <view wx:if="{{source.pointsDiscountFen > 0}}" class="row"><text>积分抵扣</text><text>{{pointsDiscount}}</text></view>
   <view class="row payable-row total"><text class="strong">应付金额</text><text class="price">{{total}}</text></view>
