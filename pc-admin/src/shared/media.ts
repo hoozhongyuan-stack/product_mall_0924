@@ -7,4 +7,6 @@ export interface Asset {
   width?: number
   height?: number
   adminUrl: string
+  /** Authorized static preview; originals are reserved for explicit preview/editing. */
+  thumbnailUrl?: string
 }

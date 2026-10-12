@@ -33,7 +33,8 @@ def exchange_catalog_rows(sku_ids,*,lock=False):
             'saleUnit':unit.sale_unit if unit else None,'ratio':unit.ratio if unit else None,
             'fulfillmentKind':product.fulfillment_kind,'redeemValidUntil':product.redeem_valid_until.isoformat() if product.redeem_valid_until else None,
             'unitVersionId':str(unit.id) if unit else None,
-            'imageUrl':f'/api/v1/app/assets/{product.main_image_id}/file' if product.main_image_id else None}
+            'imageUrl':f'/api/v1/app/assets/{product.main_image_id}/file' if product.main_image_id else None,
+            'thumbnailUrl':f'/api/v1/app/assets/{product.main_image_id}/thumbnail' if product.main_image_id else None}
     return result
 
 

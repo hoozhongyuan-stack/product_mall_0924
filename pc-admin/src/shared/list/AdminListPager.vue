@@ -5,8 +5,9 @@ withDefaults(defineProps<{page: number; pageSize: number; total: number; loading
 defineEmits<{change: [page: number, size: number]}>()
 </script>
 <template>
-  <nav class="admin-list-pager" aria-label="列表分页">
-    <ElConfigProvider :locale="zhCn"><ElPagination :current-page="page" :page-size="pageSize" :total="total" :disabled="loading"
+  <nav class="admin-list-pager" aria-label="列表分页" :aria-busy="loading">
+    <span v-if="loading" role="status">正在读取分页信息…</span>
+    <ElConfigProvider v-else :locale="zhCn"><ElPagination :current-page="page" :page-size="pageSize" :total="total" :disabled="loading"
       :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next, jumper"
       @current-change="$emit('change', $event, pageSize)" @size-change="$emit('change', 1, $event)" /></ElConfigProvider>
   </nav>

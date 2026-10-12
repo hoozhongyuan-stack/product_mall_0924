@@ -91,12 +91,20 @@
 | `PATCH /api/v1/admin/skus/{id}/status`、`PATCH /api/v1/admin/skus/{id}/price`、`PUT /api/v1/admin/skus/{id}/grade-prices`、`PUT /api/v1/admin/skus/{id}/unit` | SKU 状态、日常价、等级价数组或新单位版本、`expectedRevision` | 每项独立验权限与修订号；SKU 首次上架要求商品有主图、启用的二级及一级分类和销售单位。SKU 与商品有效状态、修订号、审计同事务保存；商品手动下架时修改 SKU 状态不会解除 SPU 下架。等级价 PUT 仅替换已启用等级的价格，保留已停用等级的原价及旧版本；单位旧版本保留。 |
 | `POST /api/v1/admin/assets` | `multipart/form-data` 的 `kind=IMAGE/VIDEO/GIF` 与 `file` | 仅 `asset.upload` 可调用，返回 `assetId`、MIME、大小、宽高及 `adminUrl`；校验文件声明、容器结构和实际解码，GIF 须至少 2 帧。图片/GIF 10 MiB、视频 50 MiB。本机使用已安装的 `ffmpeg`；上传服务缺少解码器时返回 503。文件写入 `MALL_MEDIA_ROOT`，生产环境必须显式配置持久目录。未绑定素材分别受单账号 200 MiB、全站 1 GiB 配额限制，超过 24 小时由 `purge_orphan_media` 清理，上传时也会补充清理。 |
 | `GET /api/v1/admin/assets/{id}/file`、`GET /api/v1/app/assets/{id}/file` | 管理端预览、公开素材读取 | 管理端需 `asset.read` 或符合页面/启动草稿、当前或历史发布引用及本人未绑定上传的受限预览条件；公开 URL 在素材被当前上架商品、首页/微页面当前发布版本的可见组件，或启动页当前发布版本引用时可访问；草稿、隐藏组件和旧版独占素材不可公开。MP4 支持单段 `Range` 请求。 |
+| `GET /api/v1/admin/assets/{id}/thumbnail`、`GET /api/v1/app/assets/{id}/thumbnail` | 管理列表及自动编辑画布的静态缩略图 | 仅 IMAGE/GIF，返回 `image/jpeg`，最长边不超过320px、文件不超过64KiB，GIF仅首帧；VIDEO返回400 `MEDIA_INVALID`。分别复用对应 `/file` 的完整实时授权／公开可见检查，生成或等待锁结束后出站前再次校验；缓存存在也不能绕过权限、当前公开引用或源文件存在检查。管理员响应 `private,no-store` 并 `Vary: Cookie`，公开响应也 `no-store`；均带 `nosniff`。缺失源404 `NOT_FOUND`，损坏或摘要／尺寸不一致400 `MEDIA_INVALID`，解码器缺失、超时或并发繁忙503 `MEDIA_THUMBNAIL_UNAVAILABLE`，存储故障503 `MEDIA_STORAGE_UNAVAILABLE`；失败不自动返回原大图。 |
 | `GET/PUT /api/v1/admin/pages/home/draft` | 首页组件、顺序、显隐、站内链接与三项主题颜色；PUT 含 `expectedRevision` | 返回 `pageId`、草稿 `revision`、`config`、`publishedRevision`；保存草稿允许逐步配置未完成组件，不改变线上版本。`page.read` 可读，`page.edit` 可写。 |
 | `POST /api/v1/admin/pages/home/preview`、`POST /api/v1/admin/pages/home/publish` | 预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另需 `Idempotency-Key`，无需操作员密码或 `X-Action-Confirmation` | 预览严格校验可见组件、素材和站内目标；发布在事务内生成不可变版本、切换当前指针并写审计。过期修订返回 `REVISION_CONFLICT`；同键同修订重试返回原版本，同修订换键拒绝再次发布。 |
 | `GET/POST /api/v1/admin/pages`、`GET/PUT /api/v1/admin/pages/{id}/draft`、`POST /api/v1/admin/pages/{id}/preview/publish` | 列表 `page/pageSize`；创建 `{name}`；草稿 PUT `{name,expectedRevision,config}`；预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另带 `Idempotency-Key`，无需操作员密码确认 | 仅列出 `MICRO` 页面，分页上限 100；创建返回 201 与初始草稿。草稿返回 `pageId/name/revision/config/publishedRevision`；预览严格校验可见组件与目标；发布事务生成不可变版本并原子切换指针。`page.read/edit/publish` 分别校验；版本列表与回退见5.22。 |
 | `GET/PUT /api/v1/admin/startup/draft` | GET 无；PUT `{expectedRevision,gifAssetId,fallbackAssetId}`，两个素材 ID 可暂空 | 返回 `{revision,gifAssetId,fallbackAssetId,publishedRevision}`。`startup.read` 可读，`startup.edit` 可写；素材类型与文件存在性由服务端校验；过期修订返回 `REVISION_CONFLICT`。 |
 | `POST /api/v1/admin/startup/preview`、`POST /api/v1/admin/startup/publish` | 预览 `{expectedRevision}`；E1起发布 `{expectedRevision,expectedPublicationRevision}`，另需 `Idempotency-Key`，无需操作员密码确认 | 预览返回修订及两张素材的管理端 URL；发布要求两项有效并返回 `versionId/revision/gifUrl/fallbackUrl`，后两项为公开相对路径。同键同修订重试返回原版本；不同键重复发布当前修订返回 409；版本、指针、请求记录和审计同事务提交，失败旧版继续生效。 |
 | `GET /api/v1/app/startup` | 无 | 只返回当前发布版本的 `versionId/revision/gifUrl/fallbackUrl`，素材 URL 为 `/api/v1/app/assets/{id}/file` 相对路径；未发布返回 `404 STARTUP_UNPUBLISHED`。 |
+
+
+后台 `Asset` DTO（上传、素材库、分类、商品 `mainImage/galleryImages` 等统一序列化）在 IMAGE/GIF 时追加可选 `thumbnailUrl=/api/v1/admin/assets/{assetId}/thumbnail`，VIDEO不返回该字段；原 `adminUrl` 保留用于主动预览。页面商品卡及积分商品响应追加 `thumbnailUrl=/api/v1/app/assets/{mainImageId}/thumbnail`（无主图时为null），原 `imageUrl` 保留。缩略地址不是额外读取权限，公开地址仍只服务当前可见素材；私有草稿不会因此公开。自动列表／编辑画布读取缩略图，主动完整预览才读取原素材；缩略失败显示占位。
+
+缩略图按需生成，旧素材无需迁移。派生文件仅写 `MALL_MEDIA_ROOT/.thumbnails/v1/` 私有目录（目录0700、文件0600），不改变素材表、原文件、业务修订或引用。缓存键含源摘要、类型、尺寸及文件状态，源变化重新生成，成功后只保留该素材当前版本；原素材删除意图同时清除其派生数据。跨进程素材锁与全卷两个生成槽配合临时文件和同卷原子替换，避免部分文件出站。输入最多10MiB、宽高／像素沿素材原限制（8192／3200万）；使用已有ffmpeg，强制输入格式及仅pipe协议、单线程解码／滤镜、每次内存分配最多64MiB、单次8秒超时、仅一帧且输出64KiB上限；等待同一素材锁最长9秒，并发槽繁忙返回可重试503。
+
+发布镜像闸门完成后可运行 `python manage.py warm_asset_thumbnails --limit 50` 提前准备最新IMAGE/GIF的派生缓存；limit须1—200，默认50。命令只读业务库、只写派生缓存，输出 `generated/failed/bytes` 汇总（generated包括已命中缓存的可用条数）；失败逐项输出素材ID和受控错误码，最终非零退出，不打印原存储路径。无需数据库迁移或新增运行时依赖。首次请求和预热复用同一有界生成入口。
 
 启动页采用自定义导航，发布图片按比例覆盖完整视口，跳过和倒计时叠加在图片上并避开微信胶囊及安全区。
 

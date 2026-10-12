@@ -310,10 +310,10 @@ onUnmounted(() => { ++versionGeneration; ++jobGeneration; ++detailGeneration; ++
     </section>
 
     <section v-if="canManageKey" class="code-release-key panel" aria-labelledby="code-release-key-title">
-      <div class="code-versions-section-heading"><h2 id="code-release-key-title">代码上传密钥</h2><span>{{ readiness?.uploadKey.configured ? '已配置，可替换' : '尚未配置' }}</span></div>
+      <div class="code-versions-section-heading"><h2 id="code-release-key-title">代码上传密钥</h2><span v-if="readiness && !readinessLoading && !readinessError">{{ readiness.uploadKey.configured ? '已配置，可替换' : '尚未配置' }}</span><span v-else role="status">{{readinessLoading?'正在读取密钥状态…':'密钥状态待重新读取'}}</span></div>
       <p>在微信公众平台下载 .key 文件，在此加密保存。</p>
       <label for="code-upload-key-file">选择密钥文件</label>
-      <input id="code-upload-key-file" ref="keyInput" type="file" accept=".key,text/plain" :disabled="keyBusy || keyNeedsRead || keyConfirming" @change="chooseKey">
+      <input id="code-upload-key-file" ref="keyInput" type="file" accept=".key,text/plain" :disabled="keyBusy || keyNeedsRead || keyConfirming || readinessLoading" @change="chooseKey">
       <p v-if="keyError" class="notice" role="alert">{{ keyError }}</p>
       <p v-if="keyNotice" class="code-release-key-notice" role="status">{{ keyNotice }}</p>
       <button data-test="begin-key-upload" class="secondary-button" type="button" :disabled="!keyFile || !readiness?.appId || keyBusy || keyNeedsRead || readinessLoading" @click="beginKeyUpload">上传代码密钥</button>
@@ -339,7 +339,7 @@ onUnmounted(() => { ++versionGeneration; ++jobGeneration; ++detailGeneration; ++
           <tbody><tr v-for="item in versions" :key="item.versionId"><td><input type="checkbox" :aria-label="`选择版本 ${item.versionLabel}`" :checked="versionIds.includes(item.versionId)" @change="toggleVersion(item.versionId)" /></td><th scope="row">{{ item.versionLabel }}</th><td><AdminStatusBadge :status="item.storageStatus" :label="storageLabel(item.storageStatus)" :tone="item.storageStatus==='READY'?'success':item.storageStatus==='STORED_UNVERIFIED'?'pending':'danger'" /></td><td class="code-versions-hash">{{ item.sourceRevision || `SHA-256 ${item.sourceDigest.slice(0, 12)}…` }}</td><td>{{ formatSize(item.packageBytes) }}</td><td>{{ formatTime(item.completedAt) }}</td><td><button class="text-button" type="button" :aria-label="`查看版本 ${item.versionLabel} 详情`" @click="loadDetail(item.versionId)">查看详情</button></td></tr></tbody>
         </table>
       </div>
-<AdminCursorPager :page="previousCursors.length+1" :page-size="pageSize" :has-previous="!!previousCursors.length" :has-next="!!nextCursor" :loading="versionLoading" @previous="previousPage" @next="nextPage" @size="changeVersionSize" />
+<AdminCursorPager v-if="!versionError" :page="previousCursors.length+1" :page-size="pageSize" :has-previous="!!previousCursors.length" :has-next="!!nextCursor" :loading="versionLoading" @previous="previousPage" @next="nextPage" @size="changeVersionSize" />
     </section>
 
     <section class="code-versions-section" aria-labelledby="code-jobs-title">
@@ -350,7 +350,7 @@ onUnmounted(() => { ++versionGeneration; ++jobGeneration; ++detailGeneration; ++
       <p v-if="jobLoading" class="loading-inline" role="status">正在读取同步记录…</p>
       <div v-if="!jobLoading && !jobError && !jobs.length" class="panel code-versions-empty">暂无同步记录。构建由服务器部署流程发起，后台不接收本地上传包。</div>
       <div v-if="!jobLoading && !jobError && jobs.length" class="panel table-wrap admin-list-table"><table><thead><tr><th><input type="checkbox" aria-label="选择当前页全部同步记录" :checked="jobsSelected" @change="selectJobs" /></th><th>任务 / 版本</th><th>状态</th><th>失败码</th><th>创建时间</th><th>完成时间</th><th>操作</th></tr></thead><tbody><tr v-for="job in jobs" :key="job.taskId"><td><input type="checkbox" :aria-label="`选择同步记录 ${job.taskId}`" :checked="jobIds.includes(job.taskId)" @change="toggleJob(job.taskId)" /></td><td><strong>{{job.taskId}}</strong><small>{{job.versionId||'未形成版本'}}</small></td><td><AdminStatusBadge :status="job.status" :label="jobLabel(job.status)" :tone="job.status==='SUCCEEDED'?'success':job.status==='FAILED'?'danger':'processing'" /></td><td>{{job.failureCode||'—'}}</td><td>{{formatTime(job.createdAt)}}</td><td>{{formatTime(job.completedAt)}}</td><td><button class="text-button" @click="jobDetail=job">查看详情</button></td></tr></tbody></table></div>
-<AdminCursorPager :page="previousJobCursors.length+1" :page-size="jobPageSize" :has-previous="!!previousJobCursors.length" :has-next="!!nextJobCursor" :loading="jobLoading" @previous="previousJobPage" @next="nextJobPage" @size="changeJobSize" />
+<AdminCursorPager v-if="!jobError" :page="previousJobCursors.length+1" :page-size="jobPageSize" :has-previous="!!previousJobCursors.length" :has-next="!!nextJobCursor" :loading="jobLoading" @previous="previousJobPage" @next="nextJobPage" @size="changeJobSize" />
     </section>
     </details>
 

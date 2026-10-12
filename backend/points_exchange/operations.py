@@ -19,7 +19,7 @@ def offer_rows(offers):
     warehouse,balances=default_available_base_units([offer.sku_id for offer in offers])
     return [{'id':str(offer.id),'pointsPrice':offer.points_price,'status':offer.status,'revision':offer.revision,
              'createdAt':offer.created_at.isoformat(),
-             **{key:row[key] for key in ['skuId','productId','productName','skuCode','specs','saleUnit','fulfillmentKind','redeemValidUntil','imageUrl']},
+             **{key:row[key] for key in ['skuId','productId','productName','skuCode','specs','saleUnit','fulfillmentKind','redeemValidUntil','imageUrl','thumbnailUrl']},
              'availableQuantity':balances.get(offer.sku_id,0)//row['ratio'] if row['ratio'] and warehouse else 0,
              'catalogOnSale':row['eligible']} for offer in offers for row in [rows[offer.sku_id]]]
 

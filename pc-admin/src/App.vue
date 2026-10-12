@@ -7,6 +7,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { authorizedSections, canAccessRoute } from './navigation'
 import PasswordDialog from './components/PasswordDialog.vue'
 import { clearProcurementSnapshots } from './views/stores/procurement/domain.mjs'
+import { useNavigationFeedback } from './shared/navigation/useNavigationFeedback'
+import AdminNavigationLink from './shared/navigation/AdminNavigationLink.vue'
+import AdminNavigationFeedback from './shared/navigation/AdminNavigationFeedback.vue'
 
 const account = ref<Account | null>(null)
 provide('admin-account', account)
@@ -18,8 +21,11 @@ const message = ref('')
 const passwordNotice = ref('')
 const route = useRoute()
 const router = useRouter()
+const navigation = useNavigationFeedback(router, () => !!account.value, meta => canAccessRoute(meta, account.value?.permissionCodes || []))
+watch(() => JSON.stringify([account.value?.accountId, account.value?.permissionCodes]), () => navigation.clear(), { flush: 'sync' })
 const menuOpen = ref(false)
 const passwordDialogOpen = ref(false)
+function navigateMobile(target: string) { menuOpen.value = false; return navigation.navigate(target) }
 const rememberLogin = ref(false)
 const preferenceNotice = ref('')
 const rememberedLoginKey = 'mall.admin.remembered-login'
@@ -70,7 +76,7 @@ onMounted(async () => {
     loading.value = false
   }
 })
-onUnmounted(() => window.removeEventListener('admin-session-expired', sessionExpired))
+onUnmounted(() => { navigation.dispose(); window.removeEventListener('admin-session-expired', sessionExpired) })
 
 async function signIn() {
   if (!loginName.value || !password.value) {
@@ -153,22 +159,23 @@ async function signOut() {
     </header>
     <aside class="sidebar">
       <nav class="nav" aria-label="后台主导航">
-        <RouterLink v-for="section in sections" :key="section.name" :to="section.links[0]!.path" class="nav-item" :class="{ current: currentSection?.name === section.name }" :aria-current="currentSection?.name === section.name ? 'true' : undefined">{{ section.name }}</RouterLink>
+        <AdminNavigationLink :navigate="navigation.navigate" v-for="section in sections" :key="section.name" :to="section.links[0]!.path" class="nav-item" :class="{ current: currentSection?.name === section.name }" :aria-current="currentSection?.name === section.name ? 'true' : undefined">{{ section.name }}</AdminNavigationLink>
       </nav>
     </aside>
     <el-drawer v-model="menuOpen" title="商城管理后台" direction="ltr" size="min(320px, 88vw)" class="mobile-navigation" append-to-body>
       <nav class="nav" aria-label="移动后台导航">
-        <RouterLink v-for="section in sections" :key="section.name" :to="section.links[0]!.path" class="nav-item" :class="{ current: currentSection?.name === section.name }" :aria-current="currentSection?.name === section.name ? 'true' : undefined" @click="section.links[0]!.path === route.path && (menuOpen = false)">{{ section.name }}</RouterLink>
+        <AdminNavigationLink :navigate="navigateMobile" v-for="section in sections" :key="section.name" :to="section.links[0]!.path" class="nav-item" :class="{ current: currentSection?.name === section.name }" :aria-current="currentSection?.name === section.name ? 'true' : undefined">{{ section.name }}</AdminNavigationLink>
       </nav>
     </el-drawer>
     <main id="main-content" class="workspace" tabindex="-1">
       <div class="workspace-navigation">
-        <nav class="breadcrumbs" aria-label="页面位置"><span v-if="currentSection">{{ currentSection.name }}</span><template v-if="currentLink && currentLink.path !== route.path"><span aria-hidden="true">/</span><RouterLink :to="currentLink.path">{{ currentLink.title }}</RouterLink></template><span aria-hidden="true">/</span><span aria-current="page">{{ pageTitle }}</span></nav>
+        <AdminNavigationFeedback :state="navigation.state.value" @retry="navigation.retry" @refresh="navigation.safeRefresh" @dismiss="navigation.clear" />
+        <nav class="breadcrumbs" aria-label="页面位置"><span v-if="currentSection">{{ currentSection.name }}</span><template v-if="currentLink && currentLink.path !== route.path"><span aria-hidden="true">/</span><AdminNavigationLink :navigate="navigation.navigate" :to="currentLink.path">{{ currentLink.title }}</AdminNavigationLink></template><span aria-hidden="true">/</span><span aria-current="page">{{ pageTitle }}</span></nav>
         <nav v-if="currentSection?.hasSubnavigation" class="secondary-nav" :aria-label="`${currentSection.name}功能`">
-          <RouterLink v-for="link in currentSection.links" :key="link.path" :to="link.path" :class="{ active: currentLink?.path === link.path }" :aria-current="currentLink?.path === link.path ? 'page' : undefined">{{ link.title }}</RouterLink>
+          <AdminNavigationLink :navigate="navigation.navigate" v-for="link in currentSection.links" :key="link.path" :to="link.path" :class="{ active: currentLink?.path === link.path }" :aria-current="currentLink?.path === link.path ? 'page' : undefined">{{ link.title }}</AdminNavigationLink>
         </nav>
       </div>
-      <section v-if="!canOpenPage" class="page-content" role="alert"><h1>无权访问{{ pageTitle }}</h1><p>当前账号没有此页面的读取权限。</p><RouterLink to="/" class="text-link">返回概览</RouterLink></section>
+      <section v-if="!canOpenPage" class="page-content" role="alert"><h1>无权访问{{ pageTitle }}</h1><p>当前账号没有此页面的读取权限。</p><AdminNavigationLink :navigate="navigation.navigate" to="/" class="text-link">返回概览</AdminNavigationLink></section>
       <RouterView v-else v-slot="{ Component }"><component :is="Component" :account="account" /></RouterView>
     </main>
     <PasswordDialog v-if="passwordDialogOpen" @close="passwordDialogOpen = false" @changed="passwordChanged" />

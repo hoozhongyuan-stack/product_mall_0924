@@ -8,7 +8,7 @@ export interface MosaicItem { assetId: string; title?: string; link?: PageLink }
 export interface PageMetadata { tags: string[]; share: { title: string; description: string; coverAssetId: string } }
 export interface NavigationItem { title: string; assetId?: string; link: PageLink }
 export interface ComponentAppearance { backgroundColor?: string; padding?: number; margin?: number; radius?: number }
-export interface ProductCard { productId: string; name: string; priceFen: number; imageUrl: string; purchasable: boolean }
+export interface ProductCard { productId: string; name: string; priceFen: number; imageUrl: string; thumbnailUrl?: string; purchasable: boolean }
 export interface CouponCard { id: string; title: string; kind: string; minGoodsFen: number; discountFen: number; productIds: string[]; productNames: string[]; redeemEligible: boolean; validFrom: string; validUntil: string; remainingQuantity: number; selfClaimLimit: number; selfClaimedCount: number; canClaim: boolean; claimState: string }
 export type CouponData = Record<string, CouponCard[]>
 export type ComponentData = Record<string, ProductCard[]>

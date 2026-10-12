@@ -28,7 +28,7 @@ export interface Page<T> { items: T[]; page: number; pageSize: number; total: nu
 export interface InventorySku {
   productNo: string
   specs: { name: string; value: string }[]
-  mainImage: { assetId: string; adminUrl: string } | null
+  mainImage: { assetId: string; adminUrl: string; thumbnailUrl?: string } | null
   warehouseStock: { warehouseId: string; onHandBaseUnits: number; reservedBaseUnits: number; availableBaseUnits: number } | null
   skuId: string
   skuCode: string

@@ -498,7 +498,7 @@ onUnmounted(() => {
           </tbody>
         </table>
       </div>
-      <AdminListPager :page="page" :page-size="pageSize" :total="total" :loading="busy||loading||!!mode" @change="changePage"/>
+      <AdminListPager v-if="!error" :page="page" :page-size="pageSize" :total="total" :loading="busy||loading||!!mode" @change="changePage"/>
     </section>
     <ElDialog
       :model-value="!!mode"

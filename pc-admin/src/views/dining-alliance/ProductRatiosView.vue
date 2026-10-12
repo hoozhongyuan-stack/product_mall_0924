@@ -44,7 +44,7 @@ watch(()=>[props.account.accountId,props.account.permissionCodes.join(',')],()=>
   <p v-if="categoryError" role="alert" class="error">分类读取失败：{{categoryError}} <el-button @click="loadCategories">重试分类</el-button></p>
   <AdminSelectionBar unit="个商品" :count="selected.length" :loading="loading||busy" @clear="selected=[];selectionVersion++"><el-button v-if="canManage" type="primary" :disabled="!selected.length||busy||loading" @click="openBatch()">批量设置佣金比例</el-button><el-button :disabled="!selected.length||loading||busy" @click="comparison=true">对比所选商品比例</el-button></AdminSelectionBar>
   <p v-if="error&&!batchOpen" role="alert" class="error">{{error}} <el-button :disabled="busy" @click="reload()">重新读取</el-button></p><p v-if="notice" role="status">{{notice}}</p>
-  <el-table :key="selectionVersion" class="admin-list-table" v-loading="loading" :data="items" empty-text="暂无商品" @selection-change="selected=$event">
+  <el-table :key="selectionVersion" class="admin-list-table" v-loading="loading" :data="items" :empty-text="loading?'正在读取…':error?'读取失败，请重试。':'暂无商品'" @selection-change="selected=$event">
    <el-table-column type="selection" width="50" :selectable="()=>!busy&&!loading"/>
    <el-table-column label="商品" min-width="220"><template #default="{row}">{{row.name}}<p class="muted">{{row.productNo}}</p></template></el-table-column>
    <el-table-column label="分类" min-width="140"><template #default="{row}">{{categories.find(c=>c.id===row.categoryId)?.name||'未分类'}}</template></el-table-column>
@@ -52,7 +52,7 @@ watch(()=>[props.account.accountId,props.account.permissionCodes.join(',')],()=>
    <el-table-column label="配置状态" min-width="100"><template #default="{row}"><AdminStatusBadge :status="row.commissionBps===null?'UNCONFIGURED':'CONFIGURED'" :label="row.commissionBps===null?'未配置':'已配置'"/></template></el-table-column>
    <el-table-column v-if="canManage" label="操作" fixed="right" width="110"><template #default="{row}"><el-button link :disabled="busy||loading" @click="openBatch([row as ProductRatio])">设置比例</el-button></template></el-table-column>
   </el-table>
-  <AdminListPager :page="page" :page-size="pageSize" :total="total" :loading="loading||busy" @change="(p,s)=>reload(p,s)"/>
+  <AdminListPager v-if="!error" :page="page" :page-size="pageSize" :total="total" :loading="loading||busy" @change="(p,s)=>reload(p,s)"/>
  </section>
  <p class="muted">佣金＝（商品实付金额－履约前置仓进货单价×数量）×餐饮佣金比例。进货成本由前置仓统一维护。</p>
  <el-dialog v-model="batchOpen" :title="batchItems.length>1?'批量设置佣金比例':'设置佣金比例'" width="min(560px,94vw)" :before-close="closeBatch" :close-on-click-modal="false" :show-close="!busy" :close-on-press-escape="!busy">

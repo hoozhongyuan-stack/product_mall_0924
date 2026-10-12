@@ -96,15 +96,19 @@ class InventorySkuReadTests(TestCase):
                                      height=1, sha256='0' * 64, stored_name='product/test.png',
                                      original_name='test.png', created_by=AdminAccount.objects.get(login_name='owner'))
         path = f'/api/v1/admin/assets/{image.id}/file'
+        thumbnail = f'/api/v1/admin/assets/{image.id}/thumbnail'
         with patch('catalog.media_views.file_response', return_value=HttpResponse(b'image')):
             self.assertEqual(client.get(path).status_code, 403)
+            self.assertEqual(client.get(thumbnail).status_code, 403)
             product = self.sku.product
             product.main_image = image
             product.save(update_fields=['main_image'])
             self.assertEqual(client.get(path).status_code, 200)
+            self.assertEqual(client.get(thumbnail).status_code, 200)
             summary = client.get('/api/v1/admin/inventory/skus').json()['data']['items'][0]
-            self.assertEqual(summary['mainImage'], {'assetId': str(image.id), 'adminUrl': path})
+            self.assertEqual(summary['mainImage'], {'assetId': str(image.id), 'adminUrl': path, 'thumbnailUrl': thumbnail})
             self.assertEqual(client.get('/api/v1/admin/assets').status_code, 403)
             product.main_image = None
             product.save(update_fields=['main_image'])
             self.assertEqual(client.get(path).status_code, 403)
+            self.assertEqual(client.get(thumbnail).status_code, 403)

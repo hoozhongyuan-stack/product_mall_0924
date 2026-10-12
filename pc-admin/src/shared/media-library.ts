@@ -1,5 +1,9 @@
 import type { Asset } from './media'
 export type AssetKind = Asset['kind']
+/** A missing/failed thumbnail must not fall back to an expensive original. */
+export function listMediaUrl(asset: {thumbnailUrl?: string; kind?: AssetKind} | null | undefined): string {
+  return asset && asset.kind !== 'VIDEO' ? asset.thumbnailUrl || '' : ''
+}
 export interface LibraryAsset extends Asset { originalName: string; createdAt: string; sha256: string; bindingStatus: 'BOUND' | 'UNBOUND'; availability: 'READY' | 'MISSING' | 'EXPIRED' }
 export interface AssetPage { items: LibraryAsset[]; total: number; page: number; pageSize: number }
 export interface SelectionRules { kind: AssetKind; square?: boolean; excludedIds?: string[] }

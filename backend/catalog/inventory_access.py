@@ -24,7 +24,8 @@ def stock_sku_data(row):
             "productName": row.product.name, "productNo": row.product.product_no,
             "specs": [{"name": item.axis.name, "value": item.option.value} for item in row.inventory_specs],
             "mainImage": {"assetId": str(image.id),
-                          "adminUrl": f"/api/v1/admin/assets/{image.id}/file"} if image else None,
+                          "adminUrl": f"/api/v1/admin/assets/{image.id}/file",
+                          "thumbnailUrl": f"/api/v1/admin/assets/{image.id}/thumbnail"} if image else None,
             "baseUnit": row.current_unit.base_unit, "saleUnit": row.current_unit.sale_unit,
             "ratio": row.current_unit.ratio, "unitVersionId": str(row.current_unit_id)}
 

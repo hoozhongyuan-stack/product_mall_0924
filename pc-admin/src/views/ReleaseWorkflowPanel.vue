@@ -300,8 +300,8 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
     <section v-if="canManage" class="panel release-workflow-card" aria-labelledby="direct-upload-title">
       <h3 id="direct-upload-title" class="sr-only">选择代码包并上传</h3>
-      <p v-if="!directUploadReady">请先处理上方未满足的条件，并选择可用代码包。</p>
-      <p>服务器出口 IP：<strong>{{ readiness?.egressIp || '尚未配置' }}</strong>。请加入微信公众平台的代码上传 IP 白名单。</p>
+      <p v-if="readiness && !directUploadReady">请先处理上方未满足的条件，并选择可用代码包。</p>
+      <p v-if="readiness">服务器出口 IP：<strong>{{ readiness.egressIp || '尚未配置' }}</strong>。请加入微信公众平台的代码上传 IP 白名单。</p><p v-else role="status">服务器出口 IP：状态待读取。</p>
       <p v-if="activeUpload?.status === 'UNKNOWN'" role="status">有上传任务的结果待核查。请先在微信公众平台核对该版本，并在下方记录核查结果后关闭旧任务。</p>
       <p v-else-if="activeUpload" role="status">已有上传任务正在执行，请等待任务完成。</p>
       <form data-test="ci-direct-upload-form" class="release-form-grid" @submit.prevent="submitDirectUpload">
@@ -324,8 +324,8 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
     <section class="panel release-workflow-card" aria-labelledby="platform-title">
       <h3 id="platform-title">1. 第三方平台接入</h3>
-      <p v-if="canManagePlatform">组件凭据仅保存在服务器，不在页面回显。当前：{{ platform?.configured ? '凭据已配置' : '凭据未配置' }}；验证票据{{ platform?.ticketReceived ? '已收到' : '未收到' }}。</p>
-      <p v-else>第三方平台配置由拥有微信集成管理权限的账号维护；请查看上方条件检测。</p>
+      <p v-if="canManagePlatform && platform">组件凭据仅保存在服务器，不在页面回显。当前：{{ platform?.configured ? '凭据已配置' : '凭据未配置' }}；验证票据{{ platform?.ticketReceived ? '已收到' : '未收到' }}。</p>
+      <p v-else-if="canManagePlatform" role="status">第三方平台凭据状态待读取。</p><p v-else>第三方平台配置由拥有微信集成管理权限的账号维护；请查看上方条件检测。</p>
       <form v-if="canManagePlatform" class="release-form-grid" @submit.prevent="savePlatform">
         <label>组件 AppID<input v-model.trim="platformFields.componentAppId" autocomplete="off" required></label>
         <label>开发小程序 AppID<input v-model.trim="platformFields.developerAppId" autocomplete="off" required></label>
@@ -341,7 +341,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
     <section v-if="canManage" class="panel release-workflow-card" aria-labelledby="developer-key-title">
       <h3 id="developer-key-title">2. 开发小程序上传密钥</h3>
-      <p>开发小程序 {{ readiness?.developerAppId || '尚未配置' }}；密钥{{ readiness?.developerUploadKey?.configured ? '已配置' : '未配置' }}。此密钥与目标小程序直传密钥用途不同。</p>
+      <p v-if="readiness">开发小程序 {{ readiness.developerAppId || '尚未配置' }}；密钥{{ readiness?.developerUploadKey?.configured ? '已配置' : '未配置' }}。此密钥与目标小程序直传密钥用途不同。</p><p v-else role="status">开发小程序与密钥状态待读取。</p>
       <form class="release-form-grid" @submit.prevent="saveDeveloperKey">
         <label class="wide">选择 .key 文件<input type="file" accept=".key,text/plain" :disabled="!!busy" @change="chooseDeveloperKey"></label>
 
@@ -351,7 +351,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
     <section v-if="canManage" class="panel release-workflow-card" aria-labelledby="upload-title">
       <h3 id="upload-title">3. 上传代码包</h3>
-      <p v-if="!uploadReady">发布条件尚未全部满足，请先处理上方检查项。</p>
+      <p v-if="readiness && !uploadReady">发布条件尚未全部满足，请先处理上方检查项。</p>
       <form data-test="direct-upload-form" class="release-form-grid" @submit.prevent="submitUpload">
         <label>不可变代码版本<select v-model="selectedVersionId" required><option value="">请选择</option><option v-for="version in versions" :key="version.versionId" :value="version.versionId">{{ version.versionLabel }}</option></select></label>
         <label>微信版本号<input v-model.trim="uploadVersion" data-test="upload-version" maxlength="40" pattern="[0-9A-Za-z][0-9A-Za-z._-]*" required></label>
@@ -379,7 +379,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
       <h3 id="release-title">5. 审核状态与发布</h3>
       <p>发布前会再次向微信核验该审核单已通过，且仍是最新审核通过版本。</p>
       <ul class="release-record-list"><li v-for="item in reviews" :key="item.taskId"><strong>{{ item.version }} · 审核单 {{ item.auditId || '待核对' }}</strong><span>{{ reviewStatusLabel(item.status) }}<template v-if="item.reason"> · {{ item.reason }}</template></span><small>{{ item.taskId }}</small><p v-if="item.resolutionNote">核查记录：{{ item.resolutionNote }}</p><div v-if="canManage" class="release-inline-action"><button v-if="item.auditId && ['SUBMITTED', 'REVIEWING', 'APPROVED', 'REJECTED'].includes(item.status)" class="secondary-button" type="button" :disabled="!!busy" @click="refreshReview(item)">刷新微信审核状态</button><template v-if="item.status === 'APPROVED'"><button data-test="publish-reviewed" class="primary-button" type="button" :disabled="!!busy " @click="publish(item)">发布审核通过版本</button></template><button v-if="['SUBMITTING', 'UNKNOWN', 'RELEASING', 'RELEASE_UNKNOWN', 'RELEASE_REQUESTED', 'APPROVED'].includes(item.status)" class="secondary-button" type="button" @click="resolutionTarget = `review:${item.taskId}`">核查后关闭当前任务</button></div><form v-if="canManage && resolutionTarget === `review:${item.taskId}`" class="release-form-grid" @submit.prevent="resolveUnknown('review', item.taskId)"><label class="wide">微信后台核查说明（至少 20 字）<input v-model="resolutionNote" minlength="20" maxlength="500" required></label><button class="secondary-button" type="submit" :disabled="!!busy">关闭当前任务</button></form></li></ul>
-      <p v-if="!reviews.length">暂无提审记录。</p>
+      <p v-if="recordsReady && !reviews.length">暂无提审记录。</p><p v-else-if="!recordsReady" role="status">正在读取提审记录…</p>
     </section>
     </details>
   </section>

@@ -6,7 +6,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.vary import vary_on_cookie
 
 from common.http import offset_response, method
-from accounts.security import audit, error, permissions, require, response
+from accounts.security import audit, error, permissions, require, require_live, response
 
 from .media import orphan_assets, serve_asset, store_asset
 from .models import Asset, Category, Product, Sku
@@ -88,8 +88,11 @@ def asset_delete_view(request, asset_id):
         return error(request, exc.status, exc.code, str(exc))
 
 
-def file_response(request, asset, *, public=False):
+def file_response(request, asset, *, public=False, thumbnail=False, reauthorize=None):
     try:
+        if thumbnail:
+            from .thumbnails import serve_thumbnail
+            return serve_thumbnail(request, asset, public=public, reauthorize=reauthorize)
         return serve_asset(request, asset, public=public)
     except CatalogError as exc:
         return error(request, exc.status, exc.code, str(exc))
@@ -98,12 +101,30 @@ def file_response(request, asset, *, public=False):
 
 
 def admin_asset_file_view(request, asset_id):
+    return admin_asset_response(request, asset_id)
+
+
+@never_cache
+@vary_on_cookie
+def admin_asset_thumbnail_view(request, asset_id):
+    return admin_asset_response(request, asset_id, thumbnail=True)
+
+
+def admin_asset_response(request, asset_id, *, thumbnail=False):
+    asset, bad = admin_readable_asset(request, asset_id)
+    if bad is not None:
+        return bad
+    return file_response(request, asset, thumbnail=thumbnail,
+                         reauthorize=lambda: admin_readable_asset(request, asset_id, live=True)[1])
+
+
+def admin_readable_asset(request, asset_id, *, live=False):
     bad = method(request, "GET")
     if bad:
-        return bad
-    actor, bad = require(request)
+        return None, bad
+    actor, bad = (require_live if live else require)(request)
     if bad:
-        return bad
+        return None, bad
     granted = set(permissions(actor))
     if "asset.read" not in granted:
         page_reference = "page.read" in granted and asset_is_available_to_page_reader(asset_id)
@@ -124,15 +145,32 @@ def admin_asset_file_view(request, asset_id):
         if not any((store_reference, page_reference, startup_reference, storefront_reference, catalog_reference,
                     inventory_reference, own_unbound_upload)):
             audit(request, "permission.denied", "asset", asset_id, actor, result="DENIED")
-            return error(request, 403, "PERMISSION_DENIED", "当前账号没有此素材读取权限。")
+            return None, error(request, 403, "PERMISSION_DENIED", "当前账号没有此素材读取权限。")
     asset = Asset.objects.filter(id=asset_id).first()
-    return file_response(request, asset) if asset else error(request, 404, "NOT_FOUND", "素材不存在。")
+    return (asset, None) if asset else (None, error(request, 404, "NOT_FOUND", "素材不存在。"))
 
 
 def public_asset_file_view(request, asset_id):
+    return public_asset_response(request, asset_id)
+
+
+@never_cache
+def public_asset_thumbnail_view(request, asset_id):
+    return public_asset_response(request, asset_id, thumbnail=True)
+
+
+def public_asset_response(request, asset_id, *, thumbnail=False):
+    asset, bad = public_readable_asset(request, asset_id)
+    if bad is not None:
+        return bad
+    return file_response(request, asset, public=True, thumbnail=thumbnail,
+                         reauthorize=lambda: public_readable_asset(request, asset_id)[1])
+
+
+def public_readable_asset(request, asset_id):
     bad = method(request, "GET")
     if bad:
-        return bad
+        return None, bad
     product = Product.objects.filter(
         status=Product.Status.ON_SALE,
         main_image__isnull=False,
@@ -150,6 +188,6 @@ def public_asset_file_view(request, asset_id):
     store_logo = Store.objects.filter(logo_id=asset_id, enabled=True, warehouse__enabled=True).exists()
     category_image = Category.objects.filter(status=Category.Status.ACTIVE).filter(Q(parent__isnull=True) | Q(parent__status=Category.Status.ACTIVE)).filter(Q(image_id=asset_id) | Q(banner_id=asset_id)).exists()
     if not category_image and not store_logo and not product and not published_page and not published_startup and not published_storefront and not exchange:
-        return error(request, 404, "NOT_FOUND", "素材不可用。")
+        return None, error(request, 404, "NOT_FOUND", "素材不可用。")
     asset = Asset.objects.filter(id=asset_id).first()
-    return file_response(request, asset, public=True) if asset else error(request, 404, "NOT_FOUND", "素材不可用。")
+    return (asset, None) if asset else (None, error(request, 404, "NOT_FOUND", "素材不可用。"))

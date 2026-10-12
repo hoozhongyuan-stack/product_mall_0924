@@ -21,7 +21,7 @@ LOGGER = logging.getLogger(__name__)
 STORAGE_LOCK = 628940218453216
 LEGACY_NAMESPACES = frozenset({"product", "startup", "page"})
 NAMESPACES = frozenset({"media", "code", "export"})
-INTERNAL_NAMESPACES = frozenset({"tmp", ".pending-delete"})
+INTERNAL_NAMESPACES = frozenset({"tmp", ".pending-delete", ".thumbnails"})
 
 
 def storage_unavailable(exc):
@@ -147,6 +147,8 @@ class LocalStorage:
         if not Asset.objects.filter(pk=identifier).exists():
             target = self.path(key)
             target.unlink(missing_ok=True)
+            from .thumbnails import discard_asset_thumbnails
+            discard_asset_thumbnails(identifier, storage=self)
             if target.parent.exists():
                 self.sync_directory(target.parent)
         marker.unlink(missing_ok=True)

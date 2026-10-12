@@ -6,7 +6,7 @@ import AdminStatusBadge from './list/AdminStatusBadge.vue'
 import {useCurrentPageSelection} from './list/useCurrentPageSelection'
 import { computed, inject, onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 import { api, type Account } from '../api'
-import { assetQuery, selectionError, type AssetKind, type AssetPage, type LibraryAsset } from './media-library'
+import { assetQuery, listMediaUrl, selectionError, type AssetKind, type AssetPage, type LibraryAsset } from './media-library'
 import './assets.css'
 import AssetUploadQueue from './AssetUploadQueue.vue'
 const props = defineProps<{ canRead: boolean; canUpload: boolean; kind?: AssetKind; square?: boolean; excludedIds?: string[]; selecting?: boolean }>()
@@ -30,7 +30,7 @@ const loading = ref(false)
 const uploading = ref(false)
 const error = ref('')
 const notice = ref('')
-const broken = ref<string[]>([])
+const thumbnailFailures = ref<string[]>([])
 const references = ref<{ domain: string; objectId: string; label: string; role: string; version?: number; state: string }[]>([])
 const referenceAsset = ref<LibraryAsset | null>(null)
 const referenceLoading = ref(false)
@@ -51,7 +51,7 @@ async function load(reset = false) {
   error.value = ''
   try {
     const data = await api<AssetPage>(`/assets?${assetQuery({ kind: kindFilter.value, q: q.value, binding: binding.value, page: page.value, pageSize: pageSize.value, square: props.square }, props.canRead)}`)
-    if (alive && current === generation) { result.value = data; broken.value = [] }
+    if (alive && current === generation) { result.value = data; thumbnailFailures.value = [] }
   } catch (reason) { if (alive && current === generation) error.value = reason instanceof Error ? reason.message : '素材读取失败，请重试。' }
   finally { if (alive && current === generation) loading.value = false }
 }
@@ -80,7 +80,7 @@ async function loadReferences(asset: LibraryAsset, reset = true) {
   } catch (reason) { if (alive && current === referenceGeneration) referenceError.value = reason instanceof Error ? reason.message : '引用读取失败，请重试。' }
   finally { if (alive && current === referenceGeneration) referenceLoading.value = false }
 }
-function select(asset: LibraryAsset) { if (!loading.value && !uploading.value && !error.value && !invalid(asset) && !broken.value.includes(asset.assetId)) emit('select', asset) }
+function select(asset: LibraryAsset) { if (!loading.value && !uploading.value && !error.value && !invalid(asset)) emit('select', asset) }
 function turnPage(value: number) { page.value = value; void load() }
 onMounted(() => void load())
 onBeforeUnmount(() => { alive = false; generation++; referenceGeneration++ })
@@ -106,16 +106,16 @@ onBeforeUnmount(() => { alive = false; generation++; referenceGeneration++ })
       <p v-else-if="!error && !result?.items.length" class="asset-empty">暂无符合条件的素材。可调整筛选{{ canUpload ? '或上传新素材' : '' }}。</p>
       <ul v-if="selecting && result?.items.length" class="asset-grid" :aria-busy="loading">
         <li v-for="asset in result.items" :key="asset.assetId" class="asset-item">
-          <div class="asset-preview"><p v-if="asset.availability !== 'READY' || broken.includes(asset.assetId)">文件不可用</p><video v-else-if="asset.kind === 'VIDEO'" :src="asset.adminUrl" controls preload="metadata" :aria-label="asset.originalName" @error="broken = [...broken, asset.assetId]" /><img v-else :src="asset.adminUrl" :alt="asset.originalName" loading="lazy" @error="broken = [...broken, asset.assetId]" /></div>
+          <div class="asset-preview"><p v-if="asset.availability !== 'READY'">文件不可用</p><img v-else-if="listMediaUrl(asset) && !thumbnailFailures.includes(asset.assetId)" :src="listMediaUrl(asset)" :alt="asset.originalName" loading="lazy" decoding="async" @error="thumbnailFailures = [...thumbnailFailures, asset.assetId]" /><p v-else>{{asset.kind==='VIDEO'?'视频 · 点击预览':'缩略图暂不可用'}}</p></div>
           <strong class="asset-name" :title="asset.originalName">{{ asset.originalName }}</strong>
           <small>{{ asset.kind }} · {{ (asset.byteSize / 1024).toFixed(1) }} KiB{{ asset.width ? ` · ${asset.width} × ${asset.height}` : '' }}</small>
           <small>{{ asset.bindingStatus === 'BOUND' ? '已引用' : '未引用' }} · {{ new Date(asset.createdAt).toLocaleString('zh-CN') }}</small>
-          <div class="asset-actions"><el-button v-if="selecting" type="primary" :disabled="loading || uploading || !!error || !!invalid(asset) || broken.includes(asset.assetId)" @click="select(asset)">选择素材</el-button><el-button v-if="canRead" text :disabled="loading" @click="loadReferences(asset)">查看引用</el-button><el-button v-if="canDelete && asset.bindingStatus === 'UNBOUND'" text type="danger" :disabled="loading || uploading || deleting" @click="deleteAsset = asset; deleteError = ''">删除</el-button></div>
+          <div class="asset-actions"><el-button v-if="selecting" type="primary" :disabled="loading || uploading || !!error || !!invalid(asset)" @click="select(asset)">选择素材</el-button><el-button :disabled="loading" @click="previewAsset=asset">预览</el-button><el-button v-if="canRead" text :disabled="loading" @click="loadReferences(asset)">查看引用</el-button><el-button v-if="canDelete && asset.bindingStatus === 'UNBOUND'" text type="danger" :disabled="loading || uploading || deleting" @click="deleteAsset = asset; deleteError = ''">删除</el-button></div>
           <small v-if="selecting && invalid(asset)" class="error">{{ invalid(asset) }}</small>
         </li>
       </ul>
-      <div v-if="!selecting && result?.items.length" class="table-wrap admin-list-table" tabindex="0" aria-label="素材列表，可横向滚动"><table><thead><tr><th><input type="checkbox" :checked="selection.allSelected.value" :indeterminate="selection.indeterminate.value" :disabled="loading" aria-label="选择当前页素材" @change="selection.togglePage(($event.target as HTMLInputElement).checked)"></th><th>素材</th><th>类型 / 体积</th><th>引用状态</th><th>文件状态</th><th>上传时间</th><th>操作</th></tr></thead><tbody><tr v-for="asset in result.items" :key="asset.assetId"><td><input type="checkbox" :checked="selection.selectedIds.value.includes(asset.assetId)" :disabled="loading" :aria-label="`勾选素材 ${asset.originalName}`" @change="selection.toggle(asset.assetId,($event.target as HTMLInputElement).checked)"></td><td><div class="asset-list-identity"><img v-if="asset.kind !== 'VIDEO' && asset.availability === 'READY' && !broken.includes(asset.assetId)" :src="asset.adminUrl" alt="" @error="broken=[...broken,asset.assetId]"><span v-else>{{asset.kind==='VIDEO'?'视频':'文件'}}</span><strong>{{asset.originalName}}</strong></div></td><td>{{asset.kind}}<br>{{(asset.byteSize/1024).toFixed(1)}} KiB</td><td><AdminStatusBadge :status="asset.bindingStatus" :label="asset.bindingStatus==='BOUND'?'已引用':'未引用'" :tone="asset.bindingStatus==='BOUND'?'processing':'neutral'"/></td><td><AdminStatusBadge :status="asset.availability" :label="asset.availability==='READY'?'可用':'文件不可用'" :tone="asset.availability==='READY'?'success':'danger'"/></td><td>{{new Date(asset.createdAt).toLocaleString('zh-CN')}}</td><td><el-button link type="primary" :disabled="loading" @click="previewAsset=asset">预览</el-button><el-button v-if="canRead" link type="primary" :disabled="loading" @click="loadReferences(asset)">查看引用</el-button><el-button v-if="canDelete && asset.bindingStatus==='UNBOUND'" link type="danger" :disabled="loading || uploading || deleting" @click="deleteAsset=asset;deleteError=''">删除</el-button></td></tr></tbody></table></div>
-      <AdminListPager v-if="result" :page="page" :page-size="pageSize" :total="result.total" :loading="loading" @change="changeListPage"/>
+      <div v-if="!selecting && result?.items.length" class="table-wrap admin-list-table" tabindex="0" aria-label="素材列表，可横向滚动"><table><thead><tr><th><input type="checkbox" :checked="selection.allSelected.value" :indeterminate="selection.indeterminate.value" :disabled="loading" aria-label="选择当前页素材" @change="selection.togglePage(($event.target as HTMLInputElement).checked)"></th><th>素材</th><th>类型 / 体积</th><th>引用状态</th><th>文件状态</th><th>上传时间</th><th>操作</th></tr></thead><tbody><tr v-for="asset in result.items" :key="asset.assetId"><td><input type="checkbox" :checked="selection.selectedIds.value.includes(asset.assetId)" :disabled="loading" :aria-label="`勾选素材 ${asset.originalName}`" @change="selection.toggle(asset.assetId,($event.target as HTMLInputElement).checked)"></td><td><div class="asset-list-identity"><img v-if="listMediaUrl(asset) && asset.availability === 'READY' && !thumbnailFailures.includes(asset.assetId)" :src="listMediaUrl(asset)" alt="" loading="lazy" decoding="async" @error="thumbnailFailures=[...thumbnailFailures,asset.assetId]"><span v-else>{{asset.kind==='VIDEO'?'视频':'文件'}}</span><strong>{{asset.originalName}}</strong></div></td><td>{{asset.kind}}<br>{{(asset.byteSize/1024).toFixed(1)}} KiB</td><td><AdminStatusBadge :status="asset.bindingStatus" :label="asset.bindingStatus==='BOUND'?'已引用':'未引用'" :tone="asset.bindingStatus==='BOUND'?'processing':'neutral'"/></td><td><AdminStatusBadge :status="asset.availability" :label="asset.availability==='READY'?'可用':'文件不可用'" :tone="asset.availability==='READY'?'success':'danger'"/></td><td>{{new Date(asset.createdAt).toLocaleString('zh-CN')}}</td><td><el-button link type="primary" :disabled="loading" @click="previewAsset=asset">预览</el-button><el-button v-if="canRead" link type="primary" :disabled="loading" @click="loadReferences(asset)">查看引用</el-button><el-button v-if="canDelete && asset.bindingStatus==='UNBOUND'" link type="danger" :disabled="loading || uploading || deleting" @click="deleteAsset=asset;deleteError=''">删除</el-button></td></tr></tbody></table></div>
+      <AdminListPager v-if="result && !error" :page="page" :page-size="pageSize" :total="result.total" :loading="loading" @change="changeListPage"/>
       <AdminSelectedRowsDialog v-model="compareOpen" title="核对所选素材" :columns="compareColumns" :rows="compareRows"/>
       <el-dialog :model-value="Boolean(previewAsset)" title="素材预览" width="900px" @update:model-value="(value:boolean)=>{if(!value)previewAsset=null}"><template v-if="previewAsset"><p>{{previewAsset.originalName}}</p><p v-if="previewAsset.availability!=='READY'">文件不可用。</p><video v-else-if="previewAsset.kind==='VIDEO'" :src="previewAsset.adminUrl" controls style="max-width:100%;max-height:60dvh"/><img v-else :src="previewAsset.adminUrl" :alt="previewAsset.originalName" style="max-width:100%;max-height:60dvh;object-fit:contain"/></template></el-dialog>
 

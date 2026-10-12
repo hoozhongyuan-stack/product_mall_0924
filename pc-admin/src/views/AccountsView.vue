@@ -194,7 +194,7 @@ async function closeAccountDialog(done:() => void) { if(await requestCloseForm()
         </tr></tbody></table>
       <p v-if="!visibleRows.length" class="empty-state">当前条件下暂无账号。</p>
     </div>
-    <AdminListPager :page="page" :page-size="pageSize" :total="filteredRows.length" :loading="loading" @change="pageChanged" />
+    <AdminListPager v-if="!error" :page="page" :page-size="pageSize" :total="filteredRows.length" :loading="loading" @change="pageChanged" />
 <AdminSelectedRowsDialog v-model="comparisonOpen" title="所选账号" :rows="compareRows" :columns="[{key:'loginName',label:'登录名'},{key:'displayName',label:'显示名'},{key:'groups',label:'权限组'},{key:'status',label:'状态'}]" />
 <el-dialog :model-value="Boolean(detailTarget)" title="账号详情" @update:model-value="detailTarget=null"><template v-if="detailTarget"><dl><dt>登录名</dt><dd>{{detailTarget.loginName}}</dd><dt>显示名</dt><dd>{{detailTarget.displayName}}</dd><dt>身份</dt><dd>{{detailTarget.kind==='OWNER'?'主账号':'子账号'}}</dd><dt>权限组</dt><dd>{{groupNames(detailTarget.groupIds)}}</dd><dt>修订</dt><dd>{{detailTarget.revision}}</dd></dl></template></el-dialog>
 <button v-if="error && !loading" class="text-button retry" type="button" @click="load">重新加载</button>

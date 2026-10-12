@@ -223,6 +223,7 @@ urlpatterns = [
     path("api/v1/admin/assets/<uuid:asset_id>", media_views.asset_delete_view),
     path("api/v1/admin/assets/<uuid:asset_id>/references", media_views.asset_references_view),
     path("api/v1/admin/assets/<uuid:asset_id>/file", media_views.admin_asset_file_view),
+    path("api/v1/admin/assets/<uuid:asset_id>/thumbnail", media_views.admin_asset_thumbnail_view),
     path("api/v1/admin/sku-rows", catalog_views.sku_rows_view),
     path("api/v1/admin/product-rows", catalog_views.product_rows_view),
     path("api/v1/admin/sku-rows/batch-status", catalog_views.batch_status_view),
@@ -274,4 +275,5 @@ urlpatterns = [
     path("api/v1/app/products", catalog_views.public_products_view),
     path("api/v1/app/products/<uuid:product_id>", catalog_views.public_product_detail_view),
     path("api/v1/app/assets/<uuid:asset_id>/file", media_views.public_asset_file_view),
+    path("api/v1/app/assets/<uuid:asset_id>/thumbnail", media_views.public_asset_thumbnail_view),
 ]

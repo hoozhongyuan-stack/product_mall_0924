@@ -4,6 +4,7 @@ import AdminListPager from '../../shared/list/AdminListPager.vue'
 import AdminSelectionBar from '../../shared/list/AdminSelectionBar.vue'
 import AdminStatusBadge from '../../shared/list/AdminStatusBadge.vue'
 import { confirmAction } from '../../shared/confirm'
+import { listMediaUrl } from '../../shared/media-library'
 
 import { csvTable } from '../../shared/csv.mjs'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -31,6 +32,7 @@ interface CategoryBatchPreview {
     productRevision: number; canChange: boolean; reason?: string }[]
 }
 const props = defineProps<{ account: Account }>()
+const failedProductImages = ref<string[]>([])
 const emit = defineEmits<{ dirtyChange: [dirty: boolean]; workspaceChange: [open: boolean] }>()
 const permissions = computed(() => props.account.permissionCodes)
 const canUpload = computed(() => permissions.value.includes('asset.upload'))
@@ -217,6 +219,7 @@ async function load(page = 1) {
   const sequence = ++loadSequence
   clearSelection()
   loading.value = true
+  failedProductImages.value = []
   error.value = ''
   try {
     const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize.value) })
@@ -655,14 +658,14 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
         <table><thead><tr><th scope="col"><input type="checkbox" aria-label="全选本页商品" :checked="allPageSelected" :disabled="!pageData.rows.length" @change="togglePage(($event.target as HTMLInputElement).checked)" /></th><th scope="col">商品</th><th v-if="productColumnVisible('category')" scope="col">类型与分类</th><th v-if="productColumnVisible('price')" scope="col">日常价区间</th><th v-if="productColumnVisible('sku')" scope="col">SKU</th><th v-if="productColumnVisible('status')" scope="col">商品状态</th><th scope="col">操作</th></tr></thead>
           <tbody v-for="row in pageData.rows" :key="row.productId"><tr>
             <td><input type="checkbox" :aria-label="`选择商品 ${row.productNo}`" :checked="selectedProductIds.includes(row.productId)" @change="setSelected(row.productId, ($event.target as HTMLInputElement).checked)" /></td>
-            <td><div class="catalog-product-identity"><img v-if="row.mainImage" :src="row.mainImage.adminUrl" :alt="`${row.name}主图`" /><span v-else class="catalog-image-empty" aria-hidden="true">无图</span><div><strong class="strong-cell">{{ row.name }}</strong><small class="catalog-product-meta">商品编号 {{ row.productNo }}</small></div></div></td>
+            <td><div class="catalog-product-identity"><img v-if="listMediaUrl(row.mainImage) && !failedProductImages.includes(row.productId)" :src="listMediaUrl(row.mainImage)" :alt="`${row.name}主图`" loading="lazy" decoding="async" @error="failedProductImages=[...failedProductImages,row.productId]" /><span v-else class="catalog-image-empty">{{row.mainImage?'图片暂不可用':'无图'}}</span><div><strong class="strong-cell">{{ row.name }}</strong><small class="catalog-product-meta">商品编号 {{ row.productNo }}</small></div></div></td>
             <td v-if="productColumnVisible('category')">{{ row.fulfillmentKind === 'SHIP' ? '快递发货' : '到店核销' }}<small class="catalog-product-meta">{{ categoryName(row.categoryId) }}</small></td>
             <td v-if="productColumnVisible('price')" class="catalog-price">{{ priceRange(row) }}</td><td v-if="productColumnVisible('sku')">{{ row.skuCount }} 个<small class="catalog-product-meta">{{ row.onSaleSkuCount }} 个 SKU 已上架</small></td>
             <td v-if="productColumnVisible('status')"><AdminStatusBadge :status="row.status" :label="row.status === 'DRAFT' ? '草稿' : row.status === 'ON_SALE' ? '在售' : '下架'" /><small v-if="row.manuallyOffSale" class="catalog-product-meta">商品手动下架，SKU 状态已保留</small></td>
             <td class="catalog-actions"><button class="text-button" type="button" :aria-expanded="expandedProductId === row.productId" :aria-controls="`sku-detail-${row.productId}`" @click="toggleProduct(row.productId)">{{ expandedProductId === row.productId ? '收起规格' : '展开规格' }}</button><button v-if="canWrite" class="text-button" type="button" :disabled="productLoading" @click="openProduct(row.productId)">编辑商品</button><button v-if="canProductSale && row.status !== 'ON_SALE'" class="text-button" type="button" :disabled="productSaleBusy" @click="startProductSale('ON_SALE', row)">上架商品</button><button v-if="canProductSale && row.status === 'ON_SALE'" class="text-button danger" type="button" :disabled="productSaleBusy" @click="startProductSale('OFF_SALE', row)">下架商品</button></td>
           </tr><tr v-if="expandedProductId === row.productId" :id="`sku-detail-${row.productId}`" class="catalog-expanded-row"><td :colspan="7 - productHiddenColumns.length"><p v-if="detailLoadingId === row.productId" role="status">正在加载 SKU…</p><p v-else-if="detailErrors[row.productId]" class="error" role="alert">{{ detailErrors[row.productId] }} <button class="text-button" type="button" @click="loadProductDetail(row.productId)">重试</button></p>
               <div v-else-if="productDetails[row.productId]" class="catalog-sku-details"><p>该商品有 {{ row.skuCount }} 个 SKU。{{ row.matchedSkuIds.length ? `搜索命中 ${row.matchedSkuIds.length} 个 SKU，已标出。` : '' }}库存以库存管理中的实际余额为准。</p><div v-for="sku in productDetails[row.productId].skus" :key="sku.skuId" :class="['catalog-sku-card', { 'catalog-sku-match': row.matchedSkuIds.includes(sku.skuId) }]"><div><strong>{{ sku.specs.length ? sku.specs.map((spec) => `${spec.name}：${spec.value}`).join(' · ') : '默认规格' }}</strong><small class="catalog-product-meta">{{ sku.skuCode }}<span v-if="row.matchedSkuIds.includes(sku.skuId)"> · 搜索命中</span> · {{ sku.unit.ratio }} {{ sku.unit.baseUnit }}／{{ sku.unit.saleUnit }}</small></div><div>日常价 ¥{{ fenToYuan(sku.listPriceFen) }}<small class="catalog-product-meta">{{ sku.saleStatus === 'ON_SALE' ? 'SKU 上架' : 'SKU 下架' }}</small></div><div class="catalog-grade-cell"><div v-if="grades.some((grade) => grade.enabled)" class="catalog-grade-list"><span v-for="grade in grades.filter((item) => item.enabled)" :key="grade.id">{{ grade.name }}：{{ sku.gradePrices.find((price) => price.gradeId === grade.id) ? `¥${fenToYuan(sku.gradePrices.find((price) => price.gradeId === grade.id)!.priceFen)}` : '沿用日常价' }}</span></div><span v-else>暂无启用的等级</span></div><div class="catalog-actions"><button v-if="canStatus" class="text-button" type="button" @click="openSku(sku, 'status')">SKU 状态</button><button v-if="canPrice" class="text-button" type="button" @click="openSku(sku, 'price')">日常价</button><button v-if="canPrice" class="text-button" type="button" @click="openSku(sku, 'prices')">设置等级价</button><span v-if="productDetails[row.productId].unitConversion" class="help-text">单位由商品换算配置管理</span><button v-else-if="canUnit" class="text-button" type="button" @click="openSku(sku, 'unit')">单位</button></div></div><p v-if="!productDetails[row.productId].skus.length" class="empty-state">尚无 SKU。</p></div>
-            </td></tr></tbody></table><p v-if="!pageData.rows.length" class="empty-state">没有匹配的商品。可调整筛选；有编辑权限时先创建商品草稿。</p>
+            </td></tr></tbody></table><p v-if="!error && !pageData.rows.length" class="empty-state">没有匹配的商品。可调整筛选；有编辑权限时先创建商品草稿。</p>
       </div>
       <div v-else class="panel table-wrap admin-list-table catalog-goods-table" tabindex="0" aria-label="SKU 批量管理列表，可横向滚动">
         <table><thead><tr><th scope="col"><input type="checkbox" aria-label="全选本页 SKU" :checked="allPageSelected" :disabled="!skuPage.rows.length" @change="togglePage(($event.target as HTMLInputElement).checked)" /></th><th scope="col">商品名称 / 规格</th><th v-if="skuColumnVisible('type')" scope="col">类型</th><th scope="col">SKU 编码</th><th v-if="skuColumnVisible('price')" scope="col">日常价</th><th v-if="skuColumnVisible('grades')" scope="col">等级价</th><th v-if="skuColumnVisible('inventory')" scope="col">库存</th><th v-if="skuColumnVisible('status')" scope="col">状态</th><th scope="col">操作</th></tr></thead>
@@ -682,9 +685,9 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
               <button v-if="canUnit" class="text-button" type="button" @click="openSku(row, 'unit')">单位</button>
               <span v-if="!canWrite && !canStatus && !canPrice && !canUnit">仅查看</span></td>
           </tr></tbody></table>
-        <p v-if="!skuPage.rows.length" class="empty-state">没有匹配的 SKU。可调整筛选；有编辑权限时先创建商品草稿。</p>
+        <p v-if="!error && !skuPage.rows.length" class="empty-state">没有匹配的 SKU。可调整筛选；有编辑权限时先创建商品草稿。</p>
       </div>
-      <AdminListPager :page="activePage.page" :page-size="pageSize" :total="activePage.total" :loading="loading || saving || productSaleBusy" @change="changePage" />
+      <AdminListPager v-if="!error" :page="activePage.page" :page-size="pageSize" :total="activePage.total" :loading="loading || saving || productSaleBusy" @change="changePage" />
     </template>
     <button v-if="error && !loading && !operationOpen && !editorOpen" class="text-button retry" type="button" @click="load(activePage.page)">重新加载</button>
     <p class="catalog-footnote">库存请到“库存管理”按 SKU 查询；同一实物的不同规格可能共享库存，不能把可售数相加。导出仅包含当前页勾选的商品。</p>

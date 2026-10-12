@@ -28,6 +28,7 @@ def hydrate_products(props, store=None, allowed_product_ids=None):
     payment_available = bool(enabled_payment_methods())
     return [{'productId': str(item.id), 'name': item.name, 'priceFen': item.price_fen,
              'imageUrl': f'/api/v1/app/assets/{item.main_image_id}/file',
+             'thumbnailUrl': f'/api/v1/app/assets/{item.main_image_id}/thumbnail',
              'purchasable': bool(item.has_stock and payment_available and (
                  item.fulfillment_kind != Product.Fulfillment.REDEEM or
                  (item.redeem_valid_until and item.redeem_valid_until >= timezone.localdate())))}

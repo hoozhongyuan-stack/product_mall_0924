@@ -7,10 +7,13 @@ from .models import Product, SkuGradePrice, SkuSpecSelection
 
 
 def asset_data(asset):
-    return {"assetId": str(asset.id), "kind": asset.kind, "contentType": asset.content_type,
+    data = {"assetId": str(asset.id), "kind": asset.kind, "contentType": asset.content_type,
             "byteSize": asset.byte_size, "width": asset.width, "height": asset.height,
             "originalName": asset.original_name,
             "adminUrl": f"/api/v1/admin/assets/{asset.id}/file"}
+    if asset.kind in ("IMAGE", "GIF"):
+        data["thumbnailUrl"] = f"/api/v1/admin/assets/{asset.id}/thumbnail"
+    return data
 
 
 def public_asset_url(asset):

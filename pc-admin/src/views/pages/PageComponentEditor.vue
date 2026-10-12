@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import CouponFields from './CouponFields.vue'
 import MosaicFields from './MosaicFields.vue'
 import HotzoneCanvas from './HotzoneCanvas.vue'
@@ -21,6 +21,8 @@ const props = defineProps<{
 const emit = defineEmits<{ change: [value: PageComponent]; uploaded: [value: UploadedAssetBinding] }>()
 const uploading = ref('')
 const error = ref('')
+const failedThumbnails = ref<string[]>([])
+watch(() => JSON.stringify([props.component.componentId, props.component.props.assetId, props.component.props.slides?.map(slide=>slide.assetId)]),()=>{failedThumbnails.value=[]})
 
 function updateProps(values: Partial<PageComponent['props']>) {
   if (props.disabled) return
@@ -34,7 +36,7 @@ function updateSlide(index: number, change: Partial<Slide>) {
 function updateArea(index: number, change: Partial<HotzoneArea>) {
   updateAreas((props.component.props.areas || []).map((area, position) => position === index ? { ...area, ...change } : area))
 }
-function assetUrl(assetId: string) { return assetId ? `/api/v1/admin/assets/${encodeURIComponent(assetId)}/file` : '' }
+function assetUrl(assetId: string) { return assetId ? `/api/v1/admin/assets/${encodeURIComponent(assetId)}/thumbnail` : '' }
 
 async function uploadImage(event: Event, slot: 'hotzone' | 'image' | number) {
   const input = event.target as HTMLInputElement
@@ -101,7 +103,8 @@ function setLink(value: PageLink | undefined) { updateProps({ link: value }) }
       <p class="help-text">按下方顺序轮播图片。每张可单独设置跳转。</p>
       <div v-for="(slide, index) in component.props.slides || []" :key="index" class="home-subitem">
         <div class="home-subitem-head"><strong>第 {{ index + 1 }} 张</strong><button type="button" class="text-button danger" @click="updateSlides((component.props.slides || []).filter((_, position) => position !== index))">移除</button></div>
-        <img v-if="slide.assetId" :src="assetUrl(slide.assetId)" :alt="`轮播图 ${index + 1}`" class="home-asset-thumb">
+        <img v-if="slide.assetId && !failedThumbnails.includes(slide.assetId)" :src="assetUrl(slide.assetId)" :alt="`轮播图 ${index + 1}`" class="home-asset-thumb" loading="lazy" decoding="async" @error="failedThumbnails=[...failedThumbnails,slide.assetId]">
+        <span v-else-if="slide.assetId" class="home-asset-thumb">缩略图暂不可用</span>
         <label v-if="canUpload" class="home-upload-button">{{ uploading === String(index) ? '上传中…' : slide.assetId ? '更换图片' : '上传图片' }}<input type="file" accept="image/png,image/jpeg" :disabled="disabled || Boolean(uploading)" @change="uploadImage($event, index)"></label>
         <AssetPicker kind="IMAGE" :disabled="disabled || Boolean(uploading)" :excluded-ids="(component.props.slides || []).filter((_, position) => position !== index).map(item => item.assetId)" :target-key="JSON.stringify([component.componentId, component.props.slides])" @select="chooseAsset($event, index)" />
         <label>素材 ID<input :value="slide.assetId" placeholder="上传图片或粘贴素材 ID" @input="updateSlide(index, { assetId: ($event.target as HTMLInputElement).value.trim() })"></label>
@@ -112,7 +115,8 @@ function setLink(value: PageLink | undefined) { updateProps({ link: value }) }
 
     <template v-else-if="component.type === 'IMAGE_HOTZONE' || component.type === 'IMAGE'">
       <p class="help-text">{{ component.type === 'IMAGE' ? '图片广告可配置站内跳转。' : '在图片上绘制点击区域，或填写 0–1 比例坐标。' }}</p>
-      <img v-if="component.props.assetId" :src="assetUrl(component.props.assetId)" alt="热区图片" class="home-asset-thumb">
+      <img v-if="component.props.assetId && !failedThumbnails.includes(component.props.assetId)" :src="assetUrl(component.props.assetId)" alt="热区图片" class="home-asset-thumb" loading="lazy" decoding="async" @error="failedThumbnails=[...failedThumbnails,component.props.assetId]">
+      <span v-else-if="component.props.assetId" class="home-asset-thumb">缩略图暂不可用</span>
       <label v-if="canUpload" class="home-upload-button">{{ uploading === 'hotzone' ? '上传中…' : '上传或更换图片' }}<input type="file" accept="image/png,image/jpeg" :disabled="disabled || Boolean(uploading)" @change="uploadImage($event, component.type === 'IMAGE' ? 'image' : 'hotzone')"></label>
       <AssetPicker kind="IMAGE" :disabled="disabled || Boolean(uploading)" :target-key="JSON.stringify([component.componentId, component.props.assetId])" @select="chooseAsset($event, component.type === 'IMAGE' ? 'image' : 'hotzone')" />
       <label>图片素材 ID<input :value="component.props.assetId || ''" placeholder="上传图片或粘贴素材 ID" @input="updateProps({ assetId: ($event.target as HTMLInputElement).value.trim() })"></label>
