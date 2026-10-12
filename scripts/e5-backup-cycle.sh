@@ -68,6 +68,8 @@ trap 'exit 143' TERM
 e5_preflight compose
 paused=1
 compose stop admin web export-worker $e5_code_release_services scheduler
+compose run --rm --no-deps --entrypoint sh -e E5_WRITERS_PAUSED=1 release \
+    scripts/e5-app-entrypoint.sh python backend/manage.py prune_legacy_thumbnail_cache
 compose --profile ops run --rm --no-deps -e E5_WRITERS_PAUSED=1 backup
 resume_writers
 echo "Quiesced backup completed for $MALL_RELEASE_REVISION."

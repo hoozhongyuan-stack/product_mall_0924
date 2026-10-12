@@ -1,4 +1,5 @@
 """Regenerable private static derivatives; no asset or original file mutations."""
+import base64
 import fcntl
 import hashlib
 import os
@@ -7,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from contextlib import contextmanager
 
 from django.conf import settings
@@ -20,7 +22,7 @@ from .validation import CatalogError
 EDGE = 320
 MAX_BYTES = 64 * 1024
 MAX_SOURCE_BYTES = 10 * 1024 * 1024
-VERSION = "v1"
+VERSION = "v2"
 
 
 def unavailable():
@@ -167,9 +169,12 @@ def generate_thumbnail(asset, source, destination):
 def thumbnail_path(asset):
     storage = LocalStorage()
     source, fingerprint = source_state(asset)
-    target_key = f".thumbnails/{VERSION}/{asset.id}/{fingerprint}.jpg"
+    directory_key = f".thumbnails/{VERSION}/{uuid.UUID(str(asset.id)).hex}"
+    # Preserve all 256 hash bits while staying below E5's 98-byte path bound.
+    filename = base64.urlsafe_b64encode(bytes.fromhex(fingerprint)).decode("ascii").rstrip("=")
+    target_key = f"{directory_key}/{filename}.jpg"
     target = storage.prepare_parent(target_key)
-    lock = storage.prepare_parent(f".thumbnails/{VERSION}/{asset.id}/asset.lock")
+    lock = storage.prepare_parent(f"{directory_key}/asset.lock")
     with file_lock(lock):
         # Recheck source after any blocking lock, including cache hits.
         current_source, current_fingerprint = source_state(asset)
@@ -192,7 +197,7 @@ def thumbnail_path(asset):
                 # Keep only this source version under the asset's lock.
                 for obsolete in target.parent.glob("*.jpg"):
                     if obsolete != target:
-                        storage.path(f".thumbnails/{VERSION}/{asset.id}/{obsolete.name}").unlink(missing_ok=True)
+                        storage.path(f"{directory_key}/{obsolete.name}").unlink(missing_ok=True)
             finally:
                 temporary.unlink(missing_ok=True)
         return target
@@ -201,15 +206,17 @@ def thumbnail_path(asset):
 def discard_asset_thumbnails(asset_id, *, storage=None):
     """Called only after original deletion; never unlink active lock inodes."""
     storage = storage or LocalStorage()
-    directory = storage.path(f".thumbnails/{VERSION}/{asset_id}/asset.lock").parent
-    if not directory.is_dir():
-        return
-    lock = storage.path(f".thumbnails/{VERSION}/{asset_id}/asset.lock")
-    with file_lock(lock):
-        for pattern in ("*.jpg", "*.part"):
-            for derivative in directory.glob(pattern):
-                storage.path(f".thumbnails/{VERSION}/{asset_id}/{derivative.name}").unlink(missing_ok=True)
-        storage.sync_directory(directory)
+    identifier = uuid.UUID(str(asset_id))
+    for key in (f".thumbnails/{VERSION}/{identifier.hex}", f".thumbnails/v1/{identifier}"):
+        directory = storage.path(f"{key}/asset.lock").parent
+        if not directory.is_dir():
+            continue
+        lock = storage.path(f"{key}/asset.lock")
+        with file_lock(lock):
+            for pattern in ("*.jpg", "*.part"):
+                for derivative in directory.glob(pattern):
+                    storage.path(f"{key}/{derivative.name}").unlink(missing_ok=True)
+            storage.sync_directory(directory)
 
 
 def serve_thumbnail(request, asset, *, public=False, reauthorize=None):

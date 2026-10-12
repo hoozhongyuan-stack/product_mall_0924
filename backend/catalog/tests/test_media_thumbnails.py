@@ -202,7 +202,7 @@ with patch('catalog.thumbnails.generate_thumbnail',side_effect=recorded):
         self.assertLessEqual(len(self.thumbnail().read_bytes()), 65536)
 
     def test_actual_process_timeout_and_generation_slots_are_bounded(self):
-        from catalog.thumbnails import file_lock
+        from catalog.thumbnails import VERSION, file_lock
         from catalog.storage import LocalStorage
         decoder = Path(self.directory.name) / "slow-decoder"
         decoder.write_text("#!/bin/sh\nexec sleep 12\n")
@@ -214,8 +214,8 @@ with patch('catalog.thumbnails.generate_thumbnail',side_effect=recorded):
         self.assertEqual(failed.exception.status, 503)
         self.assertLess(time.monotonic() - started, 10)
         storage = LocalStorage()
-        first = storage.prepare_parent(".thumbnails/v1/slots/0.lock")
-        second = storage.prepare_parent(".thumbnails/v1/slots/1.lock")
+        first = storage.prepare_parent(f".thumbnails/{VERSION}/slots/0.lock")
+        second = storage.prepare_parent(f".thumbnails/{VERSION}/slots/1.lock")
         with file_lock(first), file_lock(second):
             with self.assertRaises(CatalogError) as failed:
                 self.thumbnail()

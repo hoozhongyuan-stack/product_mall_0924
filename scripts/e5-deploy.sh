@@ -81,6 +81,13 @@ else
         exit 1
     }
     compose stop admin web export-worker $e5_code_release_services scheduler
+    # Only legacy regenerable thumbnails are removed, after all writers stop.
+    # Preserve the backup/restore path checks and every original media file.
+    if ! compose run --rm --no-deps --entrypoint sh -e E5_WRITERS_PAUSED=1 release \
+            scripts/e5-app-entrypoint.sh python backend/manage.py prune_legacy_thumbnail_cache; then
+        echo 'Legacy thumbnail validation failed. Writers remain stopped; do not continue.' >&2
+        exit 1
+    fi
     if ! compose --profile ops run --rm --no-deps -e E5_WRITERS_PAUSED=1 \
             -e MALL_RELEASE_REVISION="$old_revision" backup; then
         echo 'Backup failed. Writers remain stopped; do not continue the upgrade.' >&2

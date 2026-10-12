@@ -59,6 +59,7 @@ elif 'config' in a and 'json' in a:print(json.dumps({{'name':'synthetic-source',
 elif 'ps' in a:print('synthetic-web')
 elif any(x.endswith('e5-preflight.py') for x in a):sys.exit(19 if os.environ.get('E5_TEST_FAIL')=='runtime' else 0)
 elif 'mini-ci-adapter' in a and '--entrypoint' in a:sys.exit(29 if os.environ.get('E5_TEST_FAIL')=='token' else 0)
+elif 'prune_legacy_thumbnail_cache' in a:sys.exit(31 if os.environ.get('E5_TEST_FAIL')=='cache' else 0)
 ''')
         self.env = {**os.environ, 'PATH': str(self.tools) + ':' + os.environ['PATH'],
                     'MALL_RELEASE_REVISION': REVISION, 'E5_BACKUP_HOST_DIR': str(self.backups),
@@ -100,6 +101,27 @@ elif 'mini-ci-adapter' in a and '--entrypoint' in a:sys.exit(29 if os.environ.ge
         self.assertLess(runtime, stop)
         self.assertLess(stop, backup)
         self.assertLess(backup, release)
+
+    def test_legacy_cache_cleanup_runs_after_pause_before_both_backups(self):
+        for script, args in [('e5-deploy.sh', ['upgrade']), ('e5-backup-cycle.sh', [])]:
+            with self.subTest(script=script):
+                result, calls = self.run_script(script, args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                stop = next(i for i, c in enumerate(calls) if ' stop ' in c)
+                prune = next(i for i, c in enumerate(calls) if 'prune_legacy_thumbnail_cache' in c)
+                backup = next(i for i, c in enumerate(calls) if ' run ' in c and c.endswith(' backup'))
+                self.assertLess(stop, prune)
+                self.assertLess(prune, backup)
+                self.assertIn('E5_WRITERS_PAUSED=1', calls[prune])
+                self.assertIn('--entrypoint sh', calls[prune])
+                self.assertIn(' release ', calls[prune])
+
+    def test_failed_cache_validation_prevents_backup_and_upgrade(self):
+        result, calls = self.run_script('e5-deploy.sh', ['upgrade'], 'cache')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(any(' stop ' in c for c in calls))
+        self.assertFalse(any((' run ' in c and c.endswith(' backup')) or '--exit-code-from release release' in c
+                             or ' up ' in c for c in calls))
 
 
 class SecretValidationTests(unittest.TestCase):
