@@ -1,0 +1,104 @@
+E5 secret preflight passed; no database or platform request was made.
+E5 secret preflight passed; no database or platform request was made.
+ Container product-mall-uat-code-upload-worker-1  Stopping
+ Container product-mall-uat-export-worker-1  Stopping
+ Container product-mall-uat-admin-1  Stopping
+ Container product-mall-uat-scheduler-1  Stopping
+ Container product-mall-uat-export-worker-1  Stopped
+ Container product-mall-uat-scheduler-1  Stopped
+ Container product-mall-uat-code-upload-worker-1  Stopped
+ Container product-mall-uat-mini-ci-adapter-1  Stopping
+ Container product-mall-uat-admin-1  Stopped
+ Container product-mall-uat-web-1  Stopping
+ Container product-mall-uat-mini-ci-adapter-1  Stopped
+ Container product-mall-uat-web-1  Stopped
+removedFiles=0 removedDirectories=0
+/backups/e5-2026-10-13-SqHLzGoI
+ Container product-mall-uat-release-1  Recreate
+ Container product-mall-uat-release-1  Recreated
+Attaching to release-1
+release-1  | Operations to perform:
+release-1  |   Apply all migrations: accounts, aftersales, auth, benefits, business_numbers, catalog, checkout, code_versions, contenttypes, customers, dining_alliance, fulfillment, inventory, notifications, orders, pages, payments, points_exchange, report_exports, sessions, shipping, stores, wechat_integration, wechat_open_platform
+release-1  | Running migrations:
+release-1  |   Applying catalog.0013_fulfillment_governance_snapshot... OK
+release-1  |   Applying catalog.0014_redemption_scope_guard... OK
+release-1  |   Applying orders.0018_fulfillment_governance_snapshot... OK
+release-1  |   Applying fulfillment.0010_governance_models... OK
+release-1  |   Applying fulfillment.0011_governance_guards... OK
+release-1  |   Applying fulfillment.0012_global_redemption_identity... OK
+release-1  |   Applying orders.0019_platform_express_insert_guard... OK
+release-1  | WECHAT_CREDENTIALS_READY source=MANAGED
+release-1  | Committed Mini Program source synchronized: source-34318e2b3dcc (92b1c42822c7700daf2a7fb5b9717cd22759e86d385816ebfb1746145bc3fa75)
+
+release-1 exited with code 0
+Aborting on container exit...
+ Container product-mall-uat-release-1  Stopping
+ Container product-mall-uat-release-1  Stopped
+ Container product-mall-uat-mini-ci-adapter-1  Recreate
+ Container product-mall-uat-media-init-1  Recreate
+ Container product-mall-uat-db-1  Running
+ Container product-mall-uat-media-init-1  Recreated
+ Container product-mall-uat-export-worker-1  Recreate
+ Container product-mall-uat-scheduler-1  Recreate
+ Container product-mall-uat-web-1  Recreate
+ Container product-mall-uat-mini-ci-adapter-1  Recreated
+ Container product-mall-uat-code-upload-worker-1  Recreate
+ Container product-mall-uat-web-1  Recreated
+ Container product-mall-uat-admin-1  Recreate
+ Container product-mall-uat-export-worker-1  Recreated
+ Container product-mall-uat-scheduler-1  Recreated
+ Container product-mall-uat-code-upload-worker-1  Recreated
+ Container product-mall-uat-admin-1  Recreated
+ Container product-mall-uat-mini-ci-adapter-1  Starting
+ Container product-mall-uat-media-init-1  Starting
+ Container product-mall-uat-media-init-1  Started
+ Container product-mall-uat-media-init-1  Waiting
+ Container product-mall-uat-db-1  Waiting
+ Container product-mall-uat-mini-ci-adapter-1  Started
+ Container product-mall-uat-media-init-1  Exited
+ Container product-mall-uat-db-1  Healthy
+ Container product-mall-uat-release-1  Starting
+ Container product-mall-uat-release-1  Started
+ Container product-mall-uat-release-1  Waiting
+ Container product-mall-uat-release-1  Waiting
+ Container product-mall-uat-release-1  Waiting
+ Container product-mall-uat-mini-ci-adapter-1  Waiting
+ Container product-mall-uat-release-1  Waiting
+ Container product-mall-uat-mini-ci-adapter-1  Healthy
+ Container product-mall-uat-release-1  Exited
+ Container product-mall-uat-code-upload-worker-1  Starting
+ Container product-mall-uat-release-1  Exited
+ Container product-mall-uat-scheduler-1  Starting
+ Container product-mall-uat-release-1  Exited
+ Container product-mall-uat-export-worker-1  Starting
+ Container product-mall-uat-release-1  Exited
+ Container product-mall-uat-web-1  Starting
+ Container product-mall-uat-scheduler-1  Started
+ Container product-mall-uat-export-worker-1  Started
+ Container product-mall-uat-web-1  Started
+ Container product-mall-uat-web-1  Waiting
+ Container product-mall-uat-code-upload-worker-1  Started
+ Container product-mall-uat-web-1  Healthy
+ Container product-mall-uat-admin-1  Starting
+ Container product-mall-uat-admin-1  Started
+ Container product-mall-uat-export-worker-1  Waiting
+ Container product-mall-uat-mini-ci-adapter-1  Waiting
+ Container product-mall-uat-db-1  Waiting
+ Container product-mall-uat-scheduler-1  Waiting
+ Container product-mall-uat-code-upload-worker-1  Waiting
+ Container product-mall-uat-admin-1  Waiting
+ Container product-mall-uat-web-1  Waiting
+ Container product-mall-uat-media-init-1  Waiting
+ Container product-mall-uat-release-1  Waiting
+ Container product-mall-uat-db-1  Healthy
+ Container product-mall-uat-scheduler-1  Healthy
+ Container product-mall-uat-web-1  Healthy
+ Container product-mall-uat-release-1  Exited
+ Container product-mall-uat-export-worker-1  Healthy
+ Container product-mall-uat-code-upload-worker-1  Healthy
+ Container product-mall-uat-mini-ci-adapter-1  Healthy
+ Container product-mall-uat-media-init-1  Exited
+ Container product-mall-uat-admin-1  Healthy
+Release f2985a18cc422241325341e17e487ebc3d69f523 is healthy in the Compose application stack.
+generated=33 failed=0 bytes=129042
+Promoted verified UAT release: f2985a18cc422241325341e17e487ebc3d69f523

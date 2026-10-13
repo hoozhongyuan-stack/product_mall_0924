@@ -1,0 +1,37 @@
+{
+  "status": "PASS",
+  "stage": "original-business-and-media-read-only-backup-comparison",
+  "backupId": "e5-2026-10-13-SqHLzGoI",
+  "tables": [
+    {
+      "table": "customer_order",
+      "originalRows": 6,
+      "oldColumns": 28,
+      "unchanged": true,
+      "sha256": "b0ab0590f7e87743efe8f726e4a510971822cfa02f0f0f4bcdde37670b4559be"
+    },
+    {
+      "table": "customer_order_line",
+      "originalRows": 6,
+      "oldColumns": 23,
+      "unchanged": true,
+      "sha256": "d58ef0cb6551f1da567aed7cb4d2ef7c2e14c4219ca333bd926c8230d6db3eab"
+    },
+    {
+      "table": "fulfillment_store_delivery_event",
+      "originalRows": 3,
+      "oldColumns": 9,
+      "unchanged": true,
+      "sha256": "6189c67f82388cbf1ea3a807a6f409c2bb988a0ec9d9ad8888aed9837ff1340d"
+    },
+    {
+      "table": "payment_receipt",
+      "originalRows": 5,
+      "oldColumns": 12,
+      "unchanged": true,
+      "sha256": "e62136276ae63fd691121fd3d9c5e0e24ad394d915ee3b1756f9d58268c7a3a2"
+    }
+  ],
+  "originalMediaCount": 53,
+  "allOriginalMediaUnchanged": true
+}

@@ -1,0 +1,203 @@
+{
+  "status": "PASS",
+  "stage": "UI-written-public-HTTPS-readback",
+  "prefix": "UAT-FG-20261013-CFB3F922",
+  "requests": [
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/auth/csrf",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/v1/admin/auth/login",
+      "status": 200
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/b71511ec-79f5-42f3-bbcc-3d0d550323b0",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/b71511ec-79f5-42f3-bbcc-3d0d550323b0",
+      "status": 200
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/b71511ec-79f5-42f3-bbcc-3d0d550323b0",
+      "status": 200
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/f07d8eef-27f1-45e7-8406-95a1d50aa2b8",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/f07d8eef-27f1-45e7-8406-95a1d50aa2b8",
+      "status": 200
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/f07d8eef-27f1-45e7-8406-95a1d50aa2b8",
+      "status": 200
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/638dc37e-e0fc-49f6-91ad-360eb4d852db",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/638dc37e-e0fc-49f6-91ad-360eb4d852db",
+      "status": 200
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/638dc37e-e0fc-49f6-91ad-360eb4d852db",
+      "status": 404
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bfe5e133-6ad1-41ce-afb0-641c4304a561",
+      "status": 200
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/bfe5e133-6ad1-41ce-afb0-641c4304a561",
+      "status": 200
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/bfe5e133-6ad1-41ce-afb0-641c4304a561",
+      "status": 200
+    }
+  ],
+  "results": [
+    {
+      "name": "UI_DELIVERY",
+      "orderId": "b71511ec-79f5-42f3-bbcc-3d0d550323b0",
+      "orderNo": "XS20261013104725000009",
+      "fulfillmentStatus": "COMPLETED",
+      "customerPlatformStoreReadbackVerified": true,
+      "summary": {
+        "deliveredQuantity": 3,
+        "localEvents": [
+          {
+            "action": "COMPLETE",
+            "requestKey": "0ef4b864-b48c-4b10-ada4-db43f6e13288",
+            "createdAt": "2026-10-13T02:51:28.091630+00:00"
+          },
+          {
+            "action": "DISPATCH",
+            "requestKey": "4e215640-cad0-4e42-8cd3-2a662be8607d",
+            "createdAt": "2026-10-13T02:50:41.346334+00:00"
+          },
+          {
+            "action": "PREPARE",
+            "requestKey": "5801bb34-22cc-47d2-ab40-5efe236b0a8e",
+            "createdAt": "2026-10-13T02:50:32.008254+00:00"
+          }
+        ],
+        "completedAt": "2026-10-13T02:51:28.067316+00:00"
+      }
+    },
+    {
+      "name": "UI_BOTH",
+      "orderId": "f07d8eef-27f1-45e7-8406-95a1d50aa2b8",
+      "orderNo": "XS20261013104725000010",
+      "fulfillmentStatus": "IN_PROGRESS",
+      "customerPlatformStoreReadbackVerified": true,
+      "summary": {
+        "redeemedQuantity": 2,
+        "remainingQuantity": 1,
+        "events": [
+          {
+            "eventId": "929b264f-bee2-4694-8867-bf270ad791cf",
+            "quantity": 1,
+            "actorKind": "PLATFORM",
+            "actorName": "UAT-FG-20261013-CFB3F922合成验收员",
+            "storeId": null,
+            "occurredAt": "2026-10-13T02:54:27.385061+00:00"
+          },
+          {
+            "eventId": "b04fa30a-54da-4f1b-a85e-65f8d7704b16",
+            "quantity": 1,
+            "actorKind": "STORE",
+            "actorName": "UAT-FG-20261013-CFB3F922合成验收",
+            "storeId": "42d4b8ef-3997-4338-bc7d-f3183d633198",
+            "occurredAt": "2026-10-13T02:54:07.297045+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UI_EXPRESS",
+      "orderId": "638dc37e-e0fc-49f6-91ad-360eb4d852db",
+      "orderNo": "XS20261013105607000011",
+      "fulfillmentStatus": "COMPLETED",
+      "customerPlatformStoreReadbackVerified": true,
+      "summary": {
+        "dispatchedQuantity": 3,
+        "deliveredQuantity": 3,
+        "shipments": [
+          {
+            "shipmentId": "2094094e-5b70-4284-ad0a-f17300388920",
+            "carrierCode": "UAT_CFB3F922",
+            "carrierName": "UAT-FG-20261013-CFB3F922合成快递不接外部物流",
+            "trackingNo": "SYNTHETIC-UI-EXPRESS-CFB3F922",
+            "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+            "warehouseName": "深圳8号仓库",
+            "shippedByName": "UAT-FG-20261013-CFB3F922合成验收员",
+            "shippedAt": "2026-10-13T02:56:49.352006+00:00",
+            "autoConfirmAt": "2026-10-18T02:56:49.352006+00:00",
+            "confirmedAt": "2026-10-13T02:57:22.470467+00:00",
+            "trackingStatus": "UNAVAILABLE"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MIXED",
+      "orderId": "bfe5e133-6ad1-41ce-afb0-641c4304a561",
+      "orderNo": "XS20261013104723000007",
+      "fulfillmentStatus": "IN_PROGRESS",
+      "customerPlatformStoreReadbackVerified": true,
+      "summary": {
+        "deliveredPhysicalQuantity": 3,
+        "remainingVirtualQuantity": 3,
+        "correctlyContinuesFulfillment": true,
+        "shipments": [
+          {
+            "shipmentId": "97cddbb3-95e3-43d8-86f8-ee25a182606c",
+            "carrierCode": "UAT_CFB3F922",
+            "carrierName": "UAT-FG-20261013-CFB3F922合成快递不接外部物流",
+            "trackingNo": "SYNTHETIC-UI-MIXED-CFB3F922",
+            "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+            "warehouseName": "深圳8号仓库",
+            "shippedByName": "UAT-FG-20261013-CFB3F922合成验收员",
+            "shippedAt": "2026-10-13T02:51:28.845768+00:00",
+            "autoConfirmAt": "2026-10-18T02:51:28.845768+00:00",
+            "confirmedAt": "2026-10-13T02:55:55.320452+00:00",
+            "trackingStatus": "UNAVAILABLE"
+          }
+        ]
+      }
+    }
+  ]
+}

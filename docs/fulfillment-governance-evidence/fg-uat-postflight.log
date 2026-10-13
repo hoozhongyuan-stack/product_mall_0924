@@ -1,0 +1,11 @@
+web healthy f2985a18cc422241325341e17e487ebc3d69f523
+admin healthy f2985a18cc422241325341e17e487ebc3d69f523
+export-worker not-configured f2985a18cc422241325341e17e487ebc3d69f523
+scheduler not-configured f2985a18cc422241325341e17e487ebc3d69f523
+code-upload-worker not-configured f2985a18cc422241325341e17e487ebc3d69f523
+mini-ci-adapter healthy f2985a18cc422241325341e17e487ebc3d69f523
+System check identified no issues (0 silenced).
+No changes detected
+Paired backup verified e5-2026-10-13-SqHLzGoI
+Business counts and all original media preserved; one verified new source package {"counts": {"assets": 33, "categories": 9, "deliveryEvents": 3, "orders": 6, "pageVersions": 1, "pages": 4, "products": 7, "receipts": 5}, "mediaFiles": 54, "originalHomeId": "26a1a14f-0e3e-48dc-b19c-f8ac92a0e09c", "originalHomeVersion": "89b5f4b8-9346-44a5-9c43-5e210a4abab9", "packageBytes": 245021, "packageFiles": 219, "packageKey": "code/source-92b1c42822c7700daf2a7fb5b9717cd22759e86d385816ebfb1746145bc3fa75.zip", "packageSha256": "92b1c42822c7700daf2a7fb5b9717cd22759e86d385816ebfb1746145bc3fa75", "packageVersion": "source-34318e2b3dcc", "platformCampaignEnabled": false, "templates": 1, "zones": 2}
+External readiness, anonymous access denial and published homepage verified

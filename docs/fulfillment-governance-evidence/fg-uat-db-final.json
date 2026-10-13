@@ -1,0 +1,224 @@
+{
+  "stage": "deployed-DB-read-only-audit",
+  "status": "PASS",
+  "prefix": "UAT-FG-20261013-CFB3F922",
+  "orders": [
+    {
+      "name": "DELIVERY",
+      "orderId": "bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "18299c26-c1c5-4c3c-b4c0-884849585f15",
+          "warehouseId": "595e5986-710e-4dda-8aa9-a42894d60cb6",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [],
+      "localEventCount": 5
+    },
+    {
+      "name": "PICKUP",
+      "orderId": "c9f89645-ccfe-40c9-ba2b-8453d78c101f",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "20ccbfcb-0ad7-47de-8fa2-83716b63a7fb",
+          "warehouseId": "595e5986-710e-4dda-8aa9-a42894d60cb6",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [],
+      "localEventCount": 2
+    },
+    {
+      "name": "EXPRESS",
+      "orderId": "bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "67f81737-5633-4c3f-9a94-a91f02201665",
+          "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [
+        2,
+        1
+      ],
+      "localEventCount": 0
+    },
+    {
+      "name": "PLATFORM",
+      "orderId": "7cdbe0f6-8f77-4a9d-80c2-d53e997f116b",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "ae93f8ea-974d-4852-b69b-a016970286a0",
+          "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [],
+      "localEventCount": 0
+    },
+    {
+      "name": "STORE",
+      "orderId": "46c91661-c91a-433f-b12a-8f5ebed55388",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "da959750-214c-48c8-a339-a03c320998bf",
+          "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [],
+      "localEventCount": 0
+    },
+    {
+      "name": "BOTH",
+      "orderId": "16f38092-c059-4083-9219-a2c709693a3c",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "05926042-5bfe-4b44-b363-964651d13756",
+          "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [],
+      "localEventCount": 0
+    },
+    {
+      "name": "MIXED",
+      "orderId": "bfe5e133-6ad1-41ce-afb0-641c4304a561",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "fd1c791a-67df-4a7a-8436-db7dc18c4721",
+          "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        },
+        {
+          "lineId": "a85f22c1-e7a0-439f-bbc0-9e7b9f103fa2",
+          "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [
+        3
+      ],
+      "localEventCount": 0
+    },
+    {
+      "name": "PARTIAL",
+      "orderId": "62614857-5a4e-4790-a789-88f48c52d797",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "e948544f-c173-4efb-853d-732d317d6672",
+          "warehouseId": "595e5986-710e-4dda-8aa9-a42894d60cb6",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [],
+      "localEventCount": 3
+    },
+    {
+      "name": "UI_DELIVERY",
+      "orderId": "b71511ec-79f5-42f3-bbcc-3d0d550323b0",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "2ac902c2-cd3c-45a3-b577-1808b743fee5",
+          "warehouseId": "595e5986-710e-4dda-8aa9-a42894d60cb6",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [],
+      "localEventCount": 3
+    },
+    {
+      "name": "UI_BOTH",
+      "orderId": "f07d8eef-27f1-45e7-8406-95a1d50aa2b8",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "01b595e6-fa8b-48a9-bda9-ee3a3b493e3f",
+          "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [],
+      "localEventCount": 0
+    },
+    {
+      "name": "UI_EXPRESS",
+      "orderId": "638dc37e-e0fc-49f6-91ad-360eb4d852db",
+      "status": "PAID",
+      "lines": [
+        {
+          "lineId": "1ceb17c3-3e3b-4c42-a61a-74b8ca22760a",
+          "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+          "saleEventCount": 1,
+          "deductedBaseQuantity": 3
+        }
+      ],
+      "shipmentQuantities": [
+        3
+      ],
+      "localEventCount": 0
+    }
+  ],
+  "balances": [
+    {
+      "warehouseId": "595e5986-710e-4dda-8aa9-a42894d60cb6",
+      "skuId": "558b39f6-cad4-4570-91e6-cebce705c91b",
+      "deductedBaseQuantity": 12,
+      "finalOnHand": 88,
+      "reserved": 0
+    },
+    {
+      "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+      "skuId": "558b39f6-cad4-4570-91e6-cebce705c91b",
+      "deductedBaseQuantity": 9,
+      "finalOnHand": 91,
+      "reserved": 0
+    },
+    {
+      "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+      "skuId": "2e0c5207-129d-4583-be64-8ed57d7a9fbb",
+      "deductedBaseQuantity": 3,
+      "finalOnHand": 97,
+      "reserved": 0
+    },
+    {
+      "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+      "skuId": "5b405e50-9098-43d4-983f-f898d35718b8",
+      "deductedBaseQuantity": 3,
+      "finalOnHand": 97,
+      "reserved": 0
+    },
+    {
+      "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+      "skuId": "1a67a3c0-1b10-4d29-b174-d6bd8d2a6fff",
+      "deductedBaseQuantity": 9,
+      "finalOnHand": 91,
+      "reserved": 0
+    }
+  ],
+  "syntheticPaymentOnly": true,
+  "realMoneyAndProvidersNotCalled": true
+}

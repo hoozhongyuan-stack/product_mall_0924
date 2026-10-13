@@ -1,0 +1,795 @@
+{
+  "prefix": "UAT-FG-20261013-CFB3F922",
+  "verifiedAt": "2026-10-13T10:48:24+0800",
+  "status": "PASS",
+  "stage": "deployed-public-HTTPS-API",
+  "requests": [
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/auth/csrf",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/v1/admin/auth/login",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": 404,
+      "code": "ORDER_NOT_FOUND"
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/7cdbe0f6-8f77-4a9d-80c2-d53e997f116b",
+      "status": 404,
+      "code": "ORDER_NOT_FOUND"
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/c16d24d7-fae4-4da7-b8b0-53c0562a4344/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 403,
+      "code": "STORE_FORBIDDEN"
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/v1/admin/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a/local-fulfillment",
+      "status": 403,
+      "code": "FULFILLMENT_OWNER_MISMATCH"
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f/pickup-preview",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f/pickup-preview",
+      "status": 409,
+      "code": "ALREADY_PICKED_UP"
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/7cdbe0f6-8f77-4a9d-80c2-d53e997f116b",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/v1/admin/redemptions/fd9ff18e-63a7-45ed-bad0-f321d4f94cda/use",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/46c91661-c91a-433f-b12a-8f5ebed55388",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/v1/admin/redemptions/a04d6816-be44-46e2-a7c3-60ab2182ba17/use",
+      "status": 403,
+      "code": "REDEMPTION_SCOPE_DENIED"
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/46c91661-c91a-433f-b12a-8f5ebed55388",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/46c91661-c91a-433f-b12a-8f5ebed55388/redemptions",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/46c91661-c91a-433f-b12a-8f5ebed55388/redemptions",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/16f38092-c059-4083-9219-a2c709693a3c",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/16f38092-c059-4083-9219-a2c709693a3c/redemptions",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/16f38092-c059-4083-9219-a2c709693a3c/redemptions",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/16f38092-c059-4083-9219-a2c709693a3c",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/v1/admin/redemptions/d177f6e4-effa-4754-908b-4302de976fec/use",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/16f38092-c059-4083-9219-a2c709693a3c",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/62614857-5a4e-4790-a789-88f48c52d797",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/62614857-5a4e-4790-a789-88f48c52d797/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/62614857-5a4e-4790-a789-88f48c52d797",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/62614857-5a4e-4790-a789-88f48c52d797/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/62614857-5a4e-4790-a789-88f48c52d797",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/62614857-5a4e-4790-a789-88f48c52d797/fulfillment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/62614857-5a4e-4790-a789-88f48c52d797",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/v1/admin/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8/shipment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8/confirm-receipt",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/aftersales/b42bd71a-7999-4ad3-a4b8-152466bdcfdd",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/v1/admin/aftersales/b42bd71a-7999-4ad3-a4b8-152466bdcfdd/review",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/v1/admin/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8/shipment",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "POST",
+      "path": "/api/v1/app/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8/confirm-receipt",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/c9f89645-ccfe-40c9-ba2b-8453d78c101f",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/7cdbe0f6-8f77-4a9d-80c2-d53e997f116b",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/7cdbe0f6-8f77-4a9d-80c2-d53e997f116b",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/46c91661-c91a-433f-b12a-8f5ebed55388",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/46c91661-c91a-433f-b12a-8f5ebed55388",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/46c91661-c91a-433f-b12a-8f5ebed55388",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/16f38092-c059-4083-9219-a2c709693a3c",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/16f38092-c059-4083-9219-a2c709693a3c",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/16f38092-c059-4083-9219-a2c709693a3c",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/orders/62614857-5a4e-4790-a789-88f48c52d797",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/v1/admin/orders/62614857-5a4e-4790-a789-88f48c52d797",
+      "status": 200,
+      "code": null
+    },
+    {
+      "actor": "member",
+      "method": "GET",
+      "path": "/api/v1/app/store-center/stores/42d4b8ef-3997-4338-bc7d-f3183d633198/orders/62614857-5a4e-4790-a789-88f48c52d797",
+      "status": 200,
+      "code": null
+    }
+  ],
+  "summaries": [
+    {
+      "name": "DELIVERY",
+      "orderId": "bd3d13e1-e783-45d8-b35f-3a48ed36ef5a",
+      "orderNo": "XS20261013104720000001",
+      "fulfillmentStatus": "COMPLETED",
+      "fulfillmentOwner": "STORE",
+      "inventoryWarehouse": {
+        "warehouseId": "595e5986-710e-4dda-8aa9-a42894d60cb6",
+        "name": "UAT-FG-20261013-CFB3F922合成前置仓"
+      },
+      "items": [
+        {
+          "orderLineId": "18299c26-c1c5-4c3c-b4c0-884849585f15",
+          "quantity": 3,
+          "facts": {
+            "kind": "SHIP",
+            "status": "COMPLETED",
+            "refundedQuantity": 0,
+            "heldQuantity": 0,
+            "frozenQuantity": 0,
+            "availableQuantity": 0,
+            "dispatchedQuantity": 3,
+            "deliveredQuantity": 3,
+            "remainingPhysicalQuantity": 0,
+            "canFulfill": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "PICKUP",
+      "orderId": "c9f89645-ccfe-40c9-ba2b-8453d78c101f",
+      "orderNo": "XS20261013104721000002",
+      "fulfillmentStatus": "COMPLETED",
+      "fulfillmentOwner": "STORE",
+      "inventoryWarehouse": {
+        "warehouseId": "595e5986-710e-4dda-8aa9-a42894d60cb6",
+        "name": "UAT-FG-20261013-CFB3F922合成前置仓"
+      },
+      "items": [
+        {
+          "orderLineId": "20ccbfcb-0ad7-47de-8fa2-83716b63a7fb",
+          "quantity": 3,
+          "facts": {
+            "kind": "SHIP",
+            "status": "COMPLETED",
+            "refundedQuantity": 0,
+            "heldQuantity": 0,
+            "frozenQuantity": 0,
+            "availableQuantity": 0,
+            "dispatchedQuantity": 3,
+            "deliveredQuantity": 3,
+            "remainingPhysicalQuantity": 0,
+            "canFulfill": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "EXPRESS",
+      "orderId": "bdd447bf-53bc-4b11-9138-8b80fdacdab8",
+      "orderNo": "XS20261013104721000003",
+      "fulfillmentStatus": "COMPLETED",
+      "fulfillmentOwner": "PLATFORM",
+      "inventoryWarehouse": {
+        "warehouseId": "7500b10d-2291-4a82-a3e3-452ebbdac773",
+        "name": "深圳8号仓库"
+      },
+      "items": [
+        {
+          "orderLineId": "67f81737-5633-4c3f-9a94-a91f02201665",
+          "quantity": 3,
+          "facts": {
+            "kind": "SHIP",
+            "status": "COMPLETED",
+            "refundedQuantity": 0,
+            "heldQuantity": 0,
+            "frozenQuantity": 0,
+            "availableQuantity": 0,
+            "dispatchedQuantity": 3,
+            "deliveredQuantity": 3,
+            "remainingPhysicalQuantity": 0,
+            "canFulfill": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "PLATFORM",
+      "orderId": "7cdbe0f6-8f77-4a9d-80c2-d53e997f116b",
+      "orderNo": "XS20261013104721000004",
+      "fulfillmentStatus": "IN_PROGRESS",
+      "fulfillmentOwner": "REDEEM",
+      "inventoryWarehouse": null,
+      "items": [
+        {
+          "orderLineId": "ae93f8ea-974d-4852-b69b-a016970286a0",
+          "quantity": 3,
+          "facts": {
+            "kind": "REDEEM",
+            "status": "PARTIAL",
+            "voucherId": "fd9ff18e-63a7-45ed-bad0-f321d4f94cda",
+            "validUntil": "2026-11-12",
+            "redeemedQuantity": 1,
+            "voidedQuantity": 0,
+            "remainingQuantity": 2,
+            "heldQuantity": 0,
+            "availableQuantity": 2,
+            "frozenQuantity": 0,
+            "refundedQuantity": 0,
+            "voucherRevision": 2,
+            "redeemScope": "PLATFORM",
+            "redeemStoreIds": [],
+            "redeemStores": [],
+            "canRedeemPlatform": true,
+            "canRedeemStore": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "STORE",
+      "orderId": "46c91661-c91a-433f-b12a-8f5ebed55388",
+      "orderNo": "XS20261013104722000005",
+      "fulfillmentStatus": "IN_PROGRESS",
+      "fulfillmentOwner": "REDEEM",
+      "inventoryWarehouse": null,
+      "items": [
+        {
+          "orderLineId": "da959750-214c-48c8-a339-a03c320998bf",
+          "quantity": 3,
+          "facts": {
+            "kind": "REDEEM",
+            "status": "PARTIAL",
+            "voucherId": "a04d6816-be44-46e2-a7c3-60ab2182ba17",
+            "validUntil": "2026-11-12",
+            "redeemedQuantity": 1,
+            "voidedQuantity": 0,
+            "remainingQuantity": 2,
+            "heldQuantity": 0,
+            "availableQuantity": 2,
+            "frozenQuantity": 0,
+            "refundedQuantity": 0,
+            "voucherRevision": 2,
+            "redeemScope": "STORE",
+            "redeemStoreIds": [
+              "42d4b8ef-3997-4338-bc7d-f3183d633198"
+            ],
+            "redeemStores": [
+              {
+                "name": "UAT-FG-20261013-CFB3F922合成验收仓",
+                "storeId": "42d4b8ef-3997-4338-bc7d-f3183d633198"
+              }
+            ],
+            "canRedeemPlatform": false,
+            "canRedeemStore": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "BOTH",
+      "orderId": "16f38092-c059-4083-9219-a2c709693a3c",
+      "orderNo": "XS20261013104722000006",
+      "fulfillmentStatus": "IN_PROGRESS",
+      "fulfillmentOwner": "REDEEM",
+      "inventoryWarehouse": null,
+      "items": [
+        {
+          "orderLineId": "05926042-5bfe-4b44-b363-964651d13756",
+          "quantity": 3,
+          "facts": {
+            "kind": "REDEEM",
+            "status": "PARTIAL",
+            "voucherId": "d177f6e4-effa-4754-908b-4302de976fec",
+            "validUntil": "2026-11-12",
+            "redeemedQuantity": 2,
+            "voidedQuantity": 0,
+            "remainingQuantity": 1,
+            "heldQuantity": 0,
+            "availableQuantity": 1,
+            "frozenQuantity": 0,
+            "refundedQuantity": 0,
+            "voucherRevision": 3,
+            "redeemScope": "BOTH",
+            "redeemStoreIds": [
+              "42d4b8ef-3997-4338-bc7d-f3183d633198"
+            ],
+            "redeemStores": [
+              {
+                "name": "UAT-FG-20261013-CFB3F922合成验收仓",
+                "storeId": "42d4b8ef-3997-4338-bc7d-f3183d633198"
+              }
+            ],
+            "canRedeemPlatform": true,
+            "canRedeemStore": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "PARTIAL",
+      "orderId": "62614857-5a4e-4790-a789-88f48c52d797",
+      "orderNo": "XS20261013104723000008",
+      "fulfillmentStatus": "AFTER_SALE",
+      "fulfillmentOwner": "STORE",
+      "inventoryWarehouse": {
+        "warehouseId": "595e5986-710e-4dda-8aa9-a42894d60cb6",
+        "name": "UAT-FG-20261013-CFB3F922合成前置仓"
+      },
+      "items": [
+        {
+          "orderLineId": "e948544f-c173-4efb-853d-732d317d6672",
+          "quantity": 3,
+          "facts": {
+            "kind": "SHIP",
+            "status": "AFTER_SALE",
+            "refundedQuantity": 0,
+            "heldQuantity": 1,
+            "frozenQuantity": 1,
+            "availableQuantity": 0,
+            "dispatchedQuantity": 2,
+            "deliveredQuantity": 2,
+            "remainingPhysicalQuantity": 1,
+            "canFulfill": false
+          }
+        }
+      ]
+    }
+  ],
+  "disclaimer": "Synthetic test receipts only; no actual money, payment provider or logistics called.",
+  "browserAndWechatNativeEvidence": false,
+  "syntheticFixtureOnly": true
+}

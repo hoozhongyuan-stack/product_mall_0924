@@ -1,0 +1,104 @@
+{
+  "featureRevision": "f2985a18cc422241325341e17e487ebc3d69f523",
+  "environment": "https://uat.aition.xin",
+  "stage": "deployment-and-synthetic-UAT-business-verification",
+  "privateFixturesCommitted": false,
+  "sourcePackageSha256": "92b1c42822c7700daf2a7fb5b9717cd22759e86d385816ebfb1746145bc3fa75",
+  "files": [
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-artifact-checksums.json",
+      "bytes": 207,
+      "sha256": "65ea99b86074d9dd60a49743dc258fda79367b39c4296f4ad353e05da7756861"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-db-evidence.json",
+      "bytes": 5651,
+      "sha256": "c0a076eb3152a65cfdb5049626b6ef2c9b703853512f7d0f3178176b43a5bdc7"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-db-final.json",
+      "bytes": 6104,
+      "sha256": "262e43ec7956d4b5478a3dc1eac65c16797ff22478e484fe588a4e120a77173f"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-deploy.log",
+      "bytes": 5598,
+      "sha256": "caf1e74afee54033eff7ddbac6acee7e1ea4a52a4566bbdb2890a8f1bb10e5d8"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-http-evidence.json",
+      "bytes": 23062,
+      "sha256": "d4c21dad9a25c51b49adc3d528d20764e1895156c8f9411676c7fd5847f02e21"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-native-customer-delivered.png",
+      "bytes": 423682,
+      "sha256": "4a078d28193d02e91a02c859edeb329f5c122ef4458ed0b5820b6de7d21d37da"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-native-customer-express-received.png",
+      "bytes": 443675,
+      "sha256": "85d5a63c3738788cb1735f8fb542ebd3d8ecb032e7a0e4ffd2fda81da54f3cac"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-native-customer-mixed-ax.txt",
+      "bytes": 3199,
+      "sha256": "72b71b0790c6870ea470e305bbf2d30c8f681556dfc55f47b36ee8d4a8eb3683"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-native-customer-shared-ax.txt",
+      "bytes": 2406,
+      "sha256": "7230c42d3da6a7a32106b4bb5ee1b648288fafae206e400d006467930d60fc66"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-native-warehouse-delivered.png",
+      "bytes": 348043,
+      "sha256": "0e256b0e04f4c91f69df2c46ccc9df7507404d00accb4c02a5a88961b784630d"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-native-warehouse-redeemed-once.png",
+      "bytes": 414103,
+      "sha256": "2822fd492690bc52eb67c18155b63b6164f446b04ab30e6bfa5b68e85315ee47"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-native-warehouse-shared-final.png",
+      "bytes": 427399,
+      "sha256": "f3208b9a7103dd9868687d88bd509bae89c0bd8101a3b03a6385a8970f8888f8"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-originals-final.json",
+      "bytes": 1050,
+      "sha256": "81a8ef625cb3a6cfa2446e667300ef2e8af337e1f6de60cf6e6b760cffe5eeb3"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-package-meta.json",
+      "bytes": 675,
+      "sha256": "d974ab1cc81f6e870da439886ccbea6c75be780c6e5d8911460aa7236b73ed16"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-platform-delivered.png",
+      "bytes": 51999,
+      "sha256": "5fcb3b0f625905c5226a9937728990a7abe07ea68c5bfbea4c3c9131dc18eabf"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-platform-express-received.png",
+      "bytes": 48925,
+      "sha256": "7f3f3bebe7d8cad72df5a4b60efa4ee2685896bef59ee774d29633f1b97d07dc"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-platform-shared-redemptions.png",
+      "bytes": 51995,
+      "sha256": "ffd156dd9cb64ea3a55708efe00d2414fb6b7742cde51c292aa3d0c68bd48870"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-postflight.log",
+      "bytes": 1265,
+      "sha256": "383461fa50f254b3275d22b7ced3b627e053559dd51071997ebf6ba3b4548a99"
+    },
+    {
+      "path": "docs/fulfillment-governance-evidence/fg-uat-ui-http-final.json",
+      "bytes": 6583,
+      "sha256": "39c9da32fb6117fe89e2f7f03e2efb501a01fcaf2d31e125d885416848da0ca2"
+    }
+  ]
+}
