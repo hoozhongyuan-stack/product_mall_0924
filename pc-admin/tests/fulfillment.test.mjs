@@ -52,3 +52,10 @@ test('store physical fulfillment labels and shipping guards remain separate from
  assert.equal(shipmentEligible({status:'PAID',deliveryMode:'PICKUP',shipEligible:true}),false)
  assert.equal(shipmentEligible({status:'PAID',deliveryMode:'DELIVERY',shipEligible:true}),false)
 })
+test('platform shipment respects owner and available unheld quantity during partial aftersale',async()=>{
+ const {shippingQuantity}=await import('../src/views/orders/fulfillment.mjs')
+ assert.equal(shipmentEligible({status:'PAID',deliveryMode:'EXPRESS',fulfillmentOwner:'STORE',shipEligible:true}),false)
+ assert.equal(shipmentEligible({status:'PAID',deliveryMode:'EXPRESS',fulfillmentOwner:'PLATFORM',fulfillmentStatus:'AFTER_SALE',shipEligible:true}),true)
+ assert.deepEqual(shippingQuantity({quantity:5,fulfillment:{refundedQuantity:0,availableQuantity:2}}),{purchased:5,refunded:0,remaining:2})
+ for(const availableQuantity of [-1,6,NaN,1.5,'2'])assert.equal(shippingQuantity({quantity:5,fulfillment:{refundedQuantity:0,availableQuantity}}),null)
+})

@@ -13,15 +13,15 @@ def _atomic():
 def assert_shippable_locked(order, lines):
     """Reject active physical holds and return lines with unrefunded units."""
     _atomic()
-    ids = [line.id for line in lines if line.fulfillment_kind == "SHIP"]
-    if AfterSaleCase.objects.filter(order_line_id__in=ids, status__in=ACTIVE).exists():
-        raise AfterSaleError("订单发货项仍有待处理售后，暂不可发货。", "AFTERSALE_BLOCKS_SHIPMENT", 409)
-    from .read import line_summaries
-    facts = line_summaries(ids)
-    remaining = [line for line in lines if line.fulfillment_kind == "SHIP"
-                 and line.quantity > facts.get(line.id, {}).get("refundedQuantity", 0)]
-    if ids and not remaining:
-        raise AfterSaleError("发货商品已全部退款，没有待发货数量。", "NO_SHIPPING_LINES", 409)
+    from fulfillment.physical import available_physical
+    physical = [line for line in lines if line.fulfillment_kind == 'SHIP']
+    if not physical:
+        return []
+    quantities = available_physical(physical)
+    remaining = [line for line in physical if quantities[line.id] > 0]
+    if not remaining:
+        held = AfterSaleCase.objects.filter(order_line_id__in=[line.id for line in physical], status__in=ACTIVE).exists()
+        raise AfterSaleError('没有可交付的未冻结商品数量。', 'AFTERSALE_BLOCKS_SHIPMENT' if held else 'NO_SHIPPING_LINES', 409)
     return remaining
 
 

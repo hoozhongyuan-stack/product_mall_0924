@@ -1,5 +1,5 @@
 """Bounded read-only public product cards for page decoration."""
-from django.db.models import OuterRef, Subquery, Q, Case, When, IntegerField
+from django.db.models import OuterRef, Subquery, Q, Case, When, IntegerField, BooleanField
 from django.utils import timezone
 from inventory.availability import product_has_available_stock
 from payments.availability import enabled_payment_methods
@@ -12,10 +12,10 @@ def hydrate_products(props, store=None, allowed_product_ids=None):
     cheapest = Sku.objects.filter(product_id=OuterRef('pk'), sale_status=Sku.SaleStatus.ON_SALE).order_by('list_price_fen', 'id')
     query = Product.objects.filter(status=Product.Status.ON_SALE, main_image__isnull=False,
         category__status='ACTIVE', category__parent__status='ACTIVE').annotate(
-            price_fen=Subquery(cheapest.values('list_price_fen')[:1]), has_stock=product_has_available_stock(store.warehouse_id if store else None)).filter(price_fen__isnull=False)
+            price_fen=Subquery(cheapest.values('list_price_fen')[:1]), has_stock=Case(When(fulfillment_kind='REDEEM', then=product_has_available_stock()), default=product_has_available_stock(store.warehouse_id), output_field=BooleanField()) if store else product_has_available_stock()).filter(price_fen__isnull=False)
     if store:
         from stores.access import sale_product_ids
-        query = query.filter(id__in=sale_product_ids(store), fulfillment_kind='SHIP')
+        query = query.filter(Q(id__in=sale_product_ids(store)) | Q(fulfillment_kind='REDEEM', redeem_store_ids__contains=[str(store.id)]))
     if allowed_product_ids is not None:
         query = query.filter(id__in=allowed_product_ids)
     if props['source'] == 'MANUAL':

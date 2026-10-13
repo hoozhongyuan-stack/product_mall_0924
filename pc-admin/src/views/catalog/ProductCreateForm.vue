@@ -2,6 +2,8 @@
 import { computed, inject, nextTick, ref, watch, type Ref } from 'vue'
 import ProductMediaEditor from './ProductMediaEditor.vue'
 import ProductDescriptionEditor from './ProductDescriptionEditor.vue'
+import RedemptionScopeFields from './RedemptionScopeFields.vue'
+import type {RedeemScope} from '../../shared/fulfillment-policy'
 import { api, type Account } from '../../api'
 import type { Asset, Category, MemberGrade } from './types'
 import SkuTable from './SkuTable.vue'
@@ -20,6 +22,8 @@ const name = ref('')
 const categoryId = ref('')
 const fulfillmentKind = ref<'SHIP' | 'REDEEM'>('SHIP')
 const redeemValidUntil = ref('')
+const redeemScope = ref<RedeemScope>('PLATFORM')
+const redeemStoreIds = ref<string[]>([])
 const description = ref('')
 const mainImage = ref<Asset | null>(null)
 const galleryImages = ref<Asset[]>([])
@@ -38,7 +42,7 @@ const editorElement = ref<HTMLElement | null>(null)
 const saving = ref(false)
 const error = ref('')
 const dirty = computed(() => Boolean(productNo.value || name.value || categoryId.value || description.value
-  || fulfillmentKind.value !== 'SHIP' || redeemValidUntil.value || axes.value.length || skus.value.length || mainImage.value
+  || fulfillmentKind.value !== 'SHIP' || redeemValidUntil.value || redeemScope.value !== 'PLATFORM' || redeemStoreIds.value.length || axes.value.length || skus.value.length || mainImage.value
   || galleryImages.value.length || video.value || mediaBusy.value))
 watch(dirty, (value) => emit('dirtyChange', value), { immediate: true })
 watch([mediaBusy, saving], () => emit('busyChange', mediaBusy.value || saving.value))
@@ -98,6 +102,7 @@ async function generateSkus() {
 
 async function save() {
   if (saving.value || !canEdit.value) return
+  if (fulfillmentKind.value === 'REDEEM' && redeemScope.value !== 'PLATFORM' && !redeemStoreIds.value.length) { error.value='至少选择一个前置仓。'; return }
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(productNo.value.trim()) || !name.value.trim() || !categoryId.value) {
     error.value = '请填写商品编号、名称和启用的二级分类。编号只允许字母、数字、短横线和下划线。'
     return
@@ -114,6 +119,8 @@ async function save() {
       productNo: productNo.value.trim(), name: name.value.trim(), categoryId: categoryId.value,
       fulfillmentKind: fulfillmentKind.value, descriptionHtml: description.value.trim(),
       redeemValidUntil: fulfillmentKind.value === 'REDEEM' ? redeemValidUntil.value || null : null,
+      redeemScope: fulfillmentKind.value === 'REDEEM' ? redeemScope.value : 'PLATFORM',
+      redeemStoreIds: fulfillmentKind.value === 'REDEEM' && redeemScope.value !== 'PLATFORM' ? redeemStoreIds.value : [],
       mainImageAssetId: mainImage.value?.assetId ?? null,
       galleryAssetIds: galleryImages.value.map((item) => item.assetId),
       videoAssetId: video.value?.assetId ?? null,
@@ -136,9 +143,10 @@ async function save() {
       <label>商品编号<input v-model="productNo" maxlength="64" required placeholder="例如 PROD-001" /></label>
       <label>商品名称<input v-model="name" maxlength="120" required placeholder="请输入商品名称" /></label>
       <label>二级分类<select v-model="categoryId" required><option value="" disabled>请选择</option><option v-for="item in props.categories.filter((row) => row.parentId && row.status === 'ACTIVE' && props.categories.some((parent) => parent.id === row.parentId && parent.status === 'ACTIVE'))" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-      <label>履约方式<select v-model="fulfillmentKind"><option value="SHIP">发货</option><option value="REDEEM">核销</option></select></label>
+      <label>商品类型<select v-model="fulfillmentKind" aria-label="商品类型"><option value="SHIP">实物商品</option><option value="REDEEM">虚拟商品／服务</option></select></label>
       <label v-if="fulfillmentKind === 'REDEEM'">核销截止日期（售卖前必填，截止日当天有效）<input v-model="redeemValidUntil" type="date" /></label>
     </div>
+    <RedemptionScopeFields v-if="fulfillmentKind==='REDEEM'" v-model:scope="redeemScope" v-model:store-ids="redeemStoreIds" :disabled="saving||!canEdit" />
     <ProductMediaEditor v-model:main-image="mainImage" v-model:gallery-images="galleryImages" v-model:video="video"
       :target-key="JSON.stringify([account?.accountId, 'new'])" :can-upload="canUpload" :disabled="saving || !canEdit"
       @busy-change="mediaBusy = $event" />

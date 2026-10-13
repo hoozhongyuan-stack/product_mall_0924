@@ -1,0 +1,132 @@
+Creating test database for alias 'default'...
+........................................................................................................................................................................................................................................................................Storage cleanup remains pending for .pending-delete/5647e4345afe452987295d56011ac645.json
+Storage cleanup remains pending for .pending-delete/1ab6f00354d243e5acc8497433674eb0.json
+..................................................Mini Program local source snapshot failed: DATABASE_UNAVAILABLE
+.Mini Program local source snapshot failed: SOURCE_UNAVAILABLE
+..Mini Program local source snapshot failed: STORAGE_UNAVAILABLE
+...................................Mini Program local source snapshot failed: SOURCE_DIRTY
+.Mini Program local source snapshot failed: SOURCE_DIRTY
+.Mini Program local source snapshot failed: SOURCE_UNAVAILABLE
+.Mini Program local source snapshot failed: SOURCE_UNAVAILABLE
+.Mini Program local source snapshot failed: STORAGE_UNAVAILABLE
+..................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................Refund settlement failed (RuntimeError)
+...........................................Refund settlement failed (RuntimeError)
+...........................s..............................................Found 1461 test(s).
+System check identified no issues (0 silenced).
+主账号已创建。请将凭据按项目约定交接，命令不会显示密码。
+Removed 1 expired unbound media assets.
+Local Mini Program source snapshot ready: source-b0af025ee146 (8cc7311e557366dfc9261dfba846cc42c20e002145b9935f4d47b54eb4909bcc)
+Local Mini Program source snapshot ready: source-b0af025ee146 (8cc7311e557366dfc9261dfba846cc42c20e002145b9935f4d47b54eb4909bcc)
+processed=1
+processed=1
+processed=1
+processed=1
+processed=1
+processed=1
+processed=1
+processed=1
+processed=0
+processed=1
+processed=0
+processed=1
+processed=1
+processed=1
+processed=1
+processed=1
+processed=0
+Committed Mini Program source synchronized: source-b0af025ee146 (8cc7311e557366dfc9261dfba846cc42c20e002145b9935f4d47b54eb4909bcc)
+customers.WechatLoginAttempt: 1
+customers.WechatCodeUse: 1
+customers.MemberSession: 1
+removedFiles=5 removedDirectories=3
+removedFiles=0 removedDirectories=0
+{"at": "2026-10-12T11:01:02.668236+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_FAILED", "exit_code": 1, "summary": ""}
+{"at": "2026-10-12T11:01:02.669364+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_OK", "exit_code": 0, "summary": "closed=0 auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+.{"at": "2026-10-12T11:01:02.670863+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_FAILED", "exit_code": 1, "summary": ""}
+{"at": "2026-10-12T11:01:02.671658+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_OK", "exit_code": 0, "summary": "closed=0 auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+.{"at": "2026-10-12T11:01:02.672950+00:00", "event": "INTERRUPTED_TICK"}
+{"at": "2026-10-12T11:01:02.673233+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_OK", "exit_code": 0, "summary": "closed=0 auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+.{"at": "2026-10-12T11:01:02.674404+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_OK", "exit_code": 0, "summary": "closed=1 auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+.{"at": "2026-10-12T11:01:02.675672+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_OK", "exit_code": 0, "summary": "closed=0 auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+{"at": "2026-10-12T11:01:02.676879+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_OK", "exit_code": 0, "summary": "closed=0 auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+.{"at": "2026-10-12T11:01:02.678117+00:00", "event": "SKIPPED_OVERLAP", "exit_code": 75}
+.{"at": "2026-10-12T11:01:02.679586+00:00", "event": "INTERRUPTED_TICK"}
+{"at": "2026-10-12T11:01:02.679982+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_OK", "exit_code": 0, "summary": "closed=0 auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+.C4 local scheduler requires an explicit matching disposable local PostgreSQL database.
+C4 local scheduler requires an explicit matching disposable local PostgreSQL database.
+C4 local scheduler requires an explicit matching disposable local PostgreSQL database.
+.{"at": "2026-10-12T11:01:02.681885+00:00", "elapsed_seconds": 240, "estimated_missed": 3, "event": "MISSED_INTERVALS"}
+{"at": "2026-10-12T11:01:02.682161+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_OK", "exit_code": 0, "summary": "closed=0 auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+.{"at": "2026-10-12T11:01:02.683333+00:00", "event": "SKIPPED_OVERLAP", "exit_code": 75}
+{"at": "2026-10-12T11:01:02.683926+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_OK", "exit_code": 0, "summary": "closed=0 auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+.{"at": "2026-10-12T11:01:02.685078+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_TIMEOUT", "exit_code": 124, "summary": ""}
+.{"at": "2026-10-12T11:01:02.686335+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_UNSAFE_PROVIDER_RESULT", "exit_code": 70, "summary": "closed=0 auto_confirmed=0 wechat=RUN"}
+.{"at": "2026-10-12T11:01:02.687670+00:00", "db": "c43_local_scheduler_test", "duration_ms": 0, "event": "TICK_INVALID_RESULT", "exit_code": 70, "summary": "closed=FAILED auto_confirmed=0 wechat=SKIPPED_UNCONFIGURED"}
+.................................................Logistics query failed for shipment 167de21b-032d-4358-9020-76f2d31da335 (Exception)
+...........................................................................subscription_sender_unknown task_id=8a8ab643-7e75-4350-8436-e1b59a437b8a error_type=TimeoutError
+.....................................auto_confirmed=FAILED errorType=RuntimeError
+.closed=FAILED errorType=RuntimeError
+.................................................................................................Refund settlement failed (RuntimeError)
+...Refund settlement failed (RuntimeError)
+Refund settlement failed (RuntimeError)
+...........Refund settlement failed (RuntimeError)
+................................................................Refund settlement failed (RuntimeError)
+.Refund settlement failed (RuntimeError)
+............................Export cleanup remains pending for task 871ae231-776f-4e43-83b9-a4b95bbe0ae3
+Traceback (most recent call last):
+  File "/Users/hoo/Documents/Codex/产品策划/dining-alliance/backend/report_exports/cleanup.py", line 46, in purge_expired_exports
+    if _delete(storage.path(expected_key), storage):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hoo/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hoo/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hoo/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+OSError: synthetic disk error
+Export orphan cleanup remains pending for 871ae231-776f-4e43-83b9-a4b95bbe0ae3
+Traceback (most recent call last):
+  File "/Users/hoo/Documents/Codex/产品策划/dining-alliance/backend/report_exports/cleanup.py", line 72, in purge_expired_exports
+    if _delete(storage.path(key), storage):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hoo/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hoo/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hoo/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+  File "/Users/hoo/Documents/Codex/产品策划/dining-alliance/backend/report_exports/cleanup.py", line 46, in purge_expired_exports
+    if _delete(storage.path(expected_key), storage):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hoo/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hoo/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/hoo/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+OSError: synthetic disk error
+.Unexpected file in private export namespace: not-a-task.csv
+....Export task 9ea15e80-67d8-4939-9e35-dcbd590275da failed: FILE_TOO_LARGE
+..Export task a45707ff-b632-46ef-8339-37a8391f5b6b failed
+Traceback (most recent call last):
+  File "/Users/hoo/Documents/Codex/产品策划/dining-alliance/backend/report_exports/worker.py", line 242, in run_next
+    _commit_file(task, temporary, size, digest, rows, storage)
+  File "/Users/hoo/Documents/Codex/产品策划/dining-alliance/backend/report_exports/worker.py", line 213, in _commit_file
+    live.save(update_fields=["status", "lease_token", "lease_until", "object_key",
+  File "/Users/hoo/Documents/Codex/产品策划/dining-alliance/backend/report_exports/tests/test_worker.py", line 235, in fail_ready
+    raise RuntimeError("synthetic database write failure")
+RuntimeError: synthetic database write failure
+...Export task 5c75651f-9511-411c-9409-f175dafff47f failed: ROW_LIMIT
+......................................
+----------------------------------------------------------------------
+Ran 1461 tests in 474.957s
+
+OK (skipped=1)
+Destroying test database for alias 'default'...
+Processed 0 export jobs; expired 0 tasks; removed 0 files and 0 temporary files.

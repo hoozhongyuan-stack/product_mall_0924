@@ -63,7 +63,7 @@ class PickupPreviewTests(TransactionTestCase):
         self.assertEqual(self.preview(delivery, 'A' * 26).json()['error']['code'], 'DELIVERY_MODE_MISMATCH')
         order, line, code = self.ready()
         from aftersales.service import apply_case
-        apply_case(self.member, line.id, 'REFUND_ONLY', 1, '暂停交付等待售后审核', uuid.uuid4())
+        apply_case(self.member, line.id, 'REFUND_ONLY', 2, '暂停交付等待售后审核', uuid.uuid4())
         self.assertEqual(self.preview(order, code).json()['error']['code'], 'AFTERSALE_BLOCKS_SHIPMENT')
         self.assertNotIn('pickupCode', delivery_data(order, include_code=True))
         self.assertNotIn('pickupQrDataUrl', delivery_data(order, include_code=True))

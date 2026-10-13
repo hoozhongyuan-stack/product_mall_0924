@@ -1,0 +1,276 @@
+
+> product-mall-admin@0.1.0 test
+> node --test tests/*.test.mjs && vitest run && vue-tsc --noEmit && vite build
+
+✔ semantic statuses keep pending, processing, success and unknown distinct (0.384584ms)
+✔ full loaded collections paginate safely without mutating inputs (0.416334ms)
+✔ selection only includes current allowed rows and never duplicates (0.346291ms)
+✔ loaded collection filters preserve actual records and tolerate empty values (1.826208ms)
+✔ reviews require an explicit decision and an audit reason (1.129375ms)
+✔ actual transfer evidence must equal the approved amount and be independently checked (4.083958ms)
+✔ a preparer cannot confirm their own transfer even with permission (0.101417ms)
+✔ unknown or failed confirmation keeps explicit recovery copy (0.083917ms)
+✔ expiry overrides enabled distribution and rejects issuance at the exact end boundary (0.44ms)
+✔ distinguishes draft, legacy, scheduled, paused, exhausted and current activities (0.087292ms)
+✔ unknown clock never optimistically enables issuance (0.046917ms)
+✔ campaign money is integer fen and cash threshold is zero (4.481417ms)
+✔ campaign bounds dates identities quantities and products (0.178958ms)
+✔ manual quantity and repeated grant cause cannot be omitted (0.112417ms)
+✔ unknown requests are actor scoped and frozen without passwords (3.23975ms)
+✔ campaign enum, validity, repeat and corrupt storage fail safely (0.6825ms)
+✔ only exact NOT_FOUND allows original request retry (1.11025ms)
+✔ issuance completion must match campaign member count and valid distinct coupons (0.189917ms)
+✔ campaign publish and distribution must match identity revision and final state (0.429292ms)
+✔ creation and editing completion must match saved terms (2.28975ms)
+✔ ambiguous throttle timeout and lost authorization preserve original identity (0.22025ms)
+✔ completion validates nested product DTO and malformed response safely (0.309ms)
+✔ approved goods and independent shipping use server total for transfer (1.895791ms)
+✔ zero cash is a valid settlement and never a positive cash transfer (0.151334ms)
+✔ benefit settlement retry is scoped to account and case and retains exact key and revision (0.408917ms)
+✔ zero-cash return accepts explicit zero only for a server zero-cash case (2.713417ms)
+✔ malformed persisted intent is cleared without submitting a replacement (0.422625ms)
+✔ an application amount never becomes an approval before review (0.434917ms)
+✔ review acceptance and completion have distinct refund facts (0.067792ms)
+✔ rejected withdrawn and unknown cases never imply a refund (0.065708ms)
+✔ offer price is a bounded integer and SKU is selected safely (0.797291ms)
+✔ offer recovery binds original SKU price identity and exact revision (0.45225ms)
+✔ edit and availability recovery validates request revision and final action (0.363542ms)
+✔ pending offer request is actor and object scoped and contains no password (2.675875ms)
+✔ points orders have explicit settlement labels and never money as their main value (1.833375ms)
+✔ unknown settlement values do not invent a zero and malformed offer payloads stay frozen (0.64875ms)
+✔ only ready and unexpired exports can be downloaded (0.595875ms)
+✔ known rejection clears pending request but uncertain result retains its request key (0.072958ms)
+✔ export labels and download names are fixed locally (0.093083ms)
+✔ shipment requires a configured carrier and a bounded tracking number (0.908334ms)
+✔ redemption quantity is a whole number within the server remaining count (0.306667ms)
+✔ fulfillment labels and shipping eligibility reflect independent order state (0.290375ms)
+✔ after-sale and refund states are distinct from completed fulfillment (0.23525ms)
+✔ shipment quantities preserve purchased units and subtract only confirmed refunded units (1.034625ms)
+✔ missing malformed or out of range refund quantities block shipment instead of becoming zero (0.286708ms)
+✔ store physical fulfillment labels and shipping guards remain separate from redemption (0.13075ms)
+✔ platform shipment respects owner and available unheld quantity during partial aftersale (0.29325ms)
+✔ normalizes nested Vue reactive component props into independent plain JSON (1.4465ms)
+✔ normalizes an independent micro page without turning it into a home page (0.221958ms)
+✔ late upload updates its original component even after the selected component changes (0.376209ms)
+✔ late upload does not bind to a different slide after its position changes (0.155042ms)
+✔ CSV escapes quotes and formulas in user-entered inventory notes (0.825125ms)
+✔ CSV neutralizes formulas hidden behind whitespace, BOM or control characters (0.263875ms)
+✔ inbound quantity accepts only safe positive integer operation units (0.423375ms)
+✔ groups physical balances by base unit instead of adding bottles to items (1.417875ms)
+✔ counts each warehouse anchor once while retaining balances in other warehouses (0.2865ms)
+✔ selector rejects missing, incompatible, nonsquare and duplicate assets (2.321333ms)
+✔ query encodes filters and limits upload-only users to unbound assets (1.620375ms)
+✔ upload checks real size/type and selection rejects an obsolete target (4.080292ms)
+✔ global readers can reuse bound materials and blank filters stay absent (0.227834ms)
+✔ video and GIF uploads enforce their own MIME and byte boundaries (0.15375ms)
+✔ money uses decimal strings and integer fen (1.0155ms)
+✔ thresholds must ascend and start at zero (0.216875ms)
+✔ body binds revision and exact integer amounts (0.241416ms)
+✔ pending body and key are stable per account (0.970292ms)
+✔ rule bounds prevent invalid ratios, dates and oversized amounts (0.393417ms)
+✔ corrupt persisted request cannot be submitted as a new body (0.201667ms)
+✔ public reasons explain completion, refund, reversal and expiry (0.148542ms)
+✔ actual money is parsed exactly to cents and invalid amounts are refused (1.043584ms)
+✔ reconciliation requires independently verified bank details and a reason for mismatch (8.337375ms)
+✔ reported payment and anomalies never display as paid (0.1175ms)
+✔ immutable confirmation must be regenerated after changing evidence (19.669125ms)
+✔ actions follow payment method, state and current permissions (2.288125ms)
+✔ platform never operates warehouse delivery or pickup (0.128625ms)
+✔ platform redemption follows frozen scope and available quantity (0.08625ms)
+✔ shipment corrections and read-only tracking are available independently (0.078209ms)
+✔ local forms use existing service body and evidence rather than arbitrary snapshots (0.240166ms)
+✔ pending action recovery accepts only the original actor and domain path (0.793541ms)
+✔ cached body cannot switch approved local action or unrelated order voucher (0.422167ms)
+✔ receipt recovery binds the server record to order, actor and frozen evidence (0.597291ms)
+✔ bounded list summaries expose voucher and shipment operations without detail queries (0.219417ms)
+✔ procurement validates integer money and frozen status actions (2.614209ms)
+✔ private snapshots expire and reject invalid paths or request identities (0.258584ms)
+✔ private proof URL and result matching are bound to order and revision (0.219625ms)
+✔ rollback body binds target and both revisions and requires a reason (2.98975ms)
+✔ pending recovery retains exact body and key only within actor and target (0.369584ms)
+✔ recovery accepts only the original historical version and next publication revision (0.151833ms)
+✔ unknown outcomes and recovery authorization failures retain original request (0.207167ms)
+✔ new rollback requires a durable verified recovery record before network submission (0.244959ms)
+✔ original publish body and confirmation revision remain fixed across rollback and draft edits (1.416167ms)
+✔ successful original receipt after a later rollback reads authoritative pointer and version (0.757791ms)
+✔ failed pointer/detail refresh never supplies a partial publication state (0.353042ms)
+✔ unpublished pointer is synchronized without requesting a nonexistent detail (0.256875ms)
+✔ publish completion accepts a valid original receipt and rejects malformed or different operations (0.62075ms)
+✔ durable ordinary publish recovery is scoped and preserves exact frozen body without password (0.555041ms)
+✔ acceptance validates actual counts, waiver and reason (0.882083ms)
+✔ blank refund amount asks server calculation; money is exact integer fen (0.260875ms)
+✔ unknown and processing refund outcomes require queries (0.224375ms)
+✔ counts remain integers, bounded and consistent across received and waived decisions (0.375583ms)
+✔ pending acceptance retains exact body and key within its account and case only (1.596417ms)
+✔ provider conflict and closed refunds explain why automatic actions are blocked (0.4665ms)
+✔ weight units require positive integers and fees preserve cents (1.637917ms)
+✔ fences require geometry, integer thresholds and a real time interval (0.379583ms)
+✔ all template modes reject invalid input without converting display values (0.184708ms)
+✔ circle and distance validation cover invalid locations and midnight windows (0.445333ms)
+✔ campaign dates round trip in Beijing time regardless of device timezone (68.238583ms)
+✔ navigation keeps exact order and requires icon pairs (0.463042ms)
+✔ navigation updates one item without mutating input (0.284959ms)
+✔ service modes require their matching contact and clear inactive fields (0.854ms)
+✔ save result normalization does not misreport a new edit (3.872ms)
+✔ v2 navigation migrates v1, allows custom targets and five entries immutably (1.60375ms)
+✔ v2 navigation validates labels, identities, targets and media pairs (0.437125ms)
+✔ reordering axes retains existing SKU identity and filled values (0.961583ms)
+✔ new and removed combinations are explicit while retained SKU keeps its revision (0.110375ms)
+✔ payload includes stable IDs and revisions, with valid enabled grade price (0.7095ms)
+✔ late startup upload only replaces the originally selected slot (0.814916ms)
+✔ 实盘数量允许零和安全整数，拒绝小数与负数 (1.391792ms)
+✔ 提交盘点要求全部 SKU 和差异原因 (2.552917ms)
+✔ settings parser requires the three fixed disabled candidates (1.008667ms)
+✔ draft validation and request preserve disabled semantics (1.2845ms)
+✔ save reconciliation preserves edits made during the request (0.1115ms)
+✔ task labels distinguish unknown delivery from synthetic processing (0.74525ms)
+✔ only explicitly recoverable reservations with a dedicated permission show recovery (0.219916ms)
+✔ task query keeps bounded filters and opaque cursor (0.334375ms)
+✔ task query sends the chosen cursor page size and rejects unsupported page sizes (0.683167ms)
+ℹ tests 125
+ℹ suites 0
+ℹ pass 125
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 596.7415
+
+ RUN  v5.0.2 /Users/hoo/Documents/Codex/产品策划/dining-alliance/pc-admin
+
+
+ Test Files  90 passed (90)
+      Tests  679 passed (679)
+   Start at  18:26:14
+   Duration  26.00s (tests 40%, import 37%, environment 17%, transform 5%)
+
+    Isolate  90 workers spawned · ~255ms startup each (spawn + environment, per file)
+             at least ~5.47s faster with isolate: false — reuses workers across files instead of one per file
+
+vite v8.3.0 building client environment for production...
+transforming...
+✓ 2041 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                          1.04 kB │ gzip:   0.45 kB
+dist/assets/ProcurementSettingsView-CV2_67U9.css         0.21 kB │ gzip:   0.16 kB
+dist/assets/StoreDeliveryRulesView-CaoqUdIu.css          0.22 kB │ gzip:   0.17 kB
+dist/assets/ProcurementListView-DO5YXdVR.css             0.22 kB │ gzip:   0.17 kB
+dist/assets/MembersView-BPXTBQb7.css                     0.32 kB │ gzip:   0.21 kB
+dist/assets/OrdersView-DIkA-EhY.css                      0.36 kB │ gzip:   0.22 kB
+dist/assets/ProductProfitView-DWIYsJ_S.css               0.44 kB │ gzip:   0.28 kB
+dist/assets/PaymentSettingsView-BH6Qmw7K.css             0.47 kB │ gzip:   0.26 kB
+dist/assets/ProcurementDetailView-DXG8_4ML.css           0.59 kB │ gzip:   0.32 kB
+dist/assets/AfterSaleDetailView-D3UCmODW.css             0.77 kB │ gzip:   0.38 kB
+dist/assets/OrderActionDialog-1dq5LoH4.css               0.79 kB │ gzip:   0.39 kB
+dist/assets/StoreLocationPicker-Bc7GI1AR.css             1.09 kB │ gzip:   0.45 kB
+dist/assets/DashboardView-DQ3RLy8x.css                   1.26 kB │ gzip:   0.47 kB
+dist/assets/AuditView-oym_RWM9.css                       1.38 kB │ gzip:   0.54 kB
+dist/assets/BusinessSummaryView-C1LIaW9j.css             1.45 kB │ gzip:   0.52 kB
+dist/assets/ExportPanel-BcGmtHUn.css                     1.81 kB │ gzip:   0.63 kB
+dist/assets/procurement-BwTuariX.css                     1.81 kB │ gzip:   0.63 kB
+dist/assets/StoreDetailView-Cm8pDVbQ.css                 2.26 kB │ gzip:   0.75 kB
+dist/assets/PointsExchangeDetailView-BxknFBV8.css        2.28 kB │ gzip:   0.75 kB
+dist/assets/shipping-DrRzexLu.css                        2.36 kB │ gzip:   0.77 kB
+dist/assets/SubscriptionMessagesView-B8ctdZM0.css        2.50 kB │ gzip:   0.79 kB
+dist/assets/stores-BmYbhi1m.css                          2.72 kB │ gzip:   0.97 kB
+dist/assets/customers-BF0608Ig.css                       3.24 kB │ gzip:   0.90 kB
+dist/assets/CouponDetailView-B5L1GkhF.css                4.30 kB │ gzip:   1.18 kB
+dist/assets/SubscriptionMessageTasksView-HB-TlsfW.css    4.49 kB │ gzip:   1.20 kB
+dist/assets/SingletonConfigView-B6wHbeE2.css             4.99 kB │ gzip:   1.25 kB
+dist/assets/StoreInfoView-D0KB_j4x.css                   6.04 kB │ gzip:   1.59 kB
+dist/assets/publication-sync-C0Sfwmoh.css                6.22 kB │ gzip:   1.66 kB
+dist/assets/WechatIntegrationView-OV75Q5jq.css           7.11 kB │ gzip:   1.65 kB
+dist/assets/orders-D6k1HahZ.css                          7.49 kB │ gzip:   1.76 kB
+dist/assets/CodeVersionsView-DQyk9_Mg.css                8.88 kB │ gzip:   1.99 kB
+dist/assets/CatalogView-BNZMoLo-.css                    10.35 kB │ gzip:   2.42 kB
+dist/assets/AssetBrowser-DSmMdCAR.css                   17.36 kB │ gzip:   3.18 kB
+dist/assets/MicroPageView-dsuyJhQI.css                  22.01 kB │ gzip:   4.45 kB
+dist/assets/dining-Dj-fiI6g.css                         23.45 kB │ gzip:   3.71 kB
+dist/assets/InventoryView-CGhKpGu6.css                  27.34 kB │ gzip:   4.55 kB
+dist/assets/index-CAxS9uYw.css                         154.10 kB │ gzip:  22.87 kB
+dist/assets/cloneDeep-CGTneuYf.js                        0.10 kB │ gzip:   0.11 kB
+dist/assets/csv-DmS5aGhq.js                              0.23 kB │ gzip:   0.20 kB
+dist/assets/NavigationView-CCLO8p0I.js                   0.27 kB │ gzip:   0.22 kB
+dist/assets/CustomerServiceView-FfQUUy8G.js              0.28 kB │ gzip:   0.22 kB
+dist/assets/order-settlement-B2x5V6ZZ.js                 0.37 kB │ gzip:   0.28 kB
+dist/assets/useCurrentPageSelection-BHqOq5Lp.js          0.50 kB │ gzip:   0.31 kB
+dist/assets/dining-BAXmaqkc.js                           0.56 kB │ gzip:   0.47 kB
+dist/assets/AdminSelectionBar-3N8MzwM-.js                0.65 kB │ gzip:   0.45 kB
+dist/assets/types-iJt-2oGr.js                            0.76 kB │ gzip:   0.53 kB
+dist/assets/AssetsView-DHPstEbX.js                       0.82 kB │ gzip:   0.57 kB
+dist/assets/AdminListPager-BhCYlelb.js                   0.91 kB │ gzip:   0.59 kB
+dist/assets/useApi-BPuI6ZR9-D8TqnyUg.js                  0.96 kB │ gzip:   0.52 kB
+dist/assets/media-library-CjDSmDej.js                    1.01 kB │ gzip:   0.64 kB
+dist/assets/AdminCursorPager-DOvlM_4W.js                 1.19 kB │ gzip:   0.71 kB
+dist/assets/AdminSelectedRowsDialog-H0dMC8EV.js          1.35 kB │ gzip:   0.83 kB
+dist/assets/AdminListColumns-BTrBNOyw.js                 1.36 kB │ gzip:   0.82 kB
+dist/assets/AdminStatusBadge-Hp_bMQUT.js                 1.59 kB │ gzip:   0.89 kB
+dist/assets/OrderBenefitsSummary-uzs-CaWh.js             1.73 kB │ gzip:   0.92 kB
+dist/assets/tag-D3AogVXf.js                              1.96 kB │ gzip:   0.90 kB
+dist/assets/AssetPicker-DrePdSiB.js                      2.03 kB │ gzip:   1.14 kB
+dist/assets/DashboardView-M3CJ9uIb.js                    2.37 kB │ gzip:   1.28 kB
+dist/assets/persistent-operation-BRD4eMgB.js             3.24 kB │ gzip:   1.64 kB
+dist/assets/ProcurementSettingsView-7gAIKxgm.js          3.43 kB │ gzip:   1.74 kB
+dist/assets/PurchaseCostsView-Dz689vJO.js                4.00 kB │ gzip:   1.98 kB
+dist/assets/_baseClone-BLl7hCfR.js                       4.66 kB │ gzip:   1.88 kB
+dist/assets/radio-B2N8ue9t.js                            5.16 kB │ gzip:   2.11 kB
+dist/assets/StoreAccountsView-37UWBDzP.js                5.49 kB │ gzip:   2.56 kB
+dist/assets/ProcurementListView-CT4tZRyk.js              5.76 kB │ gzip:   2.73 kB
+dist/assets/StoresView-Cg_ZdbNe.js                       6.22 kB │ gzip:   2.93 kB
+dist/assets/StoreLocationPicker-Cb5J9DBu.js              6.48 kB │ gzip:   3.08 kB
+dist/assets/PointsExchangeView-D7Xiq_q8.js               6.55 kB │ gzip:   3.09 kB
+dist/assets/PaymentSettingsView-hgvHSVOW.js              6.87 kB │ gzip:   3.02 kB
+dist/assets/input-number-cUiZX9fh.js                     6.98 kB │ gzip:   2.83 kB
+dist/assets/FulfillmentSettingsView-DKbbJHqN.js          6.99 kB │ gzip:   3.01 kB
+dist/assets/AfterSalesView-Cf0ZapmT.js                   7.16 kB │ gzip:   3.34 kB
+dist/assets/MembersView-Din5-_AF.js                      7.31 kB │ gzip:   3.31 kB
+dist/assets/ExportPanel-B69Wninj.js                      7.39 kB │ gzip:   3.43 kB
+dist/assets/CouponsView-dlFIBr5O.js                      7.59 kB │ gzip:   3.48 kB
+dist/assets/BusinessSummaryView-COGY1GQg.js              7.76 kB │ gzip:   2.97 kB
+dist/assets/MemberDetailView-Byqi17aH.js                 7.92 kB │ gzip:   3.18 kB
+dist/assets/AuditView-uhQ_XXDj.js                        8.10 kB │ gzip:   3.46 kB
+dist/assets/RestaurantsView-DsoI-Ijl.js                  8.48 kB │ gzip:   3.41 kB
+dist/assets/RedemptionView-DMUE2vBS.js                   8.75 kB │ gzip:   3.67 kB
+dist/assets/ProductRatiosView-BxPLmgFT.js                9.26 kB │ gzip:   3.70 kB
+dist/assets/StoreMapSettingsView-evZBXTxZ.js             9.30 kB │ gzip:   3.66 kB
+dist/assets/SubscriptionMessagesView-C67dcL75.js         9.52 kB │ gzip:   3.94 kB
+dist/assets/OrdersView-DYwr2AuQ.js                       9.65 kB │ gzip:   3.62 kB
+dist/assets/GroupsView-D3Bo7RH7.js                      10.64 kB │ gzip:   4.26 kB
+dist/assets/ProcurementDetailView-epfxjnFg.js           10.95 kB │ gzip:   4.33 kB
+dist/assets/AccountsView-CCT1jnzr.js                    11.45 kB │ gzip:   4.27 kB
+dist/assets/confirm-BILl68wn.js                         11.66 kB │ gzip:   4.42 kB
+dist/assets/MemberRulesView-BKYCK6Fk.js                 11.90 kB │ gzip:   4.78 kB
+dist/assets/FinanceView-DgndG58y.js                     12.76 kB │ gzip:   4.47 kB
+dist/assets/PointsExchangeDetailView-DAq8UWDo.js        13.43 kB │ gzip:   5.43 kB
+dist/assets/SubscriptionMessageTasksView-DL03Wi7Z.js    14.06 kB │ gzip:   5.63 kB
+dist/assets/WechatIntegrationView-DMVQc7KX.js           14.26 kB │ gzip:   5.63 kB
+dist/assets/shipping-Cvzl5St6.js                        14.33 kB │ gzip:   5.86 kB
+dist/assets/ProductProfitView-BNoiB-EM.js               14.81 kB │ gzip:   5.62 kB
+dist/assets/runtime-dom.esm-bundler-DCI5Q72W.js         15.91 kB │ gzip:   6.72 kB
+dist/assets/StoreAccountDetailView-spoPHo0P.js          17.91 kB │ gzip:   6.49 kB
+dist/assets/OrderDetailView-CKh1n4R4.js                 19.16 kB │ gzip:   6.56 kB
+dist/assets/StoreInfoView-BzEgSKLu.js                   19.53 kB │ gzip:   6.80 kB
+dist/assets/StoreDeliveryRulesView-BSL_B9s6.js          19.69 kB │ gzip:   7.29 kB
+dist/assets/StoreDetailView-mZfFPpg5.js                 20.84 kB │ gzip:   7.75 kB
+dist/assets/SingletonConfigView-jiK3ZHG6.js             24.48 kB │ gzip:   8.57 kB
+dist/assets/input-BHPwZWH7.js                           24.54 kB │ gzip:   9.28 kB
+dist/assets/publication-sync-DPGbUj8g.js                26.20 kB │ gzip:   9.02 kB
+dist/assets/RestaurantDetailView-BxCu658R.js            26.96 kB │ gzip:   8.58 kB
+dist/assets/OrderActionDialog--CTtJhR6.js               28.20 kB │ gzip:  10.04 kB
+dist/assets/OrdersView-CkKqIWvX.js                      31.20 kB │ gzip:  10.25 kB
+dist/assets/CouponDetailView-CN7x3Xjn.js                32.51 kB │ gzip:  10.64 kB
+dist/assets/AssetBrowser-DXEEhRma.js                    38.71 kB │ gzip:  13.42 kB
+dist/assets/AfterSaleDetailView-CxRaJhhf.js             44.56 kB │ gzip:  13.48 kB
+dist/assets/CodeVersionsView-CsytDHYc.js                46.36 kB │ gzip:  13.76 kB
+dist/assets/overlay-C8FHqGwZ.js                         53.33 kB │ gzip:  19.47 kB
+dist/assets/ShippingRulesView-Dwe60A94.js               60.57 kB │ gzip:  21.07 kB
+dist/assets/api-Bvd2G3ia.js                             67.93 kB │ gzip:  26.87 kB
+dist/assets/table-BOwW3IXg.js                           75.41 kB │ gzip:  25.70 kB
+dist/assets/InventoryView-BEM-gtVk.js                   77.41 kB │ gzip:  20.44 kB
+dist/assets/MicroPageView-CfCVTE3D.js                   88.39 kB │ gzip:  27.34 kB
+dist/assets/zh-cn-BB29q2cr.js                           93.85 kB │ gzip:  31.69 kB
+dist/assets/index-Dnqek4fn.js                          225.28 kB │ gzip:  70.11 kB
+dist/assets/CatalogView-BYsIsIwX.js                    466.19 kB │ gzip: 140.69 kB
+
+✓ built in 537ms

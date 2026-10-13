@@ -891,6 +891,22 @@ E2.0先定义三类**候选**事实事件：`ORDER_PAID` 只表示现金订单�
 
 ## 已确认补充：配置配送规则与运费承担（2026-10-12）
 
-依据已确认的进货与配送 HTML，细节见 `docs/procurement-delivery.md`。后台快递模板、围栏、规格重量及平台活动由 `settlement.shipping.manage` 配置。报价与订单新增 `shippingSnapshot`，包含配置修订、资格／待选地址状态、规则标识、门槛金额、顾客运费、配送成本、前置仓承担、平台承担与包邮来源；所有金额为分。经营包邮由订单前置仓承担，平台活动包邮由平台承担，费用守恒且不双重扣减。门槛按商品金额扣券后、积分抵扣前计算，不含运费。新物理订单需明确有效前置仓作为商品与经营包邮主体。提交重验资格与修订，成交快照不随配置变更。
+依据已确认的进货与配送 HTML，细节见 `docs/procurement-delivery.md`。后台快递模板、围栏、规格重量及平台活动由 `settlement.shipping.manage` 配置。报价与订单新增 `shippingSnapshot`，包含配置修订、资格／待选地址状态、规则标识、门槛金额、顾客运费、配送成本、前置仓承担、平台承担与包邮来源；所有金额为分。按下方已确认履约治理增量，本地配送经营包邮由履约前置仓承担，快递经营包邮与平台活动由平台承担，费用守恒且不双重扣减。门槛按商品金额扣券后、积分抵扣前计算，不含运费。本地实物订单需有效履约前置仓；平台快递使用总仓且不要求前置仓。提交重验资格与修订，成交快照不随配置变更。
 
 业务展示编号：XS／CY／JH／JF／SH／TK + 北京时间 YYYYMMDDHHmmss + 类型当日六位序号；UUID 独立。进货和售后 DTO 分别新增稳定 `orderNo`、`caseNo`，内部与外部支付参考保持各自用途。正常小程序启动直接打开发布的首页微页面，加载期不渲染临时仓标题。
+
+
+## 已确认补充：订单履约治理（2026-10-12）
+
+业务以根需求文档“订单履约治理”增量与已确认 HTML 为准。新快递订单 `storeId=null, deliveryMode=EXPRESS`，所选购买入口独立保存为 `sourceStore`；库存总仓与运费承担归平台，不生成前置仓履约财务行。本地实物 `storeId` 为履约仓，方式 PICKUP／DELIVERY；纯虚拟方式 REDEEM。积分原有快递／权益入口沿相同路由，未新增本地混合结算。
+
+- 商品创建／PATCH／详情增加 `redeemScope: PLATFORM|STORE|BOTH`、`redeemStoreIds: UUID[]`、只读 `redeemStores: [{storeId,name}]`；后者由服务端返回。平台范围不可带仓，STORE／BOTH必须选择启用仓，实物不配置虚拟范围。`GET /api/v1/admin/products/redemption-stores` 需 catalog.read，返回 `{items:[{storeId,name}]}`，不要求额外店铺管理权限。
+- 报价锁定范围，并在提交时重验；发生变化返回 REDEEM_SCOPE_CHANGED。订单项不可变 JSON `redeem_scope_snapshot={scope,stores}`，旧空快照明确按仅平台解释，不读取现商品动态范围。
+- 订单详情／列表增加 `fulfillmentOwner: PLATFORM|STORE|REDEEM`、`inventoryWarehouse:{warehouseId,name}`、`fulfillmentStoreId/Name`；详情透传 `shipEligible/canFulfill`。筛选增加 deliveryMode 与 fulfillmentOwner。虚拟范围按项展示，不用订单主归属替代。
+- 逐项进度增加范围、availableQuantity／frozenQuantity、voucherRevision、canRedeemPlatform／canRedeemStore、dispatchedQuantity／deliveredQuantity／remainingPhysicalQuantity。售后既有 `redemptionScope: USED|UNUSED` 表示退款权益状态，与商品 `redeemScope` 含义不同。
+- `POST /api/v1/app/stores/{storeId}/orders/{orderId}/redemptions` 精确接收 `{orderLineId,voucherCode,quantity,expectedRevision,note}`，expectedRevision为凭证修订，UUID Idempotency-Key；实时员工orders权限、成交范围、顾客凭证与未冻结余量在订单锁内验证，成功返回OrderDetail。后台原核销endpoint复用同范围守卫。记录actorKind与storeName。
+- 仓履约动作仅 PREPARE／DISPATCH／COMPLETE／FAIL_DELIVERY／RETRY_DELIVERY；配送状态 EXCEPTION追加failureReason。仓不支持SHIP，后台本地履约endpoint拒绝。工作台待办 waitingPreparation／waitingDelivery／inTransit／waitingPickup／waitingRedemption。
+- 详情 `storeDelivery.events` 返回最新最多20条 `{action,requestKey,createdAt}`，用于未知结果先GET核对；非本地履约归属仓不获得该事件窗口。客户端持久请求不保存凭证明文，结果未知沿原请求键恢复，查询失败时不继续POST。
+- `Shipment` 改为多批次，`ShipmentLine`记录发货数量；详情追加shipments[]，shipment为最近批。顾客既有确认收货确认当前所有未确认批次；未发余量保持待履约。`LocalHandoffLine`保存分项DISPATCH／COMPLETE不可变事实。服务与数据库同按数量守卫售后退款／回库，交付不写第二笔SALE。
+
+本地预览使用脚本 `pc-admin/scripts/run-browser-integration.py --fulfillment-preview` 创建独立随机数据库和八个合成场景；服务停止时仅删除该次数据库和自有进程。小程序源码浏览器桥限定127.0.0.1并代理隔离API，不连接真实微信或支付；官方WXML／WXSS编译与浏览器预览须分别记录。

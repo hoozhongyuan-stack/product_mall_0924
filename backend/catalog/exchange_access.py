@@ -28,7 +28,8 @@ def exchange_catalog_rows(sku_ids,*,lock=False):
         eligible=bool(product.ever_on_sale and not product.manually_off_sale and product.main_image_id and category.status=='ACTIVE'
             and category.parent and category.parent.status=='ACTIVE' and unit
             and (product.fulfillment_kind!='REDEEM' or product.redeem_valid_until and product.redeem_valid_until>=timezone.localdate()))
-        result[sku.id]={'sku':sku,'unit':unit,'eligible':eligible,'skuId':str(sku.id),'productId':str(product.id),
+        from .redemption_scope import product_scope_data
+        result[sku.id]={**product_scope_data(product),'sku':sku,'unit':unit,'eligible':eligible,'skuId':str(sku.id),'productId':str(product.id),
             'name':product.name,'productName':product.name,'skuCode':sku.sku_code,'specs':specs[sku.id],
             'saleUnit':unit.sale_unit if unit else None,'ratio':unit.ratio if unit else None,
             'fulfillmentKind':product.fulfillment_kind,'redeemValidUntil':product.redeem_valid_until.isoformat() if product.redeem_valid_until else None,

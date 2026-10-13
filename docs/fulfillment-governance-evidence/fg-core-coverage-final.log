@@ -1,0 +1,10 @@
+Name                                      Stmts   Miss Branch BrPart  Cover   Missing
+-------------------------------------------------------------------------------------
+backend/catalog/redemption_scope.py          47      1     18      1    97%   55
+backend/checkout/fulfillment_context.py      20      1      8      1    93%   19
+backend/fulfillment/physical.py              28      0      8      0   100%
+backend/fulfillment/read.py                 174      7     74      8    94%   117, 127, 172, 174, 179-180, 207->219, 216->208, 230
+backend/fulfillment/redemption.py            88      7     30      7    88%   50, 76, 81, 84, 88, 91, 95
+backend/fulfillment/store_service.py        146      8     64      6    93%   94, 103, 106, 132, 137, 156, 171-172
+-------------------------------------------------------------------------------------
+TOTAL                                       503     24    202     23    93%

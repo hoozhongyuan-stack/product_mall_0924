@@ -8,6 +8,7 @@ from accounts.password_views import password_view
 from catalog import views as catalog_views
 from catalog import product_sale_views as catalog_sale_views
 from catalog import media_views
+from catalog.redemption_scope import redemption_stores_view
 from pages import views as page_views
 from pages.filing_views import filing
 from pages import startup_views, history, storefront_views, editor_views, coupon_views as page_coupon_views, release_reports
@@ -233,6 +234,7 @@ urlpatterns = [
     path("api/v1/admin/products/batch-category", catalog_views.batch_category_view),
     path("api/v1/admin/products/batch-sale-status/preview", catalog_sale_views.batch_product_sale_preview_view),
     path("api/v1/admin/products/batch-sale-status", catalog_sale_views.batch_product_sale_status_view),
+    path("api/v1/admin/products/redemption-stores", redemption_stores_view),
     path("api/v1/admin/products", catalog_views.products_view),
     path("api/v1/admin/products/<uuid:product_id>", catalog_views.product_detail_view),
     path("api/v1/admin/products/<uuid:product_id>/sale-status", catalog_sale_views.product_sale_status_view),

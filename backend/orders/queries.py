@@ -1,5 +1,5 @@
 """Bounded order read models shared by member and authorized PC views."""
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Q
 from payments.models import OfflinePaymentReport
 from payments.offline import reconciliation_data
 from payments.service import PaymentError
@@ -53,6 +53,16 @@ def list_orders(params, member=None):
         except (ValueError, TypeError):
             raise PaymentError('前置仓编号不正确。')
     rows = filter_attribution(rows, params)
+    mode = params.get('deliveryMode')
+    owner = params.get('fulfillmentOwner')
+    if mode:
+        if mode not in ('PICKUP', 'DELIVERY', 'EXPRESS', 'REDEEM'):
+            raise PaymentError('交付方式不正确。')
+        rows = rows.filter(delivery_mode=mode)
+    if owner:
+        if owner not in ('PLATFORM', 'STORE', 'REDEEM'):
+            raise PaymentError('履约方不正确。')
+        rows = rows.filter(Q(delivery_mode__in=['PICKUP', 'DELIVERY']) if owner == 'STORE' else Q(delivery_mode__in=['', 'EXPRESS']) if owner == 'PLATFORM' else Q(delivery_mode='REDEEM'))
     order_kind=params.get('orderKind')
     if order_kind:
         if order_kind not in {'CASH','POINTS'}:raise PaymentError('订单类型不正确。')
@@ -84,6 +94,9 @@ def list_orders(params, member=None):
     items = [{**attribution_data(o), 'orderId': str(o.id), 'orderNo': o.order_no, 'status': o.status, 'paymentMethod': o.payment_method,
               'storeId': str(o.store_id) if o.store_id else None,
               'storeName': o.store_snapshot.get('name') if o.store_id else None, 'deliveryMode': o.delivery_mode or None,
+              'fulfillmentOwner': 'STORE' if o.store_id else 'REDEEM' if o.delivery_mode == 'REDEEM' else 'PLATFORM',
+              'fulfillmentStoreId': str(o.store_id) if o.store_id else None, 'fulfillmentStoreName': o.store_snapshot.get('name') if o.store_id else None,
+              'inventoryWarehouse': None if o.delivery_mode == 'REDEEM' else {'warehouseId': o.store_snapshot.get('fulfillmentWarehouse', {}).get('id'), 'name': o.store_snapshot.get('fulfillmentWarehouse', {}).get('name')},
               'dining': {key: o.store_snapshot['dining'][key] for key in ('restaurantId', 'name', 'address', 'tableNumber')} if o.store_snapshot.get('dining') else None,
               'orderKind':o.order_kind,'exchangePoints':o.points_to_use if o.order_kind=='POINTS' else 0,
               'revision': o.revision, 'payableFen': o.payable_fen, 'createdAt': o.created_at.isoformat(),

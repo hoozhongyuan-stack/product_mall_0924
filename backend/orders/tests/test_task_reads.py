@@ -97,7 +97,8 @@ class OrderTaskReadTests(TransactionTestCase):
     def test_shipping_holds_refunds_transit_and_receipt_follow_existing_facts(self):
         order, line = self._paid_order('SHIP')
         case = apply_case(self.member, line.id, 'REFUND_ONLY', 1, '合成冻结发货', uuid4())
-        self.assertEqual(self.ids('WAITING_SHIPMENT'), set())
+        self.assertEqual(self.ids('WAITING_SHIPMENT'), {str(order.id)})
+        self.assertTrue(list_orders({'fulfillment': 'WAITING_SHIPMENT'})['items'][0]['shipEligible'])
         self.assertEqual(self.ids('AFTER_SALE'), {str(order.id)})
         withdraw_case(case.id, self.member, case.revision)
         self.finish_refund(line, 1)
@@ -113,7 +114,7 @@ class OrderTaskReadTests(TransactionTestCase):
     def test_shipping_hold_does_not_hide_redeemable_part_of_mixed_order(self):
         order, physical, _ = self.mixed()
         apply_case(self.member, physical.id, 'REFUND_ONLY', 1, '合成只冻结实物', uuid4())
-        self.assertEqual(self.ids('WAITING_SHIPMENT'), set())
+        self.assertEqual(self.ids('WAITING_SHIPMENT'), {str(order.id)})
         self.assertEqual(self.ids('WAITING_REDEMPTION'), {str(order.id)})
         self.assertEqual(self.ids('AFTER_SALE'), {str(order.id)})
 

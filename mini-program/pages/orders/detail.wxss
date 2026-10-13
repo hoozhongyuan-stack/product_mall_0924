@@ -32,3 +32,7 @@
 .orders-page .pickup-store-actions button { flex:1; min-width:0; min-height:88rpx; }
 
 @import "../../styles/commerce.wxss";
+
+.progress-step.current{color:var(--mall-brand)}.progress-step.current .progress-dot{background:transparent;border:2rpx solid var(--mall-brand);box-sizing:border-box}
+
+@media(max-width:320px){.orders-page .status-panel{margin-left:-16rpx;margin-right:-16rpx}}

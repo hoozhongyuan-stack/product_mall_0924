@@ -1,6 +1,7 @@
 from datetime import timedelta
 from uuid import uuid4
 from unittest.mock import patch
+from types import SimpleNamespace
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from django.db import transaction, DatabaseError
@@ -34,15 +35,20 @@ class DiningFinanceTests(TestCase):
 
     @transaction.atomic
     def complete(self,order,days=16):
-        from fulfillment.models import StoreDelivery, StoreDeliveryEvent
+        from fulfillment.store_service import operate
+        from stores.models import StoreStaff
+        when=timezone.now()-timedelta(days=days)
         Order.objects.filter(pk=order.pk).update(status='PAID',paid_at=timezone.now())
         order.refresh_from_db()
-        when=timezone.now()-timedelta(days=days)
-        row=StoreDelivery.objects.create(order=order,mode='DELIVERY',status='READY',nonce='a'*32,prepared_at=when)
-        row.status='IN_TRANSIT';row.dispatched_at=when;row.save()
-        row.status='COMPLETED';row.completed_at=when;row.save()
-        for action in ('PREPARE','DISPATCH','COMPLETE'):
-            StoreDeliveryEvent.objects.create(order=order,actor=self.member,action=action,request_key=uuid4(),request_digest='a'*64,note='测试交付证据')
+        StoreStaff.objects.get_or_create(store=order.store,member=self.member,
+                                        defaults={'permissions':['orders']})
+        # Backdate the handoff window while its new immutable event uses the real
+        # transaction clock required by the database evidence guard.
+        with patch('fulfillment.store_service.timezone',SimpleNamespace(now=lambda:when)):
+            for action in ('PREPARE','DISPATCH','COMPLETE'):
+                operate(self.member,order.store_id,order.id,
+                        {'action':action,'expectedRevision':order.revision,'note':'测试交付证据'},uuid4())
+                order.refresh_from_db()
         from payments.store_settlement import settle_order
         with patch('payments.access.applied_receipt',return_value=True),patch('payments.store_settlement.applied_receipt',return_value=True):
             settle_order(order.id)

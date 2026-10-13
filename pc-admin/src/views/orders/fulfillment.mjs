@@ -19,21 +19,25 @@ export function remaining(line) {
 }
 
 export function fulfillmentLabel(status) {
-  return ({ WAITING_PREPARATION: '待备货', WAITING_PICKUP: '待自提', WAITING_DELIVERY: '待配送', DELIVERING: '配送中', AFTER_SALE: '售后处理中', REFUNDED: '已退款', PENDING: '待履约', PARTIAL: '部分核销', IN_PROGRESS: '履约中', COMPLETED: '已完成', WAITING_PAYMENT: '待付款', CLOSED: '已关闭', WAITING_SHIPMENT: '待发货', IN_TRANSIT: '运输中', WAITING_VALIDITY: '待确认有效期', WAITING_REDEMPTION: '待核销', EXPIRED: '已过期', READY: '可核销', UNPAID: '未付款', VALIDITY_MISSING: '有效期未确认', FULLY_REDEEMED: '已全部核销' })[status] || '待履约'
+  return ({ WAITING_PREPARATION: '待备货', WAITING_PICKUP: '待自提', WAITING_DELIVERY: '待配送', DELIVERING: '配送中', EXCEPTION: '配送异常', AFTER_SALE: '售后处理中', REFUNDED: '已退款', PENDING: '待履约', PARTIAL: '部分核销', IN_PROGRESS: '履约中', COMPLETED: '已完成', WAITING_PAYMENT: '待付款', CLOSED: '已关闭', WAITING_SHIPMENT: '待发货', IN_TRANSIT: '运输中', WAITING_VALIDITY: '待确认有效期', WAITING_REDEMPTION: '待核销', EXPIRED: '已过期', READY: '可核销', UNPAID: '未付款', VALIDITY_MISSING: '有效期未确认', FULLY_REDEEMED: '已全部核销' })[status] || '待履约'
 }
 
 export function shipmentEligible(order) {
   if (['PICKUP', 'DELIVERY'].includes(order.deliveryMode)) return false
-  if (['AFTER_SALE', 'REFUNDED'].includes(order.fulfillmentStatus)) return false
+  if (order.fulfillmentOwner && order.fulfillmentOwner !== 'PLATFORM') return false
+  if (order.status !== 'PAID') return false
   if (typeof order.shipEligible === 'boolean') return order.shipEligible
+  if (['AFTER_SALE', 'REFUNDED'].includes(order.fulfillmentStatus)) return false
   if (Array.isArray(order.items)) return order.status === 'PAID' && order.items.some(line => line.fulfillmentKind === 'SHIP' && line.fulfillment?.status === 'WAITING_SHIPMENT')
   return order.status === 'PAID' && ['PENDING', 'WAITING_SHIPMENT'].includes(order.fulfillment?.shipStatus)
 }
 
 export function shippingQuantity(line) {
   const purchased=line?.quantity,refunded=line?.fulfillment?.refundedQuantity
+  const available=line?.fulfillment?.availableQuantity
   if(!Number.isSafeInteger(purchased)||purchased<1||!Number.isSafeInteger(refunded)||refunded<0||refunded>purchased)return null
-  return {purchased,refunded,remaining:purchased-refunded}
+  if(available !== undefined && (!Number.isSafeInteger(available)||available<0||available>purchased-refunded))return null
+  return {purchased,refunded,remaining:Number.isSafeInteger(available)&&available>=0&&available<=purchased-refunded?available:purchased-refunded}
 }
 export function shipmentQuantityError(lines) {
   if(!Array.isArray(lines))return '发货数量待核查，请重新读取订单。'

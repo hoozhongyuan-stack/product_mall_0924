@@ -10,18 +10,24 @@ test('actions follow payment method, state and current permissions',()=>{
  assert.deepEqual(orderActions({...paid,status:'CLOSED'},['payment.offline.confirm']),['anomaly'])
  assert.deepEqual(orderActions({...paid,status:'PAID',orderKind:'POINTS',paymentMethod:'POINTS'},['payment.offline.confirm']),[])
 })
-test('local delivery and pickup retain separate state transitions',()=>{
- for(const [state,action] of [['WAITING_PREPARATION','prepare'],['WAITING_DELIVERY','deliver'],['DELIVERING','delivered']])assert.deepEqual(orderActions({...paid,fulfillmentStatus:state},['fulfillment.ship']),[action])
- assert.deepEqual(orderActions({...paid,deliveryMode:'PICKUP',fulfillmentStatus:'WAITING_PICKUP'},['fulfillment.ship']),['pickup'])
+test('platform never operates warehouse delivery or pickup',()=>{
+ for(const state of ['WAITING_PREPARATION','WAITING_DELIVERY','DELIVERING'])assert.deepEqual(orderActions({...paid,fulfillmentStatus:state},['fulfillment.ship']),[])
+ assert.deepEqual(orderActions({...paid,deliveryMode:'PICKUP',fulfillmentStatus:'WAITING_PICKUP'},['fulfillment.ship']),[])
  assert.deepEqual(orderActions({...paid,fulfillmentStatus:'AFTER_SALE'},['fulfillment.ship','aftersale.read']),['aftersale'])
  assert.deepEqual(orderActions({...paid,fulfillmentStatus:'COMPLETED'},['fulfillment.ship']),[])
+})
+test('platform redemption follows frozen scope and available quantity',()=>{
+ const virtual={...paid,items:[{quantity:5,fulfillmentKind:'REDEEM',fulfillment:{status:'PARTIAL',remainingQuantity:5,availableQuantity:3,redeemScope:'STORE',canRedeemPlatform:false}}]}
+ assert.deepEqual(orderActions(virtual,['fulfillment.redeem']),[])
+ assert.deepEqual(orderActions({...virtual,items:[{...virtual.items[0],fulfillment:{...virtual.items[0].fulfillment,redeemScope:'BOTH',canRedeemPlatform:true}}]},['fulfillment.redeem']),['redeem'])
+ assert.deepEqual(orderActions({...virtual,items:[{...virtual.items[0],fulfillment:{...virtual.items[0].fulfillment,redeemScope:'BOTH',availableQuantity:0,canRedeemPlatform:false}}]},['fulfillment.redeem']),[])
 })
 test('shipment corrections and read-only tracking are available independently',()=>{
  const express={...paid,deliveryMode:'EXPRESS',fulfillmentStatus:'WAITING_SHIPMENT',shipEligible:true}
  assert.deepEqual(orderActions(express,['fulfillment.ship']),['ship'])
  assert.deepEqual(orderActions({...express,shipEligible:false,shipment:{trackingNo:'SF1'}},['order.read']),['tracking'])
  assert.deepEqual(orderActions({...express,shipEligible:false,shipment:{trackingNo:'SF1'}},['order.read','fulfillment.ship']),['tracking','correct'])
- assert.deepEqual(orderActions({...paid,items:[{fulfillmentKind:'REDEEM',fulfillment:{status:'READY',remainingQuantity:1}}]},['fulfillment.redeem']),['redeem'])
+ assert.deepEqual(orderActions({...paid,items:[{fulfillmentKind:'REDEEM',fulfillment:{status:'READY',remainingQuantity:1,availableQuantity:1,redeemScope:'PLATFORM',canRedeemPlatform:true}}]},['fulfillment.redeem']),['redeem'])
 })
 test('local forms use existing service body and evidence rather than arbitrary snapshots',()=>{
  assert.deepEqual(localActionBody('prepare',4,{note:'核对完成'}),{action:'PREPARE',expectedRevision:4,note:'核对完成'})

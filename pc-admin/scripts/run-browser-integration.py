@@ -78,11 +78,11 @@ def keep_preview_alive(processes):
         time.sleep(1)
 
 
-def run(*, preview=False, procurement=False, order_actions=False):
-    preview = preview or order_actions
+def run(*, preview=False, procurement=False, order_actions=False, fulfillment=False):
+    preview = preview or order_actions or fulfillment
     if preview and procurement:
         raise SystemExit("Choose either visual preview or procurement integration.")
-    preview_seed = ADMIN / ('scripts/seed-order-actions-preview.py' if order_actions else 'scripts/seed-visual-preview.py')
+    preview_seed = ADMIN / ('scripts/seed-fulfillment-preview.py' if fulfillment else 'scripts/seed-order-actions-preview.py' if order_actions else 'scripts/seed-visual-preview.py')
     if preview and not preview_seed.is_file():
         raise SystemExit('Preview seed is missing: pc-admin/scripts/seed-visual-preview.py')
     host = os.environ.get('POSTGRES_HOST', '127.0.0.1')
@@ -153,6 +153,8 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
                     subprocess.run([sys.executable, 'manage.py', 'shell', '--no-imports'],
                         input=(ADMIN / 'scripts/seed-procurement-integration.py').read_text(),
                         text=True, cwd=ROOT / 'backend', env=env, check=True)
+                if fulfillment:
+                    env.update(MALL_FULFILLMENT_PREVIEW='1', WECHAT_MINI_APP_ID='wx0000000000000001', MALL_FULFILLMENT_FIXTURE_FILE=str(Path(temporary)/'fulfillment-fixtures.json'))
                 if preview:
                     env['MALL_E2E_PREVIEW'] = '1'
                     if order_actions:
@@ -162,13 +164,19 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
                                    cwd=ROOT / 'backend', env=env, check=True)
                 with (Path(temporary) / 'servers.log').open('w+') as log:
                     for command, cwd in (
-                        ([sys.executable, 'manage.py', 'runserver', f'127.0.0.1:{api_port}', '--noreload'], ROOT / 'backend'),
+                        ([sys.executable, 'manage.py', 'runserver', f'127.0.0.1:{api_port}', *([] if preview else ['--noreload'])], ROOT / 'backend'),
                         (['npm', 'run', 'dev', '--', '--port', str(web_port), '--strictPort'], ADMIN),
                     ):
                         processes.append(subprocess.Popen(command, cwd=cwd, env=env, stdout=log,
                                                           stderr=subprocess.STDOUT, start_new_session=True))
                     wait_ready(f'http://127.0.0.1:{api_port}/api/v1/app/categories', processes[0])
                     wait_ready(env['MALL_E2E_BASE_URL'], processes[1])
+                    mini_port = None
+                    if fulfillment:
+                        mini_port = free_port()
+                        command = [sys.executable, str(ROOT/'mini-program/tests/fulfillment-preview/server.py'), '--config', env['MALL_FULFILLMENT_FIXTURE_FILE'], '--port', str(mini_port)]
+                        processes.append(subprocess.Popen(command,cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True))
+                        wait_ready(f'http://127.0.0.1:{mini_port}/',processes[-1])
                     if preview:
                         access_file = Path(temporary) / 'preview-access.json'
                         details = {
@@ -177,6 +185,7 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
                             'database': {'host': host, 'port': port, 'user': user, 'name': database},
                             'account': {'loginName': owner, 'password': owner_password},
                             'mediaRoot': env['MALL_MEDIA_ROOT'],
+                            **({'miniUrl':f'http://127.0.0.1:{mini_port}/','fulfillmentFixturesFile':env['MALL_FULFILLMENT_FIXTURE_FILE']} if fulfillment else {}),
                             **({'orderFixturesFile': env['MALL_E2E_ORDER_FIXTURE_FILE']} if order_actions else {}),
                         }
                         descriptor = os.open(access_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -184,6 +193,7 @@ AdminAccount.objects.create_user(os.environ['MALL_E2E_OWNER'], os.environ['MALL_
                             json.dump(details, credentials, ensure_ascii=False, indent=2)
                         print(f"Preview admin: {details['adminUrl']}", flush=True)
                         print(f"Preview API: {details['apiUrl']}", flush=True)
+                        if fulfillment: print(f"Preview Mini: {details['miniUrl']}", flush=True)
                         print(f'Private preview access file: {access_file}', flush=True)
                         print('Preview stays open until Ctrl-C/SIGTERM; only this run’s resources are removed.', flush=True)
                         keep_preview_alive(processes)
@@ -245,9 +255,10 @@ if __name__ == '__main__':
                         help='Seed an isolated visual preview and keep it open until Ctrl-C/SIGTERM.')
     parser.add_argument('--order-actions-preview', action='store_true', help='Preview synthetic offline, delivery, pickup and redeem orders.')
     parser.add_argument('--procurement', action='store_true', help='Test procurement in an owned synthetic local database.')
+    parser.add_argument('--fulfillment-preview', action='store_true', help='Preview three clients with owned fulfillment-governance fixtures.')
     arguments = parser.parse_args()
     signal.signal(signal.SIGTERM, interrupted)
     try:
-        raise SystemExit(run(preview=arguments.preview, procurement=arguments.procurement, order_actions=arguments.order_actions_preview))
+        raise SystemExit(run(preview=arguments.preview, procurement=arguments.procurement, order_actions=arguments.order_actions_preview, fulfillment=arguments.fulfillment_preview))
     except KeyboardInterrupt:
         raise SystemExit(130)

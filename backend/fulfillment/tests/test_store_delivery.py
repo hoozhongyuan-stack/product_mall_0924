@@ -132,10 +132,13 @@ class StoreDeliveryFlowTests(TransactionTestCase):
         with self.assertRaises(FulfillmentError):
             ship_order(order.id,self.owner,'SF','SF123456',order.revision,uuid.uuid4())
         express,_=self.local_order('EXPRESS')
-        self.action(express,'SHIP',carrierCode='SF',trackingNo='SF123456')
+        with self.assertRaises(FulfillmentError):
+            self.action(express,'SHIP',carrierCode='SF',trackingNo='SF123456')
+        express.refresh_from_db()
+        ship_order(express.id,self.owner,'SF','SF123456',express.revision,uuid.uuid4())
         fact=physical_handoff_fact(express)
-        self.assertEqual(fact.shipped_by_member_id,self.member.id)
-        self.assertIsNone(fact.shipped_by_id)
+        self.assertIsNone(fact.shipped_by_member_id)
+        self.assertEqual(fact.shipped_by_id,self.owner.id)
 
     def test_handoff_blocks_refund_only(self):
         order,line=self.local_order('PICKUP')
@@ -239,7 +242,7 @@ class StoreDeliveryFlowTests(TransactionTestCase):
         with self.assertRaises(FulfillmentError):
             operate(self.member,self.store.id,order.id,{'action':'PREPARE','expectedRevision':0},uuid.uuid4())
         from aftersales.service import apply_case
-        apply_case(self.member,line.id,'REFUND_ONLY',1,'暂停履约等待退款审核',uuid.uuid4())
+        apply_case(self.member,line.id,'REFUND_ONLY',2,'暂停履约等待退款审核',uuid.uuid4())
         with self.assertRaises(FulfillmentError) as caught:
             self.action(order,'PREPARE')
         self.assertEqual(caught.exception.code,'AFTERSALE_BLOCKS_SHIPMENT')

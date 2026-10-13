@@ -76,7 +76,7 @@ def _business_digest(quote, method):
         "pointsToUse": quote.points_to_use,
         "pointsDiscountFen": quote.points_discount_fen,
         "lines": sorted((line["skuId"], line["quantity"], line["unitPriceFen"],
-                         line["ratio"], line["saleUnit"]) for line in quote.lines),
+                         line["ratio"], line["saleUnit"], line.get("redeemScope"), line.get("redeemStoreIds", [])) for line in quote.lines),
     }
     return hashlib.sha256(json.dumps(source, sort_keys=True, separators=(",", ":"),
                                      ensure_ascii=False).encode()).hexdigest()
@@ -88,6 +88,10 @@ def order_data(order, *, include_voucher_code=False):
     from fulfillment.read import fulfillment_data
     fulfillment = fulfillment_data(order, include_code=include_voucher_code)
     from benefits.lifecycle import order_benefit_data
+    from catalog.redemption_scope import scope_data
+    physical = [line for line in rows if line.fulfillment_kind == "SHIP"]
+    warehouse_snapshot = order.store_snapshot.get("fulfillmentWarehouse") or {}
+    inventory_warehouse = {"warehouseId": warehouse_snapshot.get("id", str(rows[0].warehouse_id) if rows else None), "name": warehouse_snapshot.get("name", rows[0].warehouse.name if rows else "")}
     return {
         **payment_status(order),
         **attribution_data(order),
@@ -95,7 +99,15 @@ def order_data(order, *, include_voucher_code=False):
         "fulfillmentStatus": fulfillment["fulfillmentStatus"],
         "afterSaleSummary": fulfillment["afterSaleSummary"],
         "shipment": fulfillment["shipment"],
+        "shipments": fulfillment.get("shipments", []),
+        "shipEligible": fulfillment.get("shipEligible", False),
+        "canFulfill": fulfillment.get("storeDelivery", {}).get("canFulfill", False) if fulfillment.get("storeDelivery") else fulfillment.get("shipEligible", False),
         "orderId": str(order.id), "orderNo": order.order_no, "status": order.status,
+        'fulfillmentOwner': ('STORE' if order.store_id and order.delivery_mode in ('PICKUP','DELIVERY') else 'PLATFORM') if physical else 'REDEEM',
+        'fulfillmentStoreId': str(order.store_id) if order.store_id else None,
+        'fulfillmentStoreName': order.store_snapshot.get('name') if order.store_id else None,
+        'inventoryWarehouse': inventory_warehouse if physical else None,
+        'sourceStore': {'storeId': order.store_snapshot['sourceStore']['id'], 'name': order.store_snapshot['sourceStore']['name']} if order.store_snapshot.get('sourceStore') else None,
         'storeId': str(order.store_id) if order.store_id else None,
         'storeName': order.store_snapshot.get('name') if order.store_id else None,
         'deliveryMode': order.delivery_mode or None, 'store': _public_store(order.store_snapshot),
@@ -123,6 +135,7 @@ def order_data(order, *, include_voucher_code=False):
                    "skuCode": line.sku_code, "productId": str(line.product_id),
                    "name": line.product_name, "specs": line.specs_snapshot,
                    "fulfillmentKind": line.fulfillment_kind,
+                   **scope_data(line.redeem_scope_snapshot),
                    "warehouseId": str(line.warehouse_id), "quantity": line.quantity,
                    "saleUnit": line.sale_unit, "ratio": line.ratio,
                    "baseQuantity": line.base_quantity,
@@ -197,6 +210,8 @@ def _current_lines(quote, member):
                 (not row["redeemValidUntil"] or row["redeemValidUntil"] < timezone.localdate().isoformat() or
                  row["redeemValidUntil"] != snapshot.get("redeemValidUntil"))):
             raise OrderError("核销有效期已变化，请重新报价。", "REDEEM_VALIDITY_CHANGED", 409)
+        if row["fulfillmentKind"] == "REDEEM" and any(row[key] != snapshot.get(key) for key in ("redeemScope", "redeemStoreIds", "redeemStores")):
+            raise OrderError("核销范围已变化，请重新报价。", "REDEEM_SCOPE_CHANGED", 409)
         if row["priceFen"] != snapshot["unitPriceFen"]:
             raise OrderError("价格已变化，请重新报价。", "PRICE_CHANGED", 409)
         quantity = snapshot["quantity"]
@@ -240,13 +255,14 @@ def submit_order(member, body, key):
         if quote.expires_at <= timezone.now():
             raise OrderError("报价已过期，请重新核对。", "QUOTE_EXPIRED", 409)
         from checkout.store_context import store_context
+        from checkout.fulfillment_context import context_request, normalize_context
         try:
             store, delivery_mode, store_snapshot = store_context(
-                {'diningSessionId': quote.store_snapshot['dining']['sessionId']} if quote.store_snapshot.get('dining') else
-                {'storeId': str(quote.store_id), 'deliveryMode': quote.delivery_mode} if quote.store_id else {},
+                context_request(quote),
                 member, quote.address_id, lock=True)
         except ValueError as exc:
             raise OrderError(str(exc), getattr(exc, 'code', 'STORE_UNAVAILABLE'), getattr(exc, 'status', 409)) from exc
+        store, delivery_mode, store_snapshot = normalize_context(store, delivery_mode, store_snapshot, {line.get("fulfillmentKind") for line in quote.lines})
         if store_snapshot != quote.store_snapshot:
             raise OrderError('前置仓或配送规则已变化，请重新报价。', 'STORE_POLICY_CHANGED', 409)
         try:
@@ -278,7 +294,7 @@ def submit_order(member, body, key):
             from stores.models import StoreProduct
             selling = set(StoreProduct.objects.select_for_update().filter(
                 store=store, on_sale=True, product_id__in=[sku.product_id for sku, *_ in current]).values_list('product_id', flat=True))
-            if any((row['fulfillmentKind']=='SHIP' and sku.product_id not in selling) or (row['fulfillmentKind']!='SHIP' and not any(item[2]['fulfillmentKind']=='SHIP' for item in current)) for sku, _, row, _, _ in current):
+            if any(row['fulfillmentKind'] != 'SHIP' or sku.product_id not in selling for sku, _, row, _, _ in current):
                 raise OrderError('该前置仓已停止销售部分商品，请重新报价。', 'STORE_NOT_SELLING', 409)
         if store_snapshot.get('dining'):
             from dining_alliance.access import assert_products
@@ -351,6 +367,7 @@ def submit_order(member, body, key):
                 unit_version=unit, product_name=row["name"], sku_code=sku.sku_code,
                 specs_snapshot=row["specs"], fulfillment_kind=row["fulfillmentKind"],
                 redeem_valid_until=row["redeemValidUntil"],
+                redeem_scope_snapshot={"scope": row["redeemScope"], "stores": row["redeemStores"]},
                 base_unit=unit.base_unit, sale_unit=unit.sale_unit, ratio=unit.ratio,
                 quantity=quantity, base_quantity=quantity * unit.ratio,
                 unit_price_fen=row["priceFen"], goods_amount_fen=amount,

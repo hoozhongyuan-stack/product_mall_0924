@@ -18,3 +18,6 @@ from .pickup_preview import pickup_preview_view
 urlpatterns += [
     path('api/v1/app/store-center/stores/<uuid:store_id>/orders/<uuid:order_id>/pickup-preview', pickup_preview_view),
 ]
+
+from .store_views import redemptions_view
+urlpatterns += [path('api/v1/app/store-center/stores/<uuid:store_id>/orders/<uuid:order_id>/redemptions', redemptions_view)]

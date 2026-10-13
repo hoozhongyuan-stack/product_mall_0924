@@ -6,3 +6,5 @@
 .store-page{font-size:max(28rpx,14px)}.muted,.order-number,.status-tag,.product-spec{font-size:max(24rpx,12px)}.pickup-footer button{min-height:44px}
 
 @import "../../styles/commerce.wxss";
+
+.redemption-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16rpx;margin:20rpx 0;color:var(--mall-muted)}

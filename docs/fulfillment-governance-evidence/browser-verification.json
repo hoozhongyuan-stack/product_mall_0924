@@ -1,0 +1,45 @@
+{
+  "environment": "isolated local PostgreSQL + Django + Vue and Mini Program source bridge",
+  "pc": {
+    "permissions": "PASS",
+    "sharedRedemption": {
+      "storeUsed": 1,
+      "platformUsed": 1,
+      "remaining": 1
+    },
+    "multiShipment": {
+      "batches": [
+        2,
+        1
+      ],
+      "saleLedgerCount": 1,
+      "saleBaseUnits": -3,
+      "receiptCount": 1,
+      "completionBeforeReceipt": false
+    }
+  },
+  "mini": {
+    "deliveryExceptionRetryCompletion": "PASS",
+    "pickupCredentialHandoff": "PASS",
+    "partialDelivery": {
+      "delivered": 2,
+      "frozen": 1,
+      "remaining": 1
+    },
+    "sharedCustomerRecords": "PASS",
+    "virtualUnknownOriginalKeyReplay": "PASS",
+    "physicalRecovery": "Real GET event matched a simulated persisted PREPARE intent; no POST replay",
+    "responsiveWidths": [
+      320,
+      390
+    ],
+    "horizontalOverflow": false
+  },
+  "native": {
+    "wxmlCompiled": 37,
+    "wxssCompiled": 46,
+    "simulator": "NOT_RUN: DevTools service port disabled",
+    "device": "NOT_RUN"
+  },
+  "review": "No CRITICAL/HIGH/P2 blockers in final independent review"
+}

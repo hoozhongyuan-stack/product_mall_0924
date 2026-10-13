@@ -152,8 +152,9 @@ Page({
     const safeDelivery = order.storeDelivery ? { ...order.storeDelivery, pickupCode: undefined, pickupQrDataUrl: undefined } : null
     const safeDisplay = { ...display, order: { ...display.order, storeDelivery: safeDelivery }, storeDelivery: safeDelivery }
     if (order.status !== 'PENDING_PAYMENT') this.clearPayment()
+    const activeCodes = new Set(display.items.filter(item => item.redemption && item.redemption.canUse).map(item => item.orderLineId))
     const qrRows = order.status === 'PAID' ? order.items.filter((item) => item.fulfillmentKind === 'REDEEM' &&
-      item.fulfillment && typeof item.fulfillment.voucherQrDataUrl === 'string' && item.fulfillment.voucherQrDataUrl) : []
+      activeCodes.has(item.orderLineId) && item.fulfillment && typeof item.fulfillment.voucherQrDataUrl === 'string' && item.fulfillment.voucherQrDataUrl) : []
     const token = this.voucherImageToken
     const memberSession = wx.getStorageSync('mall.memberToken')
     this.displayMemberToken = memberSession
@@ -273,11 +274,11 @@ Page({
   },
   copyVoucher(event) {
     const code = event.currentTarget.dataset.code
-    if (!this.data.isPaid || typeof code !== 'string' || !code) return
+    if (!this.data.isPaid || typeof code !== 'string' || !code || !this.data.items.some(item => item.redemption && item.redemption.canUse && item.redemption.voucherCode === code)) return
     if (!session.loggedIn() || this.displayMemberToken !== wx.getStorageSync('mall.memberToken')) {
       this.paymentError({ statusCode: 401, message: '登录状态已改变，请重新登录查看凭证。' }); return
     }
-    wx.setClipboardData({ data: code, success: () => this.setData({ actionMessage: '凭证码已复制。到店核销时请出示给店员。', actionError: '' }),
+    wx.setClipboardData({ data: code, success: () => this.setData({ actionMessage: '权益凭证已复制，请向授权核销方出示。', actionError: '' }),
       fail: () => this.setData({ actionError: '复制失败，请长按凭证码选择复制。' }) })
   },
   paymentError(error) {

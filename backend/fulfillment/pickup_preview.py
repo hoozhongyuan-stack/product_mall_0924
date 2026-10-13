@@ -43,9 +43,9 @@ def preview(member, store_id, order_id, body, *, admin_actor=None):
             raise FulfillmentError('凭证与当前订单不匹配，请重新扫描或输入。', 'PICKUP_CODE_INVALID', 409)
         from aftersales.guards import assert_shippable_locked
         lines = _aftersale_guard(assert_shippable_locked, order, list(order.lines.filter(fulfillment_kind='SHIP')))
-        from aftersales.read import line_summaries
-        facts = line_summaries([line.id for line in lines])
-        items = [{'orderLineId': str(line.id), 'deliverableQuantity': line.quantity - facts.get(line.id, {}).get('refundedQuantity', 0)} for line in lines]
+        from .physical import available_physical
+        quantities = available_physical(lines)
+        items = [{'orderLineId': str(line.id), 'deliverableQuantity': quantities[line.id]} for line in lines]
         return {'verified': True, 'orderId': str(order.id), 'revision': order.revision,
                 'deliveryStatus': 'WAITING_PICKUP', 'items': items}
 

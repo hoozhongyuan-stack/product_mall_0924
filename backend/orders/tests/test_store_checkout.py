@@ -79,7 +79,7 @@ class StoreCheckoutTests(TestCase):
         store = self.make_store()
         self.product.fulfillment_kind = 'REDEEM'
         self.product.save(update_fields=['fulfillment_kind'])
-        self.assertFalse(self.quote(store)['ready'])
+        self.assertTrue(self.quote(store)['ready'])
         with self.assertRaises(QuoteValidationError):
             self.quote(store, 'INVALID')
 
@@ -170,7 +170,8 @@ class StoreCheckoutTests(TestCase):
     def test_explicit_unknown_store_never_falls_back_to_legacy_stock(self):
         from checkout.store_context import store_context
         for body in ({'deliveryMode': 'PICKUP'}, {'storeId': 'bad', 'deliveryMode': 'PICKUP'},
-                     {'storeId': None, 'deliveryMode': 'EXPRESS'}, {'storeId': str(uuid4()), 'deliveryMode': 'PICKUP'}):
+ {'storeId': str(uuid4()), 'deliveryMode': 'PICKUP'}):
             with self.assertRaises(ValueError):
                 store_context(body, self.member, None)
+        self.assertEqual(store_context({'deliveryMode':'EXPRESS'}, self.member, None), (None, 'EXPRESS', {}))
         self.assertEqual(self.client.get('/api/v1/app/products', {'storeId': ''}).status_code, 400)

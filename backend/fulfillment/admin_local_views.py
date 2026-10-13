@@ -97,6 +97,8 @@ def redemption_use_view(request, order_id, voucher_id):
         from .views import _body
         body, key = _body(request, ('quantity', 'expectedRevision')), _key(request)
         with transaction.atomic():
+            from aftersales.returns import _identity_lock
+            _identity_lock('redeem-use', key, 'REDEMPTION_USE')
             order = _locked_order(order_id)
             if 'fulfillment.redeem' not in operation_permissions(actor):
                 raise FulfillmentError('当前账号没有此操作权限。', 'PERMISSION_DENIED', 403)

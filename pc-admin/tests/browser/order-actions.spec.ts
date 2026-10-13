@@ -45,28 +45,40 @@ test('order dialog: confirms offline receipt without operator password',async({p
  expect(f.records[1].key).toBe(f.records[0].key);f.verify()
 })
 
-test('order dialog: dispatches dining delivery with the original warehouse',async({page},info)=>{
- const f=await fixture(page,baseOrder(),async(route,path,current)=>{if(path.endsWith('/local-fulfillment')){await ok(route,{order:{...current,fulfillmentStatus:'DELIVERING',revision:4}});return true}return false})
- const dialog=await open(page,'开始配送')
- await dialog.getByLabel('配送人员',{exact:true}).fill('测试配送员');await dialog.getByLabel('联系电话',{exact:true}).fill('13800000000')
- await dialog.getByLabel('操作备注（选填）',{exact:true}).fill('配送到餐厅A-01桌')
- await screenshot(page,info,'dispatch-confirmation');await dialog.locator('[data-test=action-submit]').click();await expect(dialog).toBeHidden()
- expect(f.records[0].body).toEqual({action:'DISPATCH',expectedRevision:3,note:'配送人员：测试配送员；联系电话：13800000000；配送到餐厅A-01桌'})
- await expect(page.getByRole('button',{name:'确认送达',exact:true})).toBeVisible();f.verify()
+test('platform delivery and pickup are visible without warehouse operation buttons',async({page},info)=>{
+ const f=await fixture(page,baseOrder(),async()=>false)
+ await expect(page.getByRole('button',{name:'开始配送',exact:true})).toHaveCount(0)
+ await expect(page.getByRole('button',{name:'确认备货完成',exact:true})).toHaveCount(0)
+ await page.getByRole('button',{name:'查看详情',exact:true}).click()
+ await expect(page.getByRole('dialog',{name:'订单详情',exact:true})).toContainText('由对应前置仓中心备货和交付')
+ await page.locator('.el-overlay').last().evaluate(async root=>{await Promise.all(root.getAnimations({subtree:true}).map(animation=>animation.finished))})
+ await page.screenshot({path:info.outputPath('platform-local-readonly.png'),fullPage:false,animations:'disabled'})
+ await page.getByRole('button',{name:'关闭',exact:true}).click()
+ f.setOrder({...baseOrder(),deliveryMode:'PICKUP',fulfillmentStatus:'WAITING_PICKUP'});await page.getByRole('button',{name:'刷新订单',exact:true}).click()
+ await expect(page.getByRole('button',{name:'确认自提',exact:true})).toHaveCount(0)
+ expect(f.records).toHaveLength(0);f.verify()
 })
 
-test('order dialog: verifies pickup code before completing pickup',async({page},info)=>{
- const order={...baseOrder(),deliveryMode:'PICKUP',fulfillmentStatus:'WAITING_PICKUP'}
- const f=await fixture(page,order,async(route,path,current)=>{if(path.endsWith('/pickup-preview')){await ok(route,{verified:true,revision:3});return true}if(path.endsWith('/local-fulfillment')){await ok(route,{order:{...current,fulfillmentStatus:'COMPLETED',revision:4}});return true}return false})
- const dialog=await open(page,'确认自提');await expect(dialog.locator('[data-test=action-submit]')).toBeDisabled()
- await dialog.getByLabel('自提凭证',{exact:true}).fill('PICKUP-QA');await dialog.getByRole('button',{name:'核验自提凭证'}).click()
- await expect(dialog.getByText('凭证核验通过',{exact:false})).toBeVisible();await screenshot(page,info,'pickup-preview')
- await dialog.locator('[data-test=action-submit]').click();await expect(dialog).toBeHidden()
- expect(f.records.at(-1)!.body).toEqual({action:'COMPLETE',expectedRevision:3,note:'',pickupCode:'PICKUP-QA'});f.verify()
+test('platform virtual redemption shares frozen scope and leaves held rights untouched',async({page},info)=>{
+ const original=baseOrder();const progress={status:'PARTIAL',redeemScope:'BOTH',redeemStoreIds:['store-1'],redeemStores:[{storeId:'store-1',name:'授权深圳前置仓'}],redeemedQuantity:2,remainingQuantity:3,availableQuantity:2,frozenQuantity:1,canRedeemPlatform:true,validUntil:'2028-01-01'}
+ const order={...original,deliveryMode:'REDEEM',fulfillmentOwner:'REDEEM',fulfillmentStatus:'WAITING_REDEMPTION',redeemEligible:true,dining:null,inventoryWarehouse:null,items:[{...original.items[0],quantity:5,fulfillmentKind:'REDEEM',fulfillment:progress}]}
+ let f:Awaited<ReturnType<typeof fixture>>
+ f=await fixture(page,order,async(route,path,current)=>{
+  if(path.endsWith('/redemptions/lookup')){await ok(route,{...progress,voucherId:'voucher-1',orderId:'qa-order',orderNo:current.orderNo,orderLineId:'line-1',name:'服务次卡',quantity:5,status:'READY',revision:4});return true}
+  if(path.endsWith('/voucher-1/use')){const next={...current,revision:4,redeemEligible:false,items:[{...current.items[0],fulfillment:{...progress,redeemedQuantity:4,remainingQuantity:1,availableQuantity:0}}]};f.setOrder(next);await ok(route,{order:next});return true}return false
+ })
+ const dialog=await open(page,'核销');await dialog.getByLabel('顾客出示的核销凭证',{exact:true}).fill('CARD-QA');await dialog.getByRole('button',{name:'读取凭证',exact:true}).click()
+ await expect(dialog).toContainText('平台＋指定前置仓：授权深圳前置仓');await expect(dialog).toContainText('售后冻结 1')
+ await dialog.getByLabel('本次核销数量',{exact:true}).fill('3');await expect(dialog.locator('[data-test=action-submit]')).toBeDisabled()
+ await dialog.getByLabel('本次核销数量',{exact:true}).fill('2');await dialog.locator('[data-test=action-submit]').click();await expect(dialog).toBeHidden()
+ const writes=f.records.filter(r=>r.path.endsWith('/use'));expect(writes).toHaveLength(1);expect(writes[0].body).toEqual({quantity:2,expectedRevision:4});expect(writes[0].key).toMatch(/^[a-f0-9-]{36}$/)
+ await page.getByRole('button',{name:'查看详情',exact:true}).click();const detail=page.getByRole('dialog',{name:'订单详情',exact:true});await expect(detail).toContainText('剩余 1 · 售后冻结 1 · 当前可核销 0')
+ await page.locator('.el-overlay').last().evaluate(async root=>{await Promise.all(root.getAnimations({subtree:true}).map(animation=>animation.finished))})
+ await page.screenshot({path:info.outputPath('platform-shared-rights.png'),fullPage:false,animations:'disabled'});f.verify()
 })
 
 test('order dialog: frozen voucher cannot be redeemed',async({page},info)=>{
- const order={...baseOrder(),deliveryMode:'EXPRESS',fulfillmentStatus:'WAITING_REDEMPTION',items:[{...baseOrder().items[0],fulfillmentKind:'REDEEM',fulfillment:{status:'READY',refundedQuantity:0,remainingQuantity:2}}]}
+ const order={...baseOrder(),deliveryMode:'EXPRESS',fulfillmentStatus:'WAITING_REDEMPTION',items:[{...baseOrder().items[0],fulfillmentKind:'REDEEM',fulfillment:{status:'READY',refundedQuantity:0,remainingQuantity:2,availableQuantity:2,redeemScope:'PLATFORM',canRedeemPlatform:true}}]}
  const f=await fixture(page,order,async(route,path)=>{if(path.endsWith('/redemptions/lookup')){await ok(route,{voucherId:'voucher-1',orderId:'qa-order',orderNo:'QA20261011',orderLineId:'line-1',name:'模拟商品',quantity:2,redeemedQuantity:0,voidedQuantity:0,remainingQuantity:2,status:'FROZEN',revision:1,availableQuantity:0,validUntil:'2028-01-01T00:00:00Z'});return true}return false})
  const dialog=await open(page,'核销');await dialog.getByLabel('顾客出示的核销凭证',{exact:true}).fill('FROZEN-QA');await dialog.getByRole('button',{name:'读取凭证',exact:true}).click()
  await expect(dialog.locator('[data-test=action-submit]')).toBeDisabled();await screenshot(page,info,'frozen-voucher');expect(f.records).toHaveLength(1);f.verify()

@@ -46,7 +46,7 @@ class OrderFulfillmentSnapshot(models.Model):
 
 class Shipment(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    order = models.OneToOneField("orders.Order", on_delete=models.PROTECT, related_name="shipment")
+    order = models.ForeignKey("orders.Order", on_delete=models.PROTECT, related_name="shipments")
     carrier = models.ForeignKey(Carrier, on_delete=models.PROTECT)
     carrier_code = models.CharField(max_length=24)
     carrier_name = models.CharField(max_length=80)
@@ -137,7 +137,11 @@ class RedeemEvent(models.Model):
     kind = models.CharField(max_length=7, choices=Kind.choices)
     quantity = models.PositiveIntegerField()
     remaining_quantity = models.PositiveIntegerField()
-    actor = models.ForeignKey("accounts.AdminAccount", on_delete=models.PROTECT)
+    actor = models.ForeignKey("accounts.AdminAccount", on_delete=models.PROTECT, null=True, blank=True)
+    store_staff_actor = models.ForeignKey("customers.Member", on_delete=models.PROTECT, null=True, blank=True)
+    store = models.ForeignKey("stores.Store", on_delete=models.PROTECT, null=True, blank=True)
+    note = models.CharField(max_length=500, blank=True)
+    request_digest = models.CharField(max_length=64, blank=True)
     request_key = models.UUIDField(null=True, blank=True)
     original_use = models.OneToOneField("self", null=True, blank=True, on_delete=models.PROTECT,
                                         related_name="reversal")
@@ -149,6 +153,8 @@ class RedeemEvent(models.Model):
         indexes = [models.Index(fields=["voucher", "-occurred_at"], name="redeem_event_recent_idx")]
         constraints = [
             models.CheckConstraint(condition=Q(quantity__gt=0), name="redeem_event_quantity_positive"),
+            models.UniqueConstraint(fields=["request_key"], condition=Q(kind="USE") & ~Q(request_digest=""), name="redeem_use_request_global_unique"),
+            models.CheckConstraint(condition=(Q(actor__isnull=False, store_staff_actor__isnull=True, store__isnull=True) | Q(actor__isnull=True, store_staff_actor__isnull=False, store__isnull=False)), name="redeem_event_actor_one"),
             models.UniqueConstraint(fields=["voucher", "request_key"], condition=Q(request_key__isnull=False),
                                     name="redeem_voucher_request_unique"),
             models.CheckConstraint(condition=(Q(kind="USE", request_key__isnull=False,
@@ -188,8 +194,9 @@ class StoreDelivery(models.Model):
     order = models.OneToOneField('orders.Order', primary_key=True, on_delete=models.PROTECT,
                                 related_name='store_delivery')
     mode = models.CharField(max_length=8, choices=[('PICKUP', 'Pickup'), ('DELIVERY', 'Delivery')])
-    status = models.CharField(max_length=12, choices=[('READY', 'Ready'), ('IN_TRANSIT', 'In transit'), ('COMPLETED', 'Completed')])
+    status = models.CharField(max_length=12, choices=[('READY', 'Ready'), ('IN_TRANSIT', 'In transit'), ('COMPLETED', 'Completed'), ('EXCEPTION', 'Exception')])
     nonce = models.CharField(max_length=32)
+    failure_reason = models.CharField(max_length=500, blank=True)
     prepared_at = models.DateTimeField()
     dispatched_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -201,7 +208,7 @@ class StoreDelivery(models.Model):
     class Meta:
         db_table = 'fulfillment_store_delivery'
         constraints = [models.CheckConstraint(condition=(Q(mode='PICKUP', status__in=['READY', 'COMPLETED'], dispatched_at__isnull=True) | Q(mode='DELIVERY')), name='store_delivery_mode_shape'),
-            models.CheckConstraint(condition=(Q(status='COMPLETED', completed_at__isnull=False) | Q(status__in=['READY', 'IN_TRANSIT'], completed_at__isnull=True)), name='store_delivery_completion_shape')]
+            models.CheckConstraint(condition=(Q(status='COMPLETED', completed_at__isnull=False) | Q(status__in=['READY', 'IN_TRANSIT', 'EXCEPTION'], completed_at__isnull=True)), name='store_delivery_completion_shape')]
 
 
 class StoreDeliveryEvent(models.Model):
@@ -209,7 +216,7 @@ class StoreDeliveryEvent(models.Model):
     order = models.ForeignKey('orders.Order', on_delete=models.PROTECT, related_name='store_delivery_events')
     actor = models.ForeignKey('customers.Member', on_delete=models.PROTECT, null=True, blank=True)
     admin_actor = models.ForeignKey('accounts.AdminAccount', on_delete=models.PROTECT, null=True, blank=True)
-    action = models.CharField(max_length=12)
+    action = models.CharField(max_length=20)
     request_key = models.UUIDField(unique=True)
     request_digest = models.CharField(max_length=64)
     note = models.CharField(max_length=500, blank=True)
@@ -218,3 +225,30 @@ class StoreDeliveryEvent(models.Model):
     class Meta:
         db_table = 'fulfillment_store_delivery_event'
         constraints = [models.CheckConstraint(condition=(Q(actor__isnull=False, admin_actor__isnull=True) | Q(actor__isnull=True, admin_actor__isnull=False)), name='store_delivery_event_actor_one')]
+
+
+class ShipmentLine(models.Model):
+    """Immutable quantity dispatched in one platform shipment batch."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    shipment = models.ForeignKey(Shipment, on_delete=models.PROTECT, related_name='items')
+    order_line = models.ForeignKey('orders.OrderLine', on_delete=models.PROTECT, related_name='shipment_items')
+    quantity = models.PositiveIntegerField()
+
+    class Meta:
+        db_table = 'fulfillment_shipment_line'
+        constraints = [models.UniqueConstraint(fields=['shipment', 'order_line'], name='shipment_line_once'),
+                       models.CheckConstraint(condition=Q(quantity__gt=0), name='shipment_line_quantity_positive')]
+
+
+class LocalHandoffLine(models.Model):
+    """Immutable quantities physically dispatched or handed to the customer."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event = models.ForeignKey(StoreDeliveryEvent, on_delete=models.PROTECT, related_name='items')
+    order_line = models.ForeignKey('orders.OrderLine', on_delete=models.PROTECT, related_name='local_handoff_items')
+    phase = models.CharField(max_length=8, choices=[('DISPATCH', 'Dispatch'), ('COMPLETE', 'Complete')])
+    quantity = models.PositiveIntegerField()
+
+    class Meta:
+        db_table = 'fulfillment_local_handoff_line'
+        constraints = [models.UniqueConstraint(fields=['event', 'order_line'], name='local_handoff_line_once'),
+                       models.CheckConstraint(condition=Q(quantity__gt=0), name='local_handoff_quantity_positive')]

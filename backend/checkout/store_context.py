@@ -32,9 +32,9 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
         return store, 'DELIVERY', {**_store_snapshot(store), 'dining': dining}
     store_id, mode = body.get('storeId'), body.get('deliveryMode', '')
     if store_id is None:
-        if mode:
+        if mode not in ('', 'EXPRESS', 'REDEEM'):
             raise ValueError('请先选择前置仓。')
-        return None, '', {}
+        return None, mode, {}
     try:
         identifier = UUID(store_id) if isinstance(store_id, str) else None
     except ValueError as exc:
@@ -45,7 +45,7 @@ def store_context(body, member, address_id, *, lock=False, allow_address_pending
         # Keep policy stable until stock reservation commits.
         Store.objects.select_for_update().filter(pk=identifier).first()
     store = get_store(identifier, for_sale=True)
-    if mode not in ('PICKUP', 'DELIVERY', 'EXPRESS') or mode not in store.supported_modes:
+    if mode not in ('PICKUP', 'DELIVERY', 'EXPRESS', 'REDEEM') or (mode in ('PICKUP', 'DELIVERY') and mode not in store.supported_modes):
         raise ValueError('请选择该前置仓支持的交付方式。')
     snapshot = _store_snapshot(store)
     if mode == 'DELIVERY':

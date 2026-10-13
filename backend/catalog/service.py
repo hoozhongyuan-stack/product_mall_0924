@@ -120,7 +120,7 @@ def parse_skus(raw_skus, axes, option_by_key, conversion=None, raw_axes=None):
 
 def create_product(request, actor, body):
     allowed = {"productNo", "name", "categoryId", "fulfillmentKind", "status", "descriptionHtml",
-               "specAxes", "skus", "unitConversion", "mainImageAssetId", "galleryAssetIds", "videoAssetId", "redeemValidUntil"}
+               "specAxes", "skus", "unitConversion", "mainImageAssetId", "galleryAssetIds", "videoAssetId", "redeemValidUntil", "redeemScope", "redeemStoreIds"}
     if set(body) - allowed:
         raise CatalogError("商品请求含有不支持的字段。")
     product_no = code_field(body.get("productNo"), "商品编号")
@@ -129,6 +129,8 @@ def create_product(request, actor, body):
     if fulfillment not in Product.Fulfillment.values:
         raise CatalogError("履约类型不正确。")
     valid_until = redeem_valid_until(body.get("redeemValidUntil"), fulfillment)
+    from .redemption_scope import parse_scope
+    scope, store_ids = parse_scope(fulfillment, body.get("redeemScope", "PLATFORM"), body.get("redeemStoreIds"))
     if body.get("status", "DRAFT") != "DRAFT":
         raise CatalogError("新商品必须先保存为草稿。")
     document = parse_description(body.get("descriptionHtml", ""))
@@ -159,7 +161,7 @@ def create_product(request, actor, body):
             raise CatalogError("SKU 编码已存在。", "SKU_CODE_DUPLICATE", 409)
         try:
             product = Product.objects.create(product_no=product_no, name=name, category=category,
-                fulfillment_kind=fulfillment, redeem_valid_until=valid_until, description_html=document.html,
+                fulfillment_kind=fulfillment, redeem_valid_until=valid_until, redeem_scope=scope, redeem_store_ids=store_ids, description_html=document.html,
                 main_image=main_image, video=video)
             set_gallery(product, gallery)
             set_description_images(product, document.asset_ids)

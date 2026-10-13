@@ -24,4 +24,4 @@ def filter_attribution(rows, params):
 def attribution_data(order):
     snapshot = order.store_snapshot
     return {'source': 'DINING' if snapshot.get('dining') else 'REGULAR',
-            'fulfillmentWarehouse': snapshot.get('fulfillmentWarehouse')}
+            'fulfillmentWarehouse': snapshot.get('fulfillmentWarehouse') if order.delivery_mode != 'REDEEM' else None}

@@ -1,4 +1,5 @@
 import type {OrderBenefits} from '../../shared/benefits'
+import type {RedemptionPolicy} from '../../shared/fulfillment-policy'
 export interface PaymentPolicy {
   offlineEnabled?: boolean
   wechatEnabled?: boolean
@@ -11,11 +12,11 @@ export interface PaymentPolicy {
   configured: boolean
   availablePaymentMethods: string[]
 }
-export interface OrderLine {
+export interface OrderLine extends RedemptionPolicy {
   pointsUnitPrice?:number; pointsTotal?:number
   orderLineId: string; name: string; skuCode: string; quantity: number; saleUnit: string
   fulfillmentKind: string; goodsAmountFen: number; payableFen: number
-  fulfillment?: { status: string; refundedQuantity?: number; redeemedQuantity?: number; remainingQuantity?: number; voidedQuantity?: number; validUntil?: string | null; events?: RedemptionRecord[] }
+  fulfillment?: RedemptionPolicy & { status: string; availableQuantity?: number; frozenQuantity?: number; dispatchedQuantity?: number; deliveredQuantity?: number; remainingPhysicalQuantity?: number; voucherRevision?: number; canRedeemPlatform?: boolean; canRedeemStore?: boolean; refundedQuantity?: number; redeemedQuantity?: number; remainingQuantity?: number; voidedQuantity?: number; validUntil?: string | null; events?: RedemptionRecord[] }
 }
 export interface Carrier { code: string; name: string; enabled: boolean; revision: number }
 export interface Shipment {
@@ -25,10 +26,12 @@ export interface Shipment {
   correctionCount?: number
 }
 export interface RedemptionRecord {
+  actorKind?: 'ADMIN' | 'PLATFORM' | 'STORE'; storeName?: string | null
   eventId: string; kind: string; quantity: number; remainingQuantity: number; occurredAt: string; actorName?: string
   reversedAt?: string | null; reason?: string | null
 }
-export interface RedemptionLookup {
+export interface RedemptionLookup extends RedemptionPolicy {
+  frozenQuantity?: number; canRedeemPlatform?: boolean
   voucherId: string; orderId: string; orderNo: string; pointsUnitPrice?:number; pointsTotal?:number
   orderLineId: string; name: string; skuCode?: string
   quantity: number; redeemedQuantity: number; voidedQuantity: number; remainingQuantity: number; availableQuantity: number; validUntil: string | null
@@ -45,6 +48,8 @@ export interface Reconciliation {
   actorId: string; actorName?: string; createdAt?: string; authorizedAt?: string | null; receiptId?: string | null; outcome?: string
 }
 export interface Order {
+  fulfillmentOwner?: 'PLATFORM' | 'STORE' | 'REDEEM'; inventoryWarehouse?: {warehouseId: string; name: string} | null
+  fulfillmentStoreId?: string | null; fulfillmentStoreName?: string | null; failureReason?: string
   hasShipment?:boolean;redeemEligible?:boolean
   localDeliveryEvents?:{eventId:string;requestKey?:string;action:string;note:string;actorName:string;actorKind:string;occurredAt:string}[];localDeliveryEventCount?:number
   source?:'DINING'|'REGULAR';fulfillmentWarehouse?:{id:string;name:string}|null
@@ -53,7 +58,7 @@ export interface Order {
   orderKind?:'CASH'|'POINTS';exchangePoints?:number
   orderBenefits?:OrderBenefits | null
   orderId: string; orderNo: string; revision: number; status: 'PENDING_PAYMENT' | 'PAID' | 'CLOSED'; fulfillmentStatus?: string; shipEligible?: boolean
-  fulfillment?: { shipStatus?: string }; shipment?: Shipment | null
+  fulfillment?: { shipStatus?: string }; shipment?: Shipment | null; shipments?: Shipment[]
   paymentMethod: string; paymentReviewStatus: string; paymentInstructions: { instructions: string; merchantAccountId: string; revision: number; timeoutMinutes: number } | null
   goodsTotalFen: number; shippingFeeFen: number; couponDiscountFen: number; pointsDiscountFen: number; payableFen: number
   createdAt: string; expiresAt: string; paidAt: string | null; closedAt: string | null; closeReason: string | null

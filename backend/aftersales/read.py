@@ -18,10 +18,13 @@ def line_summaries(line_ids):
     rows = AfterSaleCase.objects.filter(order_line_id__in=line_ids).values("order_line_id").annotate(
         reserved=Sum(Coalesce("return_acceptance__refund_quantity","quantity"), filter=Q(status__in=ACTIVE)),
         refunded=Sum(Coalesce("return_acceptance__refund_quantity","quantity"), filter=Q(status="COMPLETED")),
-        unredeemed=Sum("unredeemed_quantity", filter=Q(status__in=ACTIVE)))
+        unredeemed=Sum("unredeemed_quantity", filter=Q(status__in=ACTIVE)),
+        unshipped=Sum("quantity", filter=Q(status="COMPLETED", kind="REFUND_ONLY")),
+        held_unshipped=Sum("quantity", filter=Q(status__in=ACTIVE, kind="REFUND_ONLY")))
     return {row["order_line_id"]: {"reservedQuantity": row["reserved"] or 0,
             "refundedQuantity": row["refunded"] or 0,
-            "reservedUnredeemedQuantity": row["unredeemed"] or 0} for row in rows}
+            "reservedUnredeemedQuantity": row["unredeemed"] or 0,
+            "refundedUnshippedQuantity": row["unshipped"] or 0, "reservedUnshippedQuantity": row["held_unshipped"] or 0} for row in rows}
 
 
 def benefit_refund_facts(order_id):

@@ -117,13 +117,16 @@ class ConfiguredCheckoutTests(TestCase):
         self.assertEqual(valid[0]['weightGrams'],800)
         with self.assertRaises(ShippingRuleError):weights([dict(skuId=str(self.skus[0].pk),weightGrams=800,expectedUnitVersionId=str(uuid4()))])
 
-    def test_physical_without_store_cannot_claim_warehouse_free(self):
+    def test_platform_express_without_store_does_not_charge_warehouse(self):
         self.setup_delivery()
         quote=create_quote(dict(items=[dict(skuId=str(self.skus[0].pk),quantity=2)],addressId=str(self.address.pk)),self.member)
         snap=quote['shippingSnapshot']
-        self.assertFalse(snap['eligible']);self.assertTrue(snap['pending'])
+        self.assertTrue(snap['eligible']);self.assertFalse(snap['pending'])
         self.assertEqual(snap['warehouseBearsFen'],0)
-        with self.assertRaises(OrderError):submit_order(self.member,dict(quoteId=quote['quoteId'],paymentMethod='OFFLINE'),uuid4())
+        result,_=submit_order(self.member,dict(quoteId=quote['quoteId'],paymentMethod='OFFLINE'),uuid4())
+        order=Order.objects.get(pk=result['orderId'])
+        self.assertIsNone(order.store_id)
+        self.assertEqual(order.delivery_mode,'EXPRESS')
 
     def test_platform_subsidy_larger_than_commission_persists_conserved_income(self):
         from stores.models import StoreSkuProfitRule

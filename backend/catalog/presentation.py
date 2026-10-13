@@ -66,9 +66,11 @@ def sku_data(sku):
 
 
 def product_data(product):
+    from .redemption_scope import product_scope_data
     axes = list(product.spec_axes.prefetch_related("options"))
     skus = product.skus.select_related("current_unit", "product").all()
     return {
+        **product_scope_data(product),
         "productId": str(product.id), "productRevision": product.revision,
         "productNo": product.product_no, "name": product.name,
         "categoryId": str(product.category_id), "fulfillmentKind": product.fulfillment_kind,
@@ -88,6 +90,7 @@ def product_data(product):
 
 
 def public_product_data(product, member=None, store=None):
+    from .redemption_scope import product_scope_data
     from inventory.availability import default_available_base_units
     from django.utils import timezone
 
@@ -96,7 +99,7 @@ def public_product_data(product, member=None, store=None):
             "axis", "option").order_by("axis__sort_order", "axis_id"))
     ).order_by("created_at", "id")
     visible_skus = list(available_skus)
-    if store:
+    if store and product.fulfillment_kind == "SHIP":
         from stores.access import available_base_units
         warehouse, balances = store.warehouse, available_base_units(store, [sku.id for sku in visible_skus])
     else:
@@ -120,7 +123,7 @@ def public_product_data(product, member=None, store=None):
                       bool(product.redeem_valid_until and product.redeem_valid_until >= timezone.localdate()))
     skus = [{**row, "cartEligible": row["cartEligible"] and validity_ready} for row in skus]
     has_stock = any(row["cartEligible"] for row in skus)
-    return {"productId": str(product.id), "productNo": product.product_no,
+    return {**product_scope_data(product), "productId": str(product.id), "productNo": product.product_no,
             "name": product.name, "categoryId": str(product.category_id),
             "fulfillmentKind": product.fulfillment_kind, "descriptionHtml": present_description(product.description_html, public=True),
             "redeemValidUntil": product.redeem_valid_until.isoformat() if product.redeem_valid_until else None,

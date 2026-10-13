@@ -3,12 +3,13 @@
 These predicates describe currently actionable fulfillment, not the single
 fulfillmentStatus display label. Mixed orders may belong to several tasks.
 """
-from django.db.models import BooleanField, Case, Count, Exists, F, OuterRef, Q, When
+from django.db.models import BooleanField, Case, Count, Exists, F, OuterRef, Q, When, IntegerField, Subquery, Sum
 from django.utils import timezone
 
 from aftersales.task_reads import active_cases, with_line_quantities
 from orders.models import OrderLine
-from .models import Shipment, StoreDelivery
+from .models import Shipment, StoreDelivery, ShipmentLine, LocalHandoffLine
+from django.db.models.functions import Coalesce, Greatest
 
 
 TASK_FIELDS = {
@@ -20,12 +21,18 @@ TASK_FIELDS = {
     'IN_TRANSIT': 'task_in_transit',
     'WAITING_REDEMPTION': 'task_waiting_redemption',
     'AFTER_SALE': 'task_after_sale',
+    'EXCEPTION': 'task_exception',
 }
 
 
-def with_order_tasks(orders):
+def with_order_tasks(orders, store_id=None):
     lines = with_line_quantities(OrderLine.objects.filter(order_id=OuterRef('pk')))
-    shipping = lines.filter(fulfillment_kind='SHIP', quantity__gt=F('task_refunded_quantity'))
+    shipped = ShipmentLine.objects.filter(order_line_id=OuterRef('pk')).values('order_line_id').annotate(total=Sum('quantity')).values('total')
+    local_dispatched = LocalHandoffLine.objects.filter(order_line_id=OuterRef('pk'), phase='DISPATCH').values('order_line_id').annotate(total=Sum('quantity')).values('total')
+    local_completed = LocalHandoffLine.objects.filter(order_line_id=OuterRef('pk'), phase='COMPLETE').values('order_line_id').annotate(total=Sum('quantity')).values('total')
+    lines = lines.alias(task_dispatched=Coalesce(Subquery(shipped, output_field=IntegerField()), 0) + Greatest(
+        Coalesce(Subquery(local_dispatched, output_field=IntegerField()), 0), Coalesce(Subquery(local_completed, output_field=IntegerField()), 0)))
+    shipping = lines.filter(fulfillment_kind='SHIP', quantity__gt=F('task_dispatched')+F('task_refunded_unshipped')+F('task_held_unshipped'))
     shipments = Shipment.objects.filter(order_id=OuterRef('pk'))
     cases = active_cases().filter(order_line__order_id=OuterRef('pk'))
     redeemable = lines.filter(
@@ -33,34 +40,36 @@ def with_order_tasks(orders):
         quantity__gt=F('redeem_voucher__redeemed_quantity') + F('redeem_voucher__voided_quantity')
         + F('task_held_unredeemed'),
     )
+    if store_id is not None:
+        redeemable = redeemable.filter(redeem_scope_snapshot__contains={'stores': [{'storeId': str(store_id)}]}).filter(redeem_scope_snapshot__scope__in=['STORE', 'BOTH'])
     paid = Q(status='PAID')
     local = StoreDelivery.objects.filter(order_id=OuterRef('pk'))
-    actionable = paid & Exists(shipping) & ~Exists(cases.filter(order_line__fulfillment_kind='SHIP'))
+    actionable = paid & Exists(shipping)
     predicates = {
-        'task_waiting_shipment': paid & ~Q(delivery_mode__in=['PICKUP','DELIVERY']) & Exists(shipping) & ~Exists(shipments)
-        & ~Exists(cases.filter(order_line__fulfillment_kind='SHIP')),
-        'task_waiting_preparation': actionable & Q(delivery_mode__in=['PICKUP','DELIVERY']) & ~Exists(local),
+        'task_waiting_shipment': paid & ~Q(delivery_mode__in=['PICKUP','DELIVERY']) & Exists(shipping),
+        'task_waiting_preparation': actionable & Q(delivery_mode__in=['PICKUP','DELIVERY']) & (~Exists(local) | Exists(local.filter(status='COMPLETED'))),
         'task_waiting_pickup': actionable & Q(delivery_mode='PICKUP') & Exists(local.filter(status='READY')),
         'task_waiting_delivery': actionable & Q(delivery_mode='DELIVERY') & Exists(local.filter(status='READY')),
-        'task_delivering': actionable & Q(delivery_mode='DELIVERY') & Exists(local.filter(status='IN_TRANSIT')),
-        'task_in_transit': paid & Exists(shipping) & Exists(shipments.filter(confirmed_at__isnull=True)),
+        'task_delivering': paid & Q(delivery_mode='DELIVERY') & Exists(local.filter(status='IN_TRANSIT')),
+        'task_in_transit': paid & Exists(lines.filter(fulfillment_kind='SHIP', quantity__gt=F('task_refunded_quantity'))) & (Exists(shipments.filter(confirmed_at__isnull=True)) | (Q(delivery_mode='DELIVERY') & Exists(local.filter(status='IN_TRANSIT')))),
         'task_waiting_redemption': paid & Exists(redeemable),
         'task_after_sale': Exists(cases),
+        'task_exception': paid & Q(delivery_mode='DELIVERY') & Exists(local.filter(status='EXCEPTION')),
     }
-    return orders.alias(**{
+    return orders.annotate(**{
         name: Case(When(condition, then=True), default=False, output_field=BooleanField())
         for name, condition in predicates.items()
     })
 
 
-def filter_order_tasks(orders, task):
+def filter_order_tasks(orders, task, store_id=None):
     """The boundary validates the public enum; SQL filters before count/slicing."""
-    return with_order_tasks(orders).filter(**{TASK_FIELDS[task]: True})
+    return with_order_tasks(orders, store_id=store_id).filter(**{TASK_FIELDS[task]: True})
 
 
-def order_task_counts(orders):
+def order_task_counts(orders, store_id=None):
     """One aggregate statement, irrespective of the member's order count."""
-    return with_order_tasks(orders).aggregate(
+    return with_order_tasks(orders, store_id=store_id).aggregate(
         pendingPayment=Count('pk', filter=Q(status='PENDING_PAYMENT')),
         waitingShipment=Count('pk', filter=Q(task_waiting_shipment=True)),
         inTransit=Count('pk', filter=Q(task_in_transit=True)),

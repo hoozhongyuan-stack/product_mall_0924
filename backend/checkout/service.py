@@ -100,6 +100,8 @@ def create_quote(body, member, source_digest=""):
             raise
         raise QuoteValidationError(str(exc)) from exc
     skus = quote_catalog_rows(ids, member)
+    from .fulfillment_context import normalize_context
+    store, delivery_mode, store_snapshot = normalize_context(store, delivery_mode, store_snapshot, {row["fulfillmentKind"] for row in skus.values()})
     if store:
         from stores.access import available_base_units, sale_product_ids
         warehouse, balances = store.warehouse, available_base_units(store, ids)
@@ -140,7 +142,9 @@ def create_quote(body, member, source_digest=""):
         status = "OK"
         if not sku["onSale"]:
             status = "OFF_SALE"
-        elif store and ((sku['fulfillmentKind']=='SHIP' and sku['productId'] not in sale_ids) or (sku['fulfillmentKind']!='SHIP' and not mixed_physical)):
+        elif store and sku['fulfillmentKind'] != 'SHIP':
+            status = 'LOCAL_MIXED_NOT_SUPPORTED'
+        elif store and sku['productId'] not in sale_ids:
             status = 'STORE_NOT_SELLING'
         elif (sku["fulfillmentKind"] == "REDEEM" and
                 (not sku["redeemValidUntil"] or sku["redeemValidUntil"] < timezone.localdate().isoformat())):
@@ -163,6 +167,7 @@ def create_quote(body, member, source_digest=""):
             "specs": sku["specs"], "imageUrl": sku["imageUrl"],
             "fulfillmentKind": sku["fulfillmentKind"], "quantity": quantity,
             "redeemValidUntil": sku["redeemValidUntil"],
+            **{key: sku[key] for key in ("redeemScope", "redeemStoreIds", "redeemStores")},
             "saleUnit": sku["saleUnit"], "ratio": ratio,
             "baseQuantity": quantity * ratio if ratio else None,
             "availableQuantity": available_qty, "unitPriceFen": price, "lineAmountFen": amount,

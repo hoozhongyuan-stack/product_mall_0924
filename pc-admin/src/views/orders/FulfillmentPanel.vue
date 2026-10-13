@@ -9,6 +9,7 @@ const hasShipLines=computed(()=>props.order.items.some(l=>l.fulfillmentKind==='S
 const shipLines=computed(()=>props.order.items.filter(l=>l.fulfillmentKind==='SHIP'))
 const quantityError=computed(()=>shipmentQuantityError(props.order.items))
 const canShip=computed(()=>props.account.permissionCodes.includes('fulfillment.ship'))
+const history=computed(()=>props.order.shipments?.filter(shipment=>shipment.shipmentId!==props.order.shipment?.shipmentId)||[])
 const canCorrect=computed(()=>canShip.value&&!!props.order.shipment)
 </script>
 
@@ -19,5 +20,6 @@ const canCorrect=computed(()=>canShip.value&&!!props.order.shipment)
     <p v-else-if="order.status === 'PAID'">{{ fulfillmentLabel(order.fulfillmentStatus) }} · 尚未发货。</p>
     <p v-else>确认收款后才可发货。</p>
 
+    <template v-if="history.length"><h3>历史发货批次</h3><article v-for="shipment in history" :key="shipment.shipmentId" class="order-report"><strong>{{shipment.carrierName}} · {{shipment.trackingNo}}</strong><p>{{time(shipment.shippedAt)}} · {{shipment.shippedByName||'授权操作员'}} · {{shipment.warehouseName||'平台总仓'}}</p><p>{{shipment.confirmedAt?`已收货 · ${time(shipment.confirmedAt)}`:'运输中'}}</p></article></template>
   </section>
 </template>

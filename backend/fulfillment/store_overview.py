@@ -25,10 +25,11 @@ def overview_view(request, store_id):
         raise StoreError('工作台概览不接受查询参数。')
     stats = None
     if 'orders' in permissions:
-        rows = Order.objects.filter(store_id=store_id)
-        counts = order_task_counts(rows)
+        from .store_views import scoped_orders, scoped_aftersales
+        rows = scoped_orders(store_id)
+        counts = order_task_counts(rows, store_id=store_id)
         stats = {key: counts[key] for key in (
-            'waitingPreparation', 'waitingPickup', 'waitingDelivery', 'waitingShipment')}
-        stats = {**stats, 'totalOrders': rows.count(),
-            'activeAfterSales': active_cases().filter(order_line__order__store_id=store_id).count()}
+            'waitingPreparation', 'waitingPickup', 'waitingDelivery', 'waitingRedemption')}
+        stats = {**stats, 'inTransit': counts['delivering'], 'totalOrders': rows.count(),
+            'activeAfterSales': scoped_aftersales(store_id).filter(status__in=['PENDING_REVIEW', 'WAITING_RETURN', 'WAITING_REFUND']).count()}
     return response(request, {'storeId': str(store_id), 'permissions': permissions, 'stats': stats})

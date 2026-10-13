@@ -4,6 +4,7 @@ import { api, ApiError, type Account } from '../../api';
 import { amountFen, reconciliationError } from './offline-payment.mjs';
 import { redemptionError, shippingQuantity, shipmentQuantityError, shipmentError } from './fulfillment.mjs';
 import { actionLabels, localActionBody, orderActions, validatePending, actionPermission, receiptRecoveryMatches, type OrderAction } from './order-actions.mjs';
+import {fulfillmentOwnerLabel,redemptionScopeLabel} from '../../shared/fulfillment-policy';
 import { orderSettlementValue } from '../../shared/order-settlement.mjs';
 import { time, type Order, type Carrier, type RedemptionLookup, type Reconciliation } from './types';
 const props = defineProps<{
@@ -11,6 +12,8 @@ const props = defineProps<{
     orderId: string;
     action: OrderAction | null;
     reconciliation?: Reconciliation | null;
+    redemptionCode?: string;
+    redemptionQuantity?: string;
 }>();
 const emit = defineEmits<{
     close: [
@@ -48,7 +51,8 @@ const storageKey = computed(() => `mall-order-action:${props.account.accountId}:
 const isReceipt = computed(() => props.action === 'receipt' || props.action === 'anomaly');
 const readonlyAction = computed(() => ['tracking', 'aftersale'].includes(props.action || ''));
 const allowed = computed(() => !!props.action && !!order.value && orderActions(order.value, props.account.permissionCodes).includes(props.action));
-const permitted = computed(() => !!props.action && props.account.permissionCodes.includes(actionPermission(props.action)));
+const warehouseAction = computed(() => ['prepare','deliver','delivered','pickup'].includes(props.action || ''));
+const permitted = computed(() => !!props.action && !warehouseAction.value && props.account.permissionCodes.includes(actionPermission(props.action)));
 const locked = computed(() => busy.value || !!pending.value);
 const physical = computed(() => order.value?.items.filter(l => l.fulfillmentKind === 'SHIP') || []);
 const validation = computed(() => {
@@ -125,7 +129,7 @@ async function initialize() {
     if (!props.action || !props.orderId)
         return;
     loading.value = true;
-    form.value = blank();
+    form.value = { ...blank(), code: props.redemptionCode || '', quantity: props.redemptionQuantity || '1' };
     try {
         restore();
         if (!pending.value && props.reconciliation && isReceipt.value && props.reconciliation.actorId === props.account.accountId) {
@@ -158,6 +162,7 @@ async function initialize() {
         if (current === epoch)
             loading.value = false;
     }
+    if (current === epoch && props.action === 'redeem' && props.redemptionCode && !pending.value && !error.value) await lookup();
 }
 async function recover() { if (busy.value)
     return; const current = epoch; busy.value = true; error.value = ''; try {
@@ -275,8 +280,8 @@ onBeforeUnmount(() => epoch++);
 <template>
 <el-dialog :model-value="!!action" :title="action ? actionLabels[action] : ''" width="700" class="order-confirm-dialog" :close-on-click-modal="false" :close-on-press-escape="!busy" :show-close="!busy" @update:model-value="close">
 <p v-if="loading" role="status">正在读取最新订单…</p><p v-if="storageError" class="order-warning" role="alert">{{storageError}}</p><p v-if="error" class="order-warning" role="alert">{{error}} <button v-if="!pending" class="text-button" :disabled="busy" @click="initialize">重新读取</button></p>
-<template v-if="order&&!loading"><div class="order-action-summary"><strong>{{order.orderNo}} · {{orderSettlementValue(order)}}</strong><p>履约前置仓：{{order.storeName||'平台订单'}}<span v-if="order.fulfillmentWarehouse"> · 仓库：{{order.fulfillmentWarehouse.name}}</span></p><p v-if="order.dining">归属餐饮店：{{order.dining.name}} · 桌号 {{order.dining.tableNumber}}<br>收货位置：{{order.dining.address}}</p><p v-else-if="order.address">{{order.address.recipientName}} · {{order.address.phone}}<br>{{order.address.province}}{{order.address.city}}{{order.address.district}}{{order.address.detail}}</p></div>
-<p v-if="!allowed&&!pending" class="order-warning">订单当前不可执行此操作，或当前账号没有操作权限。</p><p v-if="notice" class="order-note" role="status">{{notice}}</p><div v-if="pending" class="order-warning"><h3>原请求内容 · 修订 {{pending.body.expectedRevision??'已保存收款凭证'}}</h3><p v-if="pending.body.paidAt">到账时间：{{time(String(pending.body.paidAt))}}</p><p v-if="pending.body.note">说明：{{pending.body.note}}</p><p v-if="pending.body.carrierCode">快递：{{pending.body.carrierCode}} · 运单：{{pending.body.trackingNo}}</p><p v-if="pending.body.reason">更正原因：{{pending.body.reason}}</p><p v-if="pending.body.quantity">本次核销：{{pending.body.quantity}}份</p><p v-if="pending.body.pickupCode">自提凭证：已保存原核验凭证</p><p>原请求已固定，请先查询最新订单并核对实际处理结果。关闭弹窗后仍会保留待确认记录。</p><button class="secondary-button" :disabled="busy" @click="recover">查询订单结果</button></div>
+<template v-if="order&&!loading"><div class="order-action-summary"><strong>{{order.orderNo}} · {{orderSettlementValue(order)}}</strong><p>履约方：{{fulfillmentOwnerLabel(order)}}<span v-if="order.fulfillmentWarehouse"> · 仓库：{{order.fulfillmentWarehouse.name}}</span></p><p v-if="order.dining">归属餐饮店：{{order.dining.name}} · 桌号 {{order.dining.tableNumber}}<br>收货位置：{{order.dining.address}}</p><p v-else-if="order.address">{{order.address.recipientName}} · {{order.address.phone}}<br>{{order.address.province}}{{order.address.city}}{{order.address.district}}{{order.address.detail}}</p></div>
+<p v-if="warehouseAction" class="order-warning">配送、自提由前置仓中心执行。平台可查询原操作结果，不能重新提交交付动作。</p><p v-else-if="!allowed&&!pending" class="order-warning">订单当前不可执行此操作，或当前账号没有操作权限。</p><p v-if="notice" class="order-note" role="status">{{notice}}</p><div v-if="pending" class="order-warning"><h3>原请求内容 · 修订 {{pending.body.expectedRevision??'已保存收款凭证'}}</h3><p v-if="pending.body.paidAt">到账时间：{{time(String(pending.body.paidAt))}}</p><p v-if="pending.body.note">说明：{{pending.body.note}}</p><p v-if="pending.body.carrierCode">快递：{{pending.body.carrierCode}} · 运单：{{pending.body.trackingNo}}</p><p v-if="pending.body.reason">更正原因：{{pending.body.reason}}</p><p v-if="pending.body.quantity">本次核销：{{pending.body.quantity}}份</p><p v-if="pending.body.pickupCode">自提凭证：已保存原核验凭证</p><p>原请求已固定，请先查询最新订单并核对实际处理结果。关闭弹窗后仍会保留待确认记录。</p><button class="secondary-button" :disabled="busy" @click="recover">查询订单结果</button></div>
 <fieldset :disabled="locked||!allowed" class="order-action-fields">
 <template v-if="isReceipt"><p>请按银行或渠道账单核对实际到账，用户报告付款不作为收款依据。{{action==='anomaly'?'原单已关闭，到账只登记异常资金。':''}}</p><div class="order-form"><label>收款账户标识<input v-model="form.merchantAccountId" name="merchantAccountId" maxlength="80"></label><label>实际到账流水号<input v-model="form.externalTradeNo" name="externalTradeNo" maxlength="128"></label><label>实际到账金额（元）<input v-model="form.amount" name="amount" inputmode="decimal"></label><label>实际到账时间<input v-model="form.paidAt" name="paidAt" type="datetime-local"></label><label class="wide">核对备注 / 金额差异原因<textarea v-model="form.note" maxlength="500" rows="3"></textarea></label><label class="wide check-row"><input v-model="form.verified" name="verified" type="checkbox">已核对实际账户、流水、金额和到账时间</label></div></template>
 <template v-if="['prepare','deliver','delivered','pickup','ship'].includes(action||'')"><h3>本次剩余实物数量</h3><p v-for="line in physical" :key="line.orderLineId">{{line.name}} · {{line.skuCode}} · {{shippingQuantity(line)?.remaining??'待核查'}} {{line.saleUnit}}</p><p>已退回数量不再交付，履约仓沿用订单快照。</p></template>
@@ -285,7 +290,7 @@ onBeforeUnmount(() => epoch++);
 <label v-if="['prepare','deliver','delivered'].includes(action||'')">{{action==='delivered'?'实际交付说明（至少5字）':'操作备注（选填）'}}<textarea v-model="form.note" maxlength="500" rows="3"></textarea></label><label v-if="action==='delivered'" class="check-row"><input v-model="form.verified" type="checkbox">以上剩余商品已实际送达，确认完成配送</label>
 <div v-if="action==='pickup'"><p>自提按整单剩余实物数量交付；请核验顾客出示的自提码。</p><label>自提凭证<input v-model="form.pickupCode" maxlength="40" @input="pickupVerified=false"></label><button class="secondary-button" :disabled="busy||!form.pickupCode.trim()" @click="lookup">核验自提凭证</button><p v-if="pickupVerified" class="order-success">凭证核验通过，本次交付上述全部剩余实物数量。</p></div>
 <div v-if="action==='ship'||action==='correct'" class="order-form"><label>快递公司<select v-model="form.carrierCode"><option value="">请选择</option><option v-for="c in carriers" :key="c.code" :value="c.code">{{c.name}}</option></select></label><label>运单号<input v-model="form.trackingNo" maxlength="80"></label><label v-if="action==='correct'" class="wide">更正原因<textarea v-model="form.reason" rows="3" maxlength="500"></textarea></label></div>
-<div v-if="action==='redeem'"><label>顾客出示的核销凭证<input v-model="form.code" maxlength="40" @input="voucher=null"></label><button class="secondary-button" :disabled="!form.code.trim()||busy" @click="lookup">读取凭证</button><template v-if="voucher"><p>{{voucher.name}} · 剩余 {{voucher.remainingQuantity}} 份 · 当前可核销 {{voucher.availableQuantity}} 份</p><label>本次核销数量<input v-model="form.quantity" inputmode="numeric"></label></template></div>
+<div v-if="action==='redeem'"><label>顾客出示的核销凭证<input v-model="form.code" maxlength="40" @input="voucher=null"></label><button class="secondary-button" :disabled="!form.code.trim()||busy" @click="lookup">读取凭证</button><template v-if="voucher"><p>{{voucher.name}} · {{redemptionScopeLabel(voucher)}} · 售后冻结 {{voucher.frozenQuantity||0}} 份 · 剩余 {{voucher.remainingQuantity}} 份 · 当前可核销 {{voucher.availableQuantity}} 份</p><label>本次核销数量<input v-model="form.quantity" inputmode="numeric"></label></template></div>
 <p v-if="action==='query'">向微信查询真实支付结果，支付成功后由服务端结算；查询未付款不会人工标记为已付款。</p>
 </fieldset>
 <template v-if="action==='tracking'&&tracking"><h3>{{tracking.carrierName}} · {{tracking.trackingNo}}</h3><p v-if="!tracking.events.length">暂无可用物流轨迹，快递公司与运单号仍可核对。</p><p v-for="(event,index) in tracking.events" :key="index">{{event.time}} · {{event.context||event.description}}</p></template>

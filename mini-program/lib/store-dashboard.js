@@ -1,4 +1,4 @@
-const TODOS=[['waitingPreparation','待备货','WAITING_PREPARATION'],['waitingPickup','待自提','WAITING_PICKUP'],['waitingDelivery','待配送','WAITING_DELIVERY'],['waitingShipment','待发货','WAITING_SHIPMENT']]
+const TODOS=[['waitingPreparation','待备货','WAITING_PREPARATION'],['waitingDelivery','待配送','WAITING_DELIVERY'],['inTransit','配送中','IN_TRANSIT'],['waitingPickup','待自提','WAITING_PICKUP'],['waitingRedemption','待核销','WAITING_REDEMPTION']]
 const SHORTCUTS=[
  {key:'products',label:'商品与库存',section:'products',permission:'products',icon:'parcel'},
  {key:'orders',label:'全部订单',section:'orders',permission:'orders',icon:'shipment'},
@@ -27,7 +27,7 @@ function orderStatus(order){
  if(order.status!=='PAID')return ({PENDING_PAYMENT:'待付款',CLOSED:'已关闭'})[order.status]||order.status
  const fact=order.fulfillmentStatus
  const state=['AFTER_SALE','REFUNDED'].includes(fact)?fact:(order.storeDelivery&&order.storeDelivery.status)||fact
- return ({WAITING_PREPARATION:'待备货',WAITING_PICKUP:'待自提',WAITING_DELIVERY:'待配送',WAITING_SHIPMENT:'待发货',IN_TRANSIT:order.deliveryMode==='DELIVERY'?'配送中':'已发货',DELIVERING:'配送中',IN_PROGRESS:'履约中',COMPLETED:'已完成',REFUNDED:'已退款',AFTER_SALE:'售后处理中',WAITING_REDEMPTION:'待核销'})[state]||'已付款'
+ return ({WAITING_PREPARATION:'待备货',WAITING_PICKUP:'待自提',WAITING_DELIVERY:'待配送',WAITING_SHIPMENT:'待发货',IN_TRANSIT:order.deliveryMode==='DELIVERY'?'配送中':'已发货',DELIVERING:'配送中',EXCEPTION:'配送异常',IN_PROGRESS:'履约中',COMPLETED:'已完成',REFUNDED:'已退款',AFTER_SALE:'售后处理中',WAITING_REDEMPTION:'待核销'})[state]||'已付款'
 }
 function emptyOrders(filter){const item=ORDER_FILTERS.find(x=>x.value===filter);return item&&item.value?`暂无${item.label}订单。`:'本店暂无订单。'}
 module.exports={present,query,orderStatus,ORDER_FILTERS,emptyOrders}

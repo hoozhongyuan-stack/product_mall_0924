@@ -54,7 +54,7 @@ class Order(models.Model):
                    models.Index(fields=["status", "expires_at"], name="order_status_expiry_idx"),
                    models.Index(fields=["paid_at"], condition=Q(status="PAID"), name="order_paid_fact_idx")]
         constraints = [
-            models.CheckConstraint(condition=(Q(store__isnull=True, delivery_mode='', store_snapshot={}) |
+            models.CheckConstraint(condition=(Q(store__isnull=True, delivery_mode__in=['', 'EXPRESS', 'REDEEM']) |
                 Q(store__isnull=False, delivery_mode__in=['PICKUP', 'DELIVERY', 'EXPRESS'])), name='order_store_mode_consistent'),
             models.CheckConstraint(condition=(Q(order_kind="CASH",payment_method__in=["OFFLINE","WECHAT"]) |
                 Q(order_kind="POINTS",payment_method="POINTS",goods_total_fen=0,shipping_fee_fen=0,coupon_id__isnull=True,
@@ -92,6 +92,7 @@ class OrderLine(models.Model):
     specs_snapshot = models.JSONField(default=list)
     fulfillment_kind = models.CharField(max_length=6)
     redeem_valid_until = models.DateField(null=True, blank=True)
+    redeem_scope_snapshot = models.JSONField(default=dict)
     base_unit = models.CharField(max_length=30)
     sale_unit = models.CharField(max_length=30)
     ratio = models.PositiveIntegerField()

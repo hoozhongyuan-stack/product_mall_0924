@@ -4,7 +4,7 @@ from itertools import groupby
 
 from django.core import signing
 from django.db import transaction
-from django.db.models import Count, Exists, Max, Min, OuterRef, Q, Subquery
+from django.db.models import BooleanField, Case, When, Count, Exists, Max, Min, OuterRef, Q, Subquery
 from django.utils import timezone
 
 from common.http import offset_response, parse_json_object, method
@@ -474,7 +474,7 @@ def product_detail_view(request, product_id):
     try:
         values = body(request)
         if set(values) - {"name", "categoryId", "fulfillmentKind", "status", "descriptionHtml",
-                          "mainImageAssetId", "galleryAssetIds", "videoAssetId", "expectedRevision", "redeemValidUntil"}:
+                          "mainImageAssetId", "galleryAssetIds", "videoAssetId", "expectedRevision", "redeemValidUntil", "redeemScope", "redeemStoreIds"}:
             raise CatalogError("商品基础信息接口不支持修改编号、规格或 SKU。")
         if "status" in values:
             raise CatalogError("商品销售状态由 SKU 状态决定，请在 SKU 行上架或下架。")
@@ -496,6 +496,8 @@ def product_detail_view(request, product_id):
             if (item.status == Product.Status.ON_SALE and fulfillment == Product.Fulfillment.REDEEM and
                     (valid_until is None or valid_until < timezone.localdate())):
                 raise CatalogError("在售核销商品须有尚未到期的核销截止日期。", "REDEEM_VALIDITY_REQUIRED")
+            from .redemption_scope import parse_scope
+            scope, store_ids = parse_scope(fulfillment, values.get("redeemScope", item.redeem_scope if fulfillment == "REDEEM" else "PLATFORM"), values.get("redeemStoreIds", item.redeem_store_ids if fulfillment == "REDEEM" else []))
             category = active_leaf(values.get("categoryId", str(item.category_id)))
             document = parse_description(values.get("descriptionHtml", item.description_html))
             main_image, gallery, video = resolve_media(values, item, description_ids=document.asset_ids)
@@ -509,7 +511,7 @@ def product_detail_view(request, product_id):
                     *item.description_images.values_list("asset_id", flat=True)] if value])
             if item.status == Product.Status.ON_SALE and main_image is None:
                 raise CatalogError("上架商品须先设置主图。", "MEDIA_REQUIRED")
-            before = {"name": item.name, "categoryId": str(item.category_id), "status": item.status,
+            before = {"redeemScope": item.redeem_scope, "redeemStoreIds": item.redeem_store_ids, "name": item.name, "categoryId": str(item.category_id), "status": item.status,
                       "mainImageAssetId": str(item.main_image_id) if item.main_image_id else None,
                       "galleryAssetIds": [str(row.asset_id) for row in item.gallery_images.order_by("position")],
                       "descriptionImageAssetIds": [str(identifier) for identifier in
@@ -517,16 +519,17 @@ def product_detail_view(request, product_id):
                       "videoAssetId": str(item.video_id) if item.video_id else None}
             item.name, item.category, item.fulfillment_kind = name, category, fulfillment
             item.redeem_valid_until = valid_until
+            item.redeem_scope, item.redeem_store_ids = scope, store_ids
             item.description_html = document.html
             item.main_image, item.video = main_image, video
             item.revision += 1
-            item.save(update_fields=["name", "category", "fulfillment_kind", "redeem_valid_until",
+            item.save(update_fields=["name", "category", "fulfillment_kind", "redeem_valid_until", "redeem_scope", "redeem_store_ids",
                                      "description_html", "main_image", "video", "revision", "updated_at"])
             set_description_images(item, document.asset_ids)
             if "galleryAssetIds" in values:
                 set_gallery(item, gallery)
             audit(request, "product.update", "product", item.id, actor, before=before,
-                  after={"name": name, "categoryId": str(category.id), "status": item.status,
+                  after={"redeemScope": scope, "redeemStoreIds": store_ids, "name": name, "categoryId": str(category.id), "status": item.status,
                          "mainImageAssetId": str(main_image.id) if main_image else None,
                          "galleryAssetIds": [str(asset.id) for asset in gallery],
                          "descriptionImageAssetIds": [str(identifier) for identifier in document.asset_ids],
@@ -708,11 +711,11 @@ def public_products_view(request):
             category__parent__status=Category.Status.ACTIVE).annotate(
                 min_list_price_fen=Subquery(cheapest_sku.values("list_price_fen")[:1]),
                 preview_sku_id=Subquery(cheapest_sku.values("id")[:1]),
-                has_available_stock=product_has_available_stock(store.warehouse_id if store else None),
+                has_available_stock=Case(When(fulfillment_kind="REDEEM", then=product_has_available_stock()), default=product_has_available_stock(store.warehouse_id), output_field=BooleanField()) if store else product_has_available_stock(),
             ).filter(min_list_price_fen__isnull=False).order_by("-created_at", "id")
         if store:
             from stores.access import sale_product_ids
-            products = products.filter(id__in=sale_product_ids(store), fulfillment_kind='SHIP')
+            products = products.filter(Q(id__in=sale_product_ids(store)) | Q(fulfillment_kind='REDEEM', redeem_store_ids__contains=[str(store.id)]))
         if dining:
             products = products.filter(id__in=dining[1])
         category_id = request.GET.get("categoryId")
@@ -777,7 +780,7 @@ def public_product_detail_view(request, product_id):
         from stores.access import get_store, sale_product_ids
         try:
             store = get_store(uuid_field(request.GET['storeId'], '前置仓 ID'), for_sale=True)
-            if product_id not in sale_product_ids(store):
+            if product_id not in sale_product_ids(store) and not Product.objects.filter(pk=product_id, fulfillment_kind='REDEEM', redeem_store_ids__contains=[str(store.id)]).exists():
                 return error(request, 404, 'STORE_NOT_SELLING', '该前置仓不销售此商品。')
         except ValueError as exc:
             return error(request, 409, 'STORE_UNAVAILABLE', str(exc))
@@ -789,8 +792,6 @@ def public_product_detail_view(request, product_id):
         category__parent__status=Category.Status.ACTIVE).first()
     if not item:
         return error(request, 404, "NOT_FOUND", "商品不可用。")
-    if store and item.fulfillment_kind != 'SHIP':
-        return error(request, 404, 'STORE_NOT_SELLING', '前置仓暂不支持权益核销商品。')
     if not item.skus.filter(sale_status=Sku.SaleStatus.ON_SALE).exists():
         return error(request, 404, "PRODUCT_OFF_SALE", "商品暂无在售 SKU。")
     return response(request, public_product_data(item, member, store))

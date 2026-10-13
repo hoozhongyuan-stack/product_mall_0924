@@ -59,7 +59,7 @@ def _snapshot(offer,row,quantity,warehouse,address_id,address):
     return {'offerId':str(offer.id),'offerRevision':offer.revision,'skuId':str(offer.sku_id),
         'pointsUnitPrice':offer.points_price,'quantity':quantity,'totalPoints':offer.points_price*quantity,
         'warehouseId':str(warehouse.id),'addressId':str(address_id) if address_id else None,'address':address,
-        'line':{key:row[key] for key in ['skuId','productId','name','skuCode','specs','saleUnit','ratio','unitVersionId','fulfillmentKind','redeemValidUntil','imageUrl']}}
+        'line':{key:row[key] for key in ['skuId','productId','name','skuCode','specs','saleUnit','ratio','unitVersionId','fulfillmentKind','redeemValidUntil','imageUrl','redeemScope','redeemStoreIds','redeemStores']}}
 
 
 @transaction.atomic
@@ -119,13 +119,15 @@ def _create_order(member,quote,row,warehouse,policy):
     order=Order.objects.create(order_kind='POINTS',order_no=next_number('JF'),member=member,quote_id=quote.id,
         payment_method='POINTS',address_snapshot=_address_dto(snapshot['address']),goods_total_fen=0,shipping_fee_fen=0,
         benefit_policy_snapshot=policy,points_to_use=snapshot['totalPoints'],points_discount_fen=0,payable_fen=0,
+        delivery_mode='EXPRESS' if row['fulfillmentKind']=='SHIP' else 'REDEEM',
+        store_snapshot={'fulfillmentWarehouse': {'id':str(warehouse.id),'name':warehouse.name}},
         expires_at=quote.expires_at)
     from fulfillment.service import snapshot_order_policy_locked
     from aftersales.service import snapshot_order_policy_locked as snapshot_after_sale
     snapshot_order_policy_locked(order);snapshot_after_sale(order)
     line=OrderLine.objects.create(order=order,sku=row['sku'],product_id=row['productId'],warehouse=warehouse,
         unit_version=unit,product_name=row['name'],sku_code=row['skuCode'],specs_snapshot=row['specs'],
-        fulfillment_kind=row['fulfillmentKind'],redeem_valid_until=row['redeemValidUntil'],base_unit=unit.base_unit,
+        fulfillment_kind=row['fulfillmentKind'],redeem_valid_until=row['redeemValidUntil'],redeem_scope_snapshot={'scope':row['redeemScope'],'stores':row['redeemStores']},base_unit=unit.base_unit,
         sale_unit=unit.sale_unit,ratio=unit.ratio,quantity=qty,base_quantity=qty*unit.ratio,
         points_unit_price=snapshot['pointsUnitPrice'],points_total=snapshot['totalPoints'],
         unit_price_fen=0,goods_amount_fen=0,payable_fen=0)

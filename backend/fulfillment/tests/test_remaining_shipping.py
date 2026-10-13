@@ -75,7 +75,7 @@ class RemainingShippingTests(TransactionTestCase):
         for kind in ['CASH','POINTS']:
             with self.subTest(kind=kind):
                 order,line=self.paid(kind)
-                case=apply_case(self.member,line.id,'REFUND_ONLY',1,'合成尚未核实退款',uuid4())
+                case=apply_case(self.member,line.id,'REFUND_ONLY',2,'合成尚未核实退款',uuid4())
                 for stage in ['REQUESTED','APPROVED']:
                     order.refresh_from_db()
                     self.assertFalse(page_fulfillment_summaries([order])[order.id]['shipEligible'])
@@ -85,8 +85,8 @@ class RemainingShippingTests(TransactionTestCase):
                     if stage=='REQUESTED':review_case(case.id,self.owner,True,'合成审核后仍占用',case.revision)
                 self.assertFalse(Shipment.objects.filter(order=order).exists())
                 self.complete(case,kind);order.refresh_from_db()
-                ship_order(order.id,self.owner,'REMAIN','READY-'+kind,order.revision,uuid4())
-                self.assertTrue(Shipment.objects.filter(order=order).exists())
+                self.assertFalse(page_fulfillment_summaries([order])[order.id]['shipEligible'])
+                self.assertFalse(Shipment.objects.filter(order=order).exists())
 
     def test_cash_and_points_fully_refunded_shipping_lines_cannot_create_shipment(self):
         for kind in ['CASH','POINTS']:

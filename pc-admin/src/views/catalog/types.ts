@@ -2,6 +2,7 @@ export type CategoryStatus = 'ACTIVE' | 'INACTIVE'
 export type SaleStatus = 'ON_SALE' | 'OFF_SALE'
 export type ProductStatus = 'DRAFT' | 'ON_SALE' | 'OFF_SALE'
 import type { Asset } from '../../shared/media'
+import type {RedemptionPolicy} from '../../shared/fulfillment-policy'
 export type { Asset } from '../../shared/media'
 
 export interface Category {
@@ -68,7 +69,7 @@ export interface ProductSku extends SkuRow { specOptionIds: string[] }
 export interface SpecOption { id?: string; clientKey?: string; value: string; sortOrder: number }
 export interface SpecAxis { id?: string; clientKey?: string; name: string; sortOrder: number; options: SpecOption[] }
 export interface UnitConversion { axisKey: string; baseOptionKey: string; ratios: { optionKey: string; ratio: number }[] }
-export interface ProductDetail {
+export interface ProductDetail extends RedemptionPolicy {
   unitConversion?: UnitConversion | null
   productId: string
   productNo: string

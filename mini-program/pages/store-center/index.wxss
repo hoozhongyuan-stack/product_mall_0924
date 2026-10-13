@@ -16,7 +16,7 @@
 .section-tab{margin:0;background:transparent;color:#66717a;font-size:26rpx;padding:18rpx 16rpx;line-height:1.5;border-radius:0;white-space:nowrap}
 .section-tab.selected{color:#a3202b;font-weight:700;border-bottom:4rpx solid #a3202b}
 .dashboard-orders,.dashboard-account,.shortcut-list{background:#fff;border-radius:16rpx;margin:24rpx 0;overflow:hidden}
-.todo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:24rpx 8rpx}
+.todo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16rpx 0;padding:24rpx 8rpx}
 .todo-item{display:flex;flex-direction:column;align-items:center;gap:10rpx;background:transparent;color:#66717a;font-size:24rpx;padding:8rpx 0;line-height:1.5;margin:0;border-radius:0;min-width:0}
 .todo-count{font-size:40rpx;font-weight:700;color:#20252a;font-variant-numeric:tabular-nums}
 .order-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1rpx solid #e7e9eb;padding:20rpx}

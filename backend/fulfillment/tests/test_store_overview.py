@@ -32,8 +32,8 @@ class StoreOverviewTests(TransactionTestCase):
         Order.objects.bulk_create([Order(id=uuid4(), order_no=uuid4().hex, quote_id=uuid4(), **values) for _ in range(21)])
         result = self.get(); self.assertEqual(result.status_code, 200)
         stats = result.json()['data']['stats']
-        self.assertEqual(stats, dict(waitingPreparation=1, waitingPickup=1, waitingDelivery=1, waitingShipment=1, totalOrders=25, activeAfterSales=0))
-        for field, task in [('waitingPreparation', 'WAITING_PREPARATION'), ('waitingPickup', 'WAITING_PICKUP'), ('waitingDelivery', 'WAITING_DELIVERY'), ('waitingShipment', 'WAITING_SHIPMENT')]:
+        self.assertEqual(stats, dict(waitingPreparation=1, waitingPickup=1, waitingDelivery=1, waitingRedemption=0, inTransit=0, totalOrders=24, activeAfterSales=0))
+        for field, task in [('waitingPreparation', 'WAITING_PREPARATION'), ('waitingPickup', 'WAITING_PICKUP'), ('waitingDelivery', 'WAITING_DELIVERY')]:
             self.assertEqual(self.get('orders', {'fulfillment': task}).json()['data']['total'], stats[field])
         orders = self.get('orders')
         self.assertEqual(len(orders.json()['data']['items']), 20)
@@ -44,7 +44,7 @@ class StoreOverviewTests(TransactionTestCase):
 
     def test_active_cases_and_blocked_fulfillment_share_queue_definition(self):
         order, line = self.local_order('PICKUP')
-        case = apply_case(self.member, line.id, 'REFUND_ONLY', 1, '工作台统计回归', uuid4())
+        case = apply_case(self.member, line.id, 'REFUND_ONLY', 2, '工作台统计回归', uuid4())
         self.assertEqual(self.get().json()['data']['stats']['waitingPreparation'], 0)
         self.assertEqual(self.get().json()['data']['stats']['activeAfterSales'], 1)
         self.assertEqual(self.get('aftersales', {'status': 'ACTIVE'}).json()['data']['total'], 1)

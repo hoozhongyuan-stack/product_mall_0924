@@ -1,0 +1,14 @@
+[
+  {
+    "compiler": "wcc",
+    "sourceCount": 37,
+    "exitCode": 0,
+    "stderr": ""
+  },
+  {
+    "compiler": "wcsc",
+    "sourceCount": 46,
+    "exitCode": 0,
+    "stderr": ""
+  }
+]

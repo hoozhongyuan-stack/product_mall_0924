@@ -31,7 +31,9 @@ def record_note(member,store_id,case_id,body,key):
         order,line,case=_locked_case(case_id)
         list(StoreStaff.objects.select_for_update().filter(store_id=store_id,member=member))
         require_staff(member,store_id,'orders')
-        if str(order.store_id)!=str(store_id):
+        from fulfillment.redemption import permitted
+        authorized = str(order.store_id)==str(store_id) if line.fulfillment_kind=='SHIP' else permitted(line,store_id)
+        if not authorized:
             raise AfterSaleError('售后单不存在。','AFTERSALE_NOT_FOUND',404)
         prior=StoreAfterSaleNote.objects.filter(request_key=key).first()
         if prior:

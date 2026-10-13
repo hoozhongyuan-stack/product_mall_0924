@@ -1,4 +1,4 @@
-import { shipmentEligible, remaining } from './fulfillment.mjs'
+import { shipmentEligible } from './fulfillment.mjs'
 import { isPointsOrder } from '../../shared/order-settlement.mjs'
 export function orderActions(order, permissions) {
   if (!order) return []
@@ -10,16 +10,14 @@ export function orderActions(order, permissions) {
     if (order.paymentMethod === 'WECHAT' && order.status === 'PENDING_PAYMENT') actions.push('query')
   }
   if (order.status !== 'PAID') return actions
-  if (has('fulfillment.ship') && !['AFTER_SALE', 'REFUNDED'].includes(order.fulfillmentStatus)) {
-    const local = ({ WAITING_PREPARATION: 'prepare', WAITING_DELIVERY: 'deliver', DELIVERING: 'delivered', WAITING_PICKUP: 'pickup' })[order.fulfillmentStatus]
-    if (local && ['PICKUP', 'DELIVERY'].includes(order.deliveryMode)) actions.push(local)
+  if (has('fulfillment.ship')) {
     if (shipmentEligible(order)) actions.push('ship')
   }
   if (order.shipment || order.hasShipment) {
     if (has('order.read')) actions.push('tracking')
     if (has('fulfillment.ship')) actions.push('correct')
   }
-  if (has('fulfillment.redeem') && (typeof order.redeemEligible === 'boolean' ? order.redeemEligible : order.items?.some(line => line.fulfillmentKind === 'REDEEM' && ['READY', 'PARTIAL', 'WAITING_REDEMPTION'].includes(line.fulfillment?.status) && remaining(line) > 0))) actions.push('redeem')
+  if (has('fulfillment.redeem') && (typeof order.redeemEligible === 'boolean' ? order.redeemEligible : order.items?.some(line => line.fulfillmentKind === 'REDEEM' && ['READY', 'PARTIAL', 'WAITING_REDEMPTION'].includes(line.fulfillment?.status) && line.fulfillment?.canRedeemPlatform !== false && ['PLATFORM','BOTH'].includes(line.fulfillment?.redeemScope || line.redeemScope) && line.fulfillment?.availableQuantity > 0))) actions.push('redeem')
   if (has('aftersale.read') && order.fulfillmentStatus === 'AFTER_SALE') actions.push('aftersale')
   return actions
 }

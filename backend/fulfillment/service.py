@@ -1,6 +1,7 @@
 """Short PostgreSQL transactions for shipment, receipt and voucher redemption."""
 import hashlib
 import hmac
+import json
 import uuid
 from datetime import timedelta
 
@@ -13,7 +14,7 @@ from orders.models import Order
 from .codes import code_digest, new_nonce, normalized_code, voucher_code
 from .models import (Carrier, FulfillmentPolicy, OrderFulfillmentSnapshot,
                      RedeemEvent, RedeemLookupFailure, RedeemVoucher,
-                     Shipment, ShipmentCorrection, VoucherRefundEvent)
+                     Shipment, ShipmentCorrection, ShipmentLine, VoucherRefundEvent)
 from .read import fulfillment_data
 
 
@@ -25,7 +26,9 @@ class FulfillmentError(ValueError):
 
 
 def _permit(actor, code):
-    if not actor or not actor.enabled or code not in permissions(actor):
+    from accounts.models import AdminAccount
+    actor = AdminAccount.objects.filter(pk=getattr(actor, "pk", None), enabled=True).first()
+    if not actor or code not in permissions(actor):
         raise FulfillmentError("当前账号没有此操作权限。", "PERMISSION_DENIED", 403)
 
 
@@ -107,13 +110,16 @@ def ship_order(order_id, actor, carrier_code, tracking_no, expected_revision, re
         raise FulfillmentError("请提供 UUID 格式的防重复请求标识。")
     tracking = _tracking(tracking_no)
     with transaction.atomic():
+        from aftersales.returns import _identity_lock
+        _identity_lock("platform-shipment", request_key, "SHIPMENT")
         order = _locked_order(order_id)
-        existing = Shipment.objects.select_for_update().filter(order=order).first()
+        _permit(actor, "fulfillment.ship")
+        existing = Shipment.objects.select_for_update().filter(request_key=request_key).first()
         if existing:
-            if (existing.request_key == request_key and existing.carrier_code == carrier_code
+            if (existing.shipped_by_id == actor.id and existing.order_id == order.id and existing.request_key == request_key and existing.carrier_code == carrier_code
                     and existing.tracking_no == tracking):
                 return _order_data(order)
-            raise FulfillmentError("该订单已经发货。", "ALREADY_SHIPPED", 409)
+            raise FulfillmentError("防重复标识对应不同发货请求。", "IDEMPOTENCY_CONFLICT", 409)
         _paid(order)
         if getattr(order, "delivery_mode", "") in ("PICKUP", "DELIVERY"):
             raise FulfillmentError("自提或同城配送订单不能快递发货。", "DELIVERY_MODE_MISMATCH", 409)
@@ -124,7 +130,13 @@ def ship_order(order_id, actor, carrier_code, tracking_no, expected_revision, re
             raise FulfillmentError("订单没有待发货商品。", "NO_SHIPPING_LINES", 409)
         from aftersales.guards import assert_shippable_locked
         lines = _aftersale_guard(assert_shippable_locked, order, lines)
+        from .physical import available_physical
+        quantities = available_physical(lines)
         warehouses = {line.warehouse_id for line in lines}
+        from inventory.models import Warehouse
+        default = Warehouse.objects.filter(is_default=True, enabled=True).first()
+        if default is None or warehouses != {default.id} or order.store_id:
+            raise FulfillmentError('快递须由平台总仓履约。', 'FULFILLMENT_OWNER_MISMATCH', 409)
         if len(warehouses) != 1:
             raise FulfillmentError("发货仓快照不一致，需人工核查。", "WAREHOUSE_MISMATCH", 409)
         snapshot = OrderFulfillmentSnapshot.objects.filter(order=order).first()
@@ -137,6 +149,7 @@ def ship_order(order_id, actor, carrier_code, tracking_no, expected_revision, re
                                 shipped_at=now, auto_confirm_days_snapshot=snapshot.auto_confirm_days,
                                 auto_confirm_at=now + timedelta(days=snapshot.auto_confirm_days),
                                 request_key=request_key)
+        ShipmentLine.objects.bulk_create([ShipmentLine(shipment=shipment, order_line=line, quantity=quantities[line.id]) for line in lines])
         from notifications.service import ORDER_SHIPPED, record_event
         record_event(ORDER_SHIPPED, shipment.id, order.member_id, occurred_at=shipment.shipped_at)
         order.revision += 1
@@ -155,7 +168,7 @@ def correct_shipment(order_id, actor, carrier_code, tracking_no, reason, expecte
         _revision(order, expected_revision)
         from customers.consumption import lock_consumption_member
         lock_consumption_member(order.member_id)
-        shipment = Shipment.objects.select_for_update().filter(order=order).first()
+        shipment = Shipment.objects.select_for_update().filter(order=order).order_by("-shipped_at", "-id").first()
         if shipment is None:
             raise FulfillmentError("该订单尚未发货。", "NOT_SHIPPED", 409)
         carrier = _carrier(carrier_code)
@@ -184,14 +197,15 @@ def confirm_receipt(member, order_id):
         _paid(order)
         from customers.consumption import lock_consumption_member
         lock_consumption_member(order.member_id)
-        shipment = Shipment.objects.select_for_update().filter(order=order).first()
-        if shipment is None:
+        shipments = list(Shipment.objects.select_for_update().filter(order=order, confirmed_at__isnull=True))
+        if not shipments and not Shipment.objects.filter(order=order).exists():
             raise FulfillmentError("订单尚未发货。", "NOT_SHIPPED", 409)
-        if shipment.confirmed_at is None:
+        for shipment in shipments:
             shipment.confirmed_at = timezone.now()
             shipment.confirmed_by_member = True
             shipment.revision += 1
             shipment.save(update_fields=["confirmed_at", "confirmed_by_member", "revision"])
+        if shipments:
             order.revision += 1
             order.save(update_fields=["revision"])
         from orders.benefit_lifecycle import reconcile_benefits_locked
@@ -202,23 +216,20 @@ def confirm_receipt(member, order_id):
 def auto_confirm_receipts(batch_size=100):
     if type(batch_size) is not int or not 1 <= batch_size <= 500:
         raise FulfillmentError("批量大小不正确。")
-    ids = list(Shipment.objects.filter(confirmed_at__isnull=True,
-                                       auto_confirm_at__lte=timezone.now())
-               .order_by("auto_confirm_at").values_list("order_id", flat=True)[:batch_size])
+    ids = list(Shipment.objects.filter(confirmed_at__isnull=True, auto_confirm_at__lte=timezone.now()).order_by("auto_confirm_at").values_list("id", "order_id")[:batch_size])
     count = 0
-    for order_id in ids:
+    for shipment_id, order_id in ids:
         with transaction.atomic():
             order = _locked_order(order_id)
-            shipment = Shipment.objects.select_for_update().filter(order=order).first()
-            if shipment and shipment.confirmed_at is None and shipment.auto_confirm_at <= timezone.now() \
-                    and order.status == Order.Status.PAID:
+            shipment = Shipment.objects.select_for_update().filter(pk=shipment_id).first()
+            if shipment and shipment.confirmed_at is None and shipment.auto_confirm_at <= timezone.now() and order.status == Order.Status.PAID:
                 shipment.confirmed_at = timezone.now()
                 shipment.revision += 1
                 shipment.save(update_fields=["confirmed_at", "revision"])
                 order.revision += 1
                 order.save(update_fields=["revision"])
                 from orders.benefit_lifecycle import reconcile_benefits_locked
-                reconcile_benefits_locked(order, source_ref="auto-receipt:" + str(order.id))
+                reconcile_benefits_locked(order, source_ref="auto-receipt:" + str(shipment.id))
                 count += 1
     return count
 
@@ -244,7 +255,16 @@ def redeem(voucher_id, actor, quantity, expected_revision, request_key):
     if type(quantity) is not int or not 1 <= quantity <= 9999 or not isinstance(request_key, uuid.UUID):
         raise FulfillmentError("核销数量或防重复标识不正确。")
     with transaction.atomic():
+        from aftersales.returns import _identity_lock
+        _identity_lock('redeem-use', request_key, 'REDEMPTION_USE')
+        digest = hashlib.sha256(json.dumps([str(voucher_id), str(actor.id), quantity, expected_revision], separators=(",", ":")).encode()).hexdigest()
+        prior = RedeemEvent.objects.filter(request_key=request_key, kind='USE').first()
+        if prior and (str(prior.voucher_id) != str(voucher_id) or prior.actor_id != actor.id or prior.store_staff_actor_id is not None or prior.quantity != quantity or prior.request_digest != digest):
+            raise FulfillmentError('防重复标识对应不同核销请求。', 'IDEMPOTENCY_CONFLICT', 409)
         order, voucher = _locked_voucher(voucher_id)
+        _permit(actor, "fulfillment.redeem")
+        from .redemption import assert_scope
+        assert_scope(voucher.order_line)
         replay = RedeemEvent.objects.filter(voucher=voucher, request_key=request_key, kind="USE").first()
         if replay:
             if replay.quantity != quantity or replay.actor_id != actor.id:
@@ -268,7 +288,7 @@ def redeem(voucher_id, actor, quantity, expected_revision, request_key):
         voucher.save(update_fields=["redeemed_quantity", "revision"])
         event = RedeemEvent.objects.create(voucher=voucher, kind="USE", quantity=quantity,
                                            remaining_quantity=remaining-quantity, actor=actor,
-                                           request_key=request_key)
+                                           request_key=request_key, request_digest=digest)
         order.revision += 1
         order.save(update_fields=["revision"])
         from orders.benefit_lifecycle import reconcile_benefits_locked
@@ -286,6 +306,7 @@ def reverse_redemption(event_id, actor, reason, expected_revision):
         raise FulfillmentError("核销记录不存在。", "REDEMPTION_NOT_FOUND", 404)
     with transaction.atomic():
         order, voucher = _locked_voucher(original)
+        _permit(actor, "fulfillment.redeem.reverse")
         _paid(order)
         event = RedeemEvent.objects.select_for_update().filter(pk=event_id, kind="USE", voucher=voucher).first()
         if event is None:
@@ -334,6 +355,8 @@ def lookup_voucher(code, actor, source="unknown"):
             result = None
         else:
             order = voucher.order_line.order
+            from .redemption import assert_scope, scope_data, event_data
+            assert_scope(voucher.order_line)
             remaining = _remaining(voucher)
             from aftersales.guards import reserved_unredeemed_quantity
             held = reserved_unredeemed_quantity(voucher.order_line_id)
@@ -345,22 +368,18 @@ def lookup_voucher(code, actor, source="unknown"):
                       "FULLY_REDEEMED" if remaining == 0 else
                       "AFTER_SALE" if available == 0 else "READY")
             recent = list(RedeemEvent.objects.filter(voucher=voucher)
-                          .select_related("actor", "reversal").order_by("-occurred_at", "-id")[:20])
-            events = [{"eventId": str(event.id), "kind": event.kind, "quantity": event.quantity,
-                       "remainingQuantity": event.remaining_quantity,
-                       "actorName": event.actor.display_name, "occurredAt": event.occurred_at.isoformat(),
-                       "reversedAt": (event.reversal.occurred_at.isoformat()
-                                      if event.kind == "USE" and hasattr(event, "reversal") else None),
-                       "reason": event.reason or None} for event in recent]
+                          .select_related("actor", "store_staff_actor", "store", "reversal").order_by("-occurred_at", "-id")[:20])
+            events = [event_data(event) for event in recent]
             result = {"voucherId": str(voucher.id), "orderId": str(order.id),
                       "orderNo": order.order_no, "orderLineId": str(voucher.order_line_id),
                       "name": voucher.order_line.product_name, "quantity": voucher.order_line.quantity,
                       "redeemedQuantity": voucher.redeemed_quantity,
                       "voidedQuantity": voucher.voided_quantity, "remainingQuantity": remaining,
-                      "heldQuantity": held, "availableQuantity": available,
+                      "heldQuantity": held, "frozenQuantity": held, "availableQuantity": available,
+                      **scope_data(voucher.order_line),
                       "validUntil": voucher.valid_until.isoformat() if voucher.valid_until else None,
                       "revision": voucher.revision, "status": status,
-                      "events": events, "eventCount": RedeemEvent.objects.filter(voucher=voucher).count()}
+                      "events": events, "records": events, "eventCount": RedeemEvent.objects.filter(voucher=voucher).count()}
     if result is None:
         raise FulfillmentError("凭证无效。", "VOUCHER_NOT_FOUND", 404)
     return result

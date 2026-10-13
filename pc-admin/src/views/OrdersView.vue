@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import {fulfillmentOwnerLabel} from '../shared/fulfillment-policy'
 import {csvTable} from '../shared/csv.mjs'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api, type Account } from '../api'
@@ -39,6 +40,8 @@ const fulfillment = ref('')
 const search = ref('')
 const storeId = ref('')
 const source = ref('')
+const deliveryMode = ref('')
+const fulfillmentOwner = ref('')
 const restaurantId = ref('')
 const restaurants = ref<{id:string;name:string}[]>([])
 const restaurantError = ref('')
@@ -69,8 +72,8 @@ const bulkExcluded = computed(() => bulkSnapshot.value.filter(order => !bulkElig
 function exclusionReason(order: Order) {
   if (pendingActions(props.account.accountId, order.orderId, sessionStorage).includes('ship')) return '上次发货结果待核查，请先核查原请求'
   if (order.status !== 'PAID') return order.status === 'CLOSED' ? '订单已关闭' : '待收款，不能发货'
-  if (order.deliveryMode === 'DELIVERY') return '前置仓配送，请逐单处理交付'
-  if (order.deliveryMode === 'PICKUP') return '到店自提，请逐单确认交付'
+  if (order.deliveryMode === 'DELIVERY') return '前置仓配送，由前置仓中心执行，平台仅查看'
+  if (order.deliveryMode === 'PICKUP') return '由前置仓中心确认提货，平台仅查看'
   if (['AFTER_SALE', 'REFUNDED'].includes(order.fulfillmentStatus || '')) return '售后或退款处理中，不能发货'
   return '当前订单没有可发货项目，请查看详情核对'
 }
@@ -94,6 +97,8 @@ async function load(reset = false) {
   loading.value = true; error.value = ''
   try {
     const query = new URLSearchParams({ page: String(page.value), pageSize: String(pageSize.value) })
+    if (deliveryMode.value) query.set('deliveryMode',deliveryMode.value)
+    if (fulfillmentOwner.value) query.set('fulfillmentOwner',fulfillmentOwner.value)
     if (source.value) query.set('source',source.value)
     if (restaurantId.value) query.set('restaurantId',restaurantId.value)
     if (storeId.value) query.set('storeId',storeId.value)
@@ -107,9 +112,9 @@ async function load(reset = false) {
   } catch (reason) { if (request === generation) { data.value = null; error.value = reason instanceof Error ? reason.message : '订单读取失败，请重试。' } }
   finally { if (request === generation) loading.value = false }
 }
-function resetFilters() { source.value='';restaurantId.value='';storeId.value = ''; status.value = ''; method.value = ''; review.value = ''; fulfillment.value = ''; search.value = ''; void load(true) }
+function resetFilters() { deliveryMode.value='';fulfillmentOwner.value=''; source.value='';restaurantId.value='';storeId.value = ''; status.value = ''; method.value = ''; review.value = ''; fulfillment.value = ''; search.value = ''; void load(true) }
 function changePage(next: number, size: number) { page.value = next; pageSize.value = size; void load() }
-watch([status, method, review, fulfillment, search, storeId, source, restaurantId], () => { selected.value = [] })
+watch([deliveryMode, fulfillmentOwner, status, method, review, fulfillment, search, storeId, source, restaurantId], () => { selected.value = [] })
 function exportSelected() {
   if (!selectedOrders.value.length) return
   const text = csvTable([['订单号','创建时间','订单来源','餐饮店','前置仓','支付方式','结算状态','履约状态','结算金额 / 积分'], ...selectedOrders.value.map(order => [order.orderNo, time(order.createdAt), order.source === 'DINING' || order.dining ? '餐饮联盟' : '普通商城', order.dining?.name || '', order.storeName || '平台订单', paymentMethodLabel(order), paymentStatus(order), order.status === 'PAID' ? fulfillmentLabel(order.fulfillmentStatus) : '—', orderSettlementValue(order)])])
@@ -187,13 +192,14 @@ onMounted(() => { void load(); void loadCarriers(); void loadStores(); void load
 </script>
 <template>
   <section class="page-content orders-page admin-list-page">
-    <header class="page-heading"><div><h1>订单管理</h1><p>查看收款与履约进度；批量发货仅处理当前页已选订单，逐单显示结果。</p></div><div class="fulfillment-actions"><RouterLink v-if="account.permissionCodes.includes('aftersale.read')" to="/aftersales" class="secondary-button">售后管理</RouterLink><RouterLink v-if="account.permissionCodes.includes('fulfillment.redeem')" to="/redemptions" class="secondary-button">到店核销</RouterLink><RouterLink v-if="account.permissionCodes.includes('fulfillment.settings.manage')" to="/fulfillment/settings" class="secondary-button">履约设置</RouterLink><button class="secondary-button" :disabled="loading" @click="load()">刷新订单</button></div></header>
+    <header class="page-heading"><div><h1>订单管理</h1><p>平台负责快递发货、授权权益核销和资金售后；配送、自提由对应前置仓中心执行。</p></div><div class="fulfillment-actions"><RouterLink v-if="account.permissionCodes.includes('aftersale.read')" to="/aftersales" class="secondary-button">售后管理</RouterLink><RouterLink v-if="account.permissionCodes.includes('fulfillment.redeem')" to="/redemptions" class="secondary-button">权益核销</RouterLink><RouterLink v-if="account.permissionCodes.includes('fulfillment.settings.manage')" to="/fulfillment/settings" class="secondary-button">履约设置</RouterLink><button class="secondary-button" :disabled="loading" @click="load()">刷新订单</button></div></header>
     <form class="order-filters" aria-label="筛选订单" @submit.prevent="load(true)">
       <label v-if="account.permissionCodes.includes('stores.read')">履约前置仓<select v-model="storeId"><option value="">全部前置仓</option><option v-for="store in stores" :key="store.id" :value="store.id">{{store.name}}</option></select></label>
       <label>订单来源<select v-model="source" aria-label="订单来源" @change="restaurantId='' "><option value="">全部来源</option><option value="REGULAR">普通商城</option><option value="DINING">餐饮联盟</option></select></label>
       <label v-if="account.permissionCodes.includes('dining.read') && source !== 'REGULAR'">归属餐饮店<select v-model="restaurantId" aria-label="归属餐饮店"><option value="">全部餐饮店</option><option v-for="restaurant in restaurants" :key="restaurant.id" :value="restaurant.id">{{restaurant.name}}</option></select></label>
+      <label>交付方式<select v-model="deliveryMode" aria-label="交付方式"><option value="">全部方式</option><option value="EXPRESS">快递发货</option><option value="DELIVERY">配送到家</option><option value="PICKUP">到仓自提</option><option value="REDEEM">权益核销</option></select></label><label>履约方<select v-model="fulfillmentOwner" aria-label="履约方"><option value="">全部履约方</option><option value="PLATFORM">平台后台</option><option value="STORE">前置仓中心</option><option value="REDEEM">按权益范围核销</option></select></label>
       <label>订单号<input v-model="search" type="search" placeholder="搜索订单号" /></label>
-      <label>履约待办<select v-model="fulfillment" aria-label="履约待办"><option value="">全部待办</option><option value="WAITING_PREPARATION">待备货</option><option value="WAITING_PICKUP">待自提</option><option value="WAITING_DELIVERY">待配送</option><option value="DELIVERING">配送中</option><option value="WAITING_SHIPMENT">待发货</option><option value="IN_TRANSIT">待收货</option><option value="WAITING_REDEMPTION">待核销</option><option value="AFTER_SALE">售后中</option></select></label>
+      <label>履约待办<select v-model="fulfillment" aria-label="履约待办"><option value="">全部待办</option><option value="WAITING_PREPARATION">待备货</option><option value="WAITING_PICKUP">待自提</option><option value="WAITING_DELIVERY">待配送</option><option value="DELIVERING">配送中</option><option value="EXCEPTION">配送异常</option><option value="WAITING_SHIPMENT">待发货</option><option value="IN_TRANSIT">待收货</option><option value="WAITING_REDEMPTION">待核销</option><option value="AFTER_SALE">售后中</option></select></label>
       <label>订单状态<select v-model="status"><option value="">全部状态</option><option value="PENDING_PAYMENT">待付款</option><option value="PAID">已结算（付款 / 扣积分）</option><option value="CLOSED">已关闭</option></select></label>
       <label>结算方式<select v-model="method"><option value="">全部方式</option><option value="OFFLINE">线下支付</option><option value="WECHAT">微信支付</option><option value="POINTS">纯积分兑换</option></select></label>
       <label>核实状态<select v-model="review"><option value="">全部</option><option value="true">用户已报告付款</option><option value="false">未报告付款</option></select></label>
@@ -215,7 +221,7 @@ onMounted(() => { void load(); void loadCarriers(); void loadStores(); void load
       <p v-if="!data.items.length" class="empty-state">当前条件下暂无订单。可调整筛选条件后查询。</p>
       <div v-else class="panel table-wrap admin-list-table" tabindex="0" aria-label="订单列表，可横向滚动">
         <table><thead><tr><th><input type="checkbox" aria-label="选择当前页全部订单" :checked="currentPageSelected" :indeterminate="selected.length>0 && !currentPageSelected" :disabled="loading" @change="selectCurrentPage(($event.target as HTMLInputElement).checked)"></th><th>订单</th><th v-if="visibleColumn('ownership')">订单归属</th><th v-if="visibleColumn('warehouse')">履约前置仓 / 仓库</th><th v-if="visibleColumn('expiry')">付款截止</th><th v-if="visibleColumn('payment')">支付方式</th><th v-if="visibleColumn('settlement')">结算状态</th><th v-if="visibleColumn('fulfillment')">履约状态</th><th v-if="visibleColumn('amount')">结算金额 / 积分</th><th>操作</th></tr></thead>
-          <tbody><tr v-for="order in data.items" :key="order.orderId"><td><input type="checkbox" :checked="selected.includes(order.orderId)" :aria-label="`选择订单 ${order.orderNo}`" @change="selectOrder(order.orderId, ($event.target as HTMLInputElement).checked)"></td><td><strong class="order-number">{{ order.orderNo }}</strong><small class="order-muted">{{ time(order.createdAt) }}</small></td><td v-if="visibleColumn('ownership')">{{order.source==='DINING'||order.dining?'餐饮联盟':'普通商城'}}<small v-if="order.dining" class="order-muted">餐饮店：{{order.dining.name}} · 桌号 {{order.dining.tableNumber}}</small></td><td v-if="visibleColumn('warehouse')">{{order.storeName||'平台订单'}}<small v-if="order.fulfillmentWarehouse" class="order-muted">仓库：{{order.fulfillmentWarehouse.name}}</small><small class="order-muted">{{({PICKUP:'到店自提',DELIVERY:'配送到家',EXPRESS:'快递发货'} as Record<string,string>)[order.deliveryMode||'']||'按商品履约'}}</small></td><td v-if="visibleColumn('expiry')">{{ isPointsOrder(order) ? '无需付款' : time(order.expiresAt) }}</td><td v-if="visibleColumn('payment')">{{paymentMethodLabel(order)}}</td><td v-if="visibleColumn('settlement')"><AdminStatusBadge :status="order.status" :label="paymentStatus(order)" :tone="order.paymentReviewStatus==='ANOMALY' ? 'danger' : order.status==='PAID' ? 'success' : order.status==='CLOSED' ? 'neutral' : 'pending'" /></td><td v-if="visibleColumn('fulfillment')"><AdminStatusBadge v-if="order.status==='PAID'" :status="order.fulfillmentStatus || 'PENDING'" :label="fulfillmentLabel(order.fulfillmentStatus)" /><span v-else>—</span></td><td v-if="visibleColumn('amount')" class="order-money">{{orderSettlementValue(order)}}</td><td><div class="fulfillment-actions"><button v-for="a in recoveries(order)" :key="a" class="text-button" @click="openAction(order,a)">核查{{actionLabels[a]}}结果</button><button class="text-button" @click="detailOrderId=order.orderId">查看详情</button><button v-if="orderActions(order,account.permissionCodes)[0]" class="text-button" @click="openAction(order,orderActions(order,account.permissionCodes)[0]!)">{{actionLabels[orderActions(order,account.permissionCodes)[0]!]}}</button><select v-if="orderActions(order,account.permissionCodes).length>1" aria-label="更多订单操作" @change="openAction(order,($event.target as HTMLSelectElement).value as OrderAction);($event.target as HTMLSelectElement).value=''"><option value="">更多</option><option v-for="a in orderActions(order,account.permissionCodes).slice(1)" :key="a" :value="a">{{actionLabels[a]}}</option></select></div></td></tr></tbody>
+          <tbody><tr v-for="order in data.items" :key="order.orderId"><td><input type="checkbox" :checked="selected.includes(order.orderId)" :aria-label="`选择订单 ${order.orderNo}`" @change="selectOrder(order.orderId, ($event.target as HTMLInputElement).checked)"></td><td><strong class="order-number">{{ order.orderNo }}</strong><small class="order-muted">{{ time(order.createdAt) }}</small></td><td v-if="visibleColumn('ownership')">{{order.source==='DINING'||order.dining?'餐饮联盟':'普通商城'}}<small v-if="order.dining" class="order-muted">餐饮店：{{order.dining.name}} · 桌号 {{order.dining.tableNumber}}</small></td><td v-if="visibleColumn('warehouse')">{{fulfillmentOwnerLabel(order)}}<small v-if="order.inventoryWarehouse || order.fulfillmentWarehouse" class="order-muted">扣库仓：{{order.inventoryWarehouse?.name || order.fulfillmentWarehouse?.name || '无实物扣库'}}</small><small class="order-muted">{{({PICKUP:'到仓自提',DELIVERY:'配送到家',EXPRESS:'快递发货',REDEEM:'权益核销'} as Record<string,string>)[order.deliveryMode||'']||'按商品履约'}}</small></td><td v-if="visibleColumn('expiry')">{{ isPointsOrder(order) ? '无需付款' : time(order.expiresAt) }}</td><td v-if="visibleColumn('payment')">{{paymentMethodLabel(order)}}</td><td v-if="visibleColumn('settlement')"><AdminStatusBadge :status="order.status" :label="paymentStatus(order)" :tone="order.paymentReviewStatus==='ANOMALY' ? 'danger' : order.status==='PAID' ? 'success' : order.status==='CLOSED' ? 'neutral' : 'pending'" /></td><td v-if="visibleColumn('fulfillment')"><AdminStatusBadge v-if="order.status==='PAID'" :status="order.fulfillmentStatus || 'PENDING'" :label="fulfillmentLabel(order.fulfillmentStatus)" /><span v-else>—</span></td><td v-if="visibleColumn('amount')" class="order-money">{{orderSettlementValue(order)}}</td><td><div class="fulfillment-actions"><button v-for="a in recoveries(order)" :key="a" class="text-button" @click="openAction(order,a)">核查{{actionLabels[a]}}结果</button><button class="text-button" @click="detailOrderId=order.orderId">查看详情</button><button v-if="orderActions(order,account.permissionCodes)[0]" class="text-button" @click="openAction(order,orderActions(order,account.permissionCodes)[0]!)">{{actionLabels[orderActions(order,account.permissionCodes)[0]!]}}</button><select v-if="orderActions(order,account.permissionCodes).length>1" aria-label="更多订单操作" @change="openAction(order,($event.target as HTMLSelectElement).value as OrderAction);($event.target as HTMLSelectElement).value=''"><option value="">更多</option><option v-for="a in orderActions(order,account.permissionCodes).slice(1)" :key="a" :value="a">{{actionLabels[a]}}</option></select></div></td></tr></tbody>
         </table>
       </div>
       <AdminListPager :page="page" :page-size="pageSize" :total="data.total" :loading="loading" @change="changePage" />

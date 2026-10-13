@@ -22,7 +22,9 @@ def quote_catalog_rows(sku_ids, member=None):
         visible = (product.status == Product.Status.ON_SALE and sku.sale_status == Sku.SaleStatus.ON_SALE
                    and product.main_image_id is not None and category.status == Category.Status.ACTIVE
                    and category.parent is not None and category.parent.status == Category.Status.ACTIVE)
+        from .redemption_scope import product_scope_data
         rows[sku.id] = {
+            **product_scope_data(product),
             "productId": str(product.id) if visible else None,
             "name": product.name if visible else "商品已失效",
             "imageUrl": f"/api/v1/app/assets/{product.main_image_id}/file" if visible else None,

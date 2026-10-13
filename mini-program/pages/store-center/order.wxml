@@ -1,28 +1,43 @@
 <view class="store-page commerce-page {{canComplete && order.deliveryMode === 'PICKUP' ? 'with-pickup-footer' : ''}}">
  <view wx:if="{{state === 'loading'}}" class="state">正在核对订单…</view>
- <view wx:if="{{error}}" class="error" role="alert">{{error}}<button wx:if="{{uncertain}}" bindtap="send" disabled="{{busy}}">{{busy ? '正在确认结果…' : '重试确认同一操作'}}</button><button wx:elif="{{!order}}" class="secondary" bindtap="load">重新加载</button></view>
+ <view wx:if="{{error}}" class="error" role="alert">{{error}}<input wx:if="{{uncertain && needsRetryCredential}}" class="stock-input" placeholder="重新输入上次使用的同一凭证" value="{{retryCredential}}" bindinput="retryCredentialInput" maxlength="200" disabled="{{busy}}"/><button wx:if="{{uncertain}}" bindtap="send" disabled="{{busy}}">{{busy ? '正在确认结果…' : '重试确认同一操作'}}</button><button wx:elif="{{state === 'auth'}}" bindtap="login">重新登录</button><button wx:elif="{{!order}}" class="secondary" bindtap="load">重新加载</button></view>
+ <view wx:if="{{actionMessage}}" class="verified" role="status">{{actionMessage}}</view>
  <block wx:if="{{order}}">
  <view wx:if="{{order.dining}}" class="section"><view class="section-title">送至餐桌</view><view>{{order.dining.name}} · {{order.dining.tableNumber}} 桌</view><view>{{order.dining.address}}</view></view>
-  <view class="card order-summary"><view class="heading"><view class="title">{{order.storeName}} · {{deliveryLabel}}</view><text class="status-tag">{{deliveryStatus}}</text></view><view class="muted order-number">订单号 {{order.orderNo || order.orderId}}</view><view class="payment">{{statusLabel}}</view><view wx:if="{{order.address}}" class="muted">{{order.address.recipientName}} {{order.address.phone}} {{order.address.detail}}</view></view>
+  <view class="card order-summary"><view class="heading"><view class="title">{{order.storeName || '订单'}} · {{deliveryLabel}}</view><text class="status-tag">{{deliveryStatus}}</text></view><view class="muted order-number">订单号 {{order.orderNo || order.orderId}}</view><view class="payment">{{statusLabel}}</view><view class="muted">履约方：{{fulfillmentOwnerLabel}}</view><view wx:if="{{inventoryWarehouseLabel}}" class="muted">扣库仓：{{inventoryWarehouseLabel}}</view><view wx:if="{{failureReason}}" class="error">配送异常：{{failureReason}}</view><view wx:if="{{order.address}}" class="muted">{{order.address.recipientName}} {{order.address.phone}} {{order.address.detail}}</view></view>
   <view wx:if="{{order.deliveryMode === 'PICKUP'}}" class="card pickup-panel">
-   <view class="title">自提核销</view><view class="muted">扫描顾客订单中的二维码，核对商品后再交付。</view>
+   <view class="title">自提提货</view><view class="muted">扫描顾客订单中的二维码，核对商品后再交付。</view>
    <block wx:if="{{canComplete && !uncertain}}">
     <button class="scan-button" bindtap="scanPickup" disabled="{{busy || verifying || scanning}}">{{scanning ? '正在扫码…' : '扫一扫自提二维码'}}</button>
     <button class="manual-button secondary" bindtap="showManual" disabled="{{busy || verifying}}">无法扫码？输入凭证</button>
     <view wx:if="{{manual}}" class="manual-entry"><input class="stock-input" placeholder="输入顾客出示的自提凭证" data-key="pickupCode" bindinput="input" maxlength="200" value="{{pickupCode}}" disabled="{{busy}}"/><button class="secondary" bindtap="verifyPickup" disabled="{{busy || verifying}}">{{verifying ? '正在核对…' : '核对凭证'}}</button></view>
     <view wx:if="{{verified}}" class="verified" role="status">凭证有效 · 已匹配当前订单</view>
    </block>
-   <view wx:elif="{{delivery.status === 'COMPLETED'}}" class="verified">已完成自提，凭证已失效。<view wx:if="{{completedAtLabel}}">核销时间 {{completedAtLabel}}</view></view>
-   <view wx:elif="{{!uncertain}}" class="notice">{{canPrepare ? '请先备货，完成后即可扫码核销。' : '当前订单暂不可核销，请先确认付款及售后状态。'}}</view>
+   <view wx:elif="{{delivery.status === 'COMPLETED'}}" class="verified">已完成自提，凭证已失效。<view wx:if="{{completedAtLabel}}">提货时间 {{completedAtLabel}}</view></view>
+   <view wx:elif="{{!uncertain}}" class="notice">{{canPrepare ? '请先备货，完成后即可核验提货。' : '当前订单暂不可提货，请先确认付款及售后状态。'}}</view>
   </view>
-  <view class="card"><view class="title">核对商品</view><view wx:if="{{verified}}" class="muted">以下为本次可交付数量，已排除退款商品。</view><view wx:for="{{items}}" wx:key="orderLineId" class="product-row"><view class="product-info"><view class="product-name">{{item.name || item.productName}}</view><view class="muted product-spec">{{item.specLabel || item.skuName || '默认规格'}}<text wx:if="{{item.saleUnit}}"> · {{item.saleUnit}}</text></view></view><text class="quantity">× {{item.quantity}}</text></view></view>
-  <view class="card">
+  <view wx:if="{{items.length}}" class="card"><view class="title">核对实物商品</view><view wx:if="{{verified}}" class="muted">以下为本次可交付数量，已排除退款商品。</view><view wx:for="{{items}}" wx:key="orderLineId" class="product-row"><view class="product-info"><view class="product-name">{{item.name || item.productName}}</view><view class="muted product-spec">{{item.specLabel || item.skuName || '默认规格'}}<text wx:if="{{item.saleUnit}}"> · {{item.saleUnit}}</text></view></view><view class="quantity">× {{item.quantity}}<view wx:if="{{item.fulfillment}}" class="muted">已交付 {{item.fulfillment.deliveredQuantity || 0}}<view wx:if="{{item.fulfillment.frozenQuantity || item.fulfillment.heldQuantity}}">售后冻结 {{item.fulfillment.frozenQuantity || item.fulfillment.heldQuantity}}</view></view></view></view></view>
+  <view wx:if="{{canPrepare || canDispatch || canComplete || canFailDelivery || canRetryDelivery}}" class="card">
    <view class="title">{{order.deliveryMode === 'PICKUP' ? '确认交付' : '交付操作'}}</view>
    <checkbox-group wx:if="{{canComplete && order.deliveryMode === 'PICKUP'}}" bindchange="confirmGoods"><label class="handover"><checkbox value="checked" checked="{{goodsConfirmed}}" disabled="{{!verified || busy || uncertain}}" color="#A3202B"/><text>已核对商品规格、数量，并交给顾客</text></label></checkbox-group>
-   <input wx:if="{{canPrepare || canDispatch || canComplete || canShip}}" class="stock-input" placeholder="操作备注（可选）" data-key="note" bindinput="input" maxlength="500" value="{{note}}" disabled="{{busy || uncertain}}"/>
-   <block wx:if="{{canShip}}"><input class="stock-input" placeholder="快递公司编码" data-key="carrierCode" bindinput="input" value="{{carrierCode}}"/><input class="stock-input" placeholder="快递运单号" data-key="trackingNo" bindinput="input" value="{{trackingNo}}"/></block>
-   <button wx:if="{{canPrepare}}" data-action="PREPARE" bindtap="act" disabled="{{busy || uncertain}}">确认备货完成</button><button wx:if="{{canDispatch}}" data-action="DISPATCH" bindtap="act" disabled="{{busy || uncertain}}">开始配送</button><button wx:if="{{canComplete && order.deliveryMode !== 'PICKUP'}}" data-action="COMPLETE" bindtap="act" disabled="{{busy || uncertain}}">{{busy ? '正在提交…' : '确认已送达'}}</button><button wx:if="{{canShip}}" data-action="SHIP" bindtap="act" disabled="{{busy || uncertain}}">提交快递发货</button>
+   <input wx:if="{{canPrepare || canDispatch || canComplete || canFailDelivery || canRetryDelivery}}" class="stock-input" placeholder="{{canComplete && order.deliveryMode === 'DELIVERY' ? '交付说明或异常原因' : '操作备注（可选）'}}" data-key="note" bindinput="input" maxlength="500" value="{{note}}" disabled="{{busy || uncertain}}"/>
+
+   <view wx:if="{{canComplete && order.deliveryMode === 'DELIVERY'}}" class="muted">确认送达须填写至少 5 字交付说明；记录异常须填写至少 3 字原因。</view>
+   <button wx:if="{{canPrepare}}" data-action="PREPARE" bindtap="act" disabled="{{busy || uncertain}}">确认备货完成</button><button wx:if="{{canDispatch}}" data-action="DISPATCH" bindtap="act" disabled="{{busy || uncertain}}">开始配送</button><button wx:if="{{canComplete && order.deliveryMode !== 'PICKUP'}}" data-action="COMPLETE" bindtap="act" disabled="{{busy || uncertain}}">{{busy ? '正在提交…' : '确认已送达'}}</button><button wx:if="{{canFailDelivery}}" class="secondary" data-action="FAIL_DELIVERY" bindtap="act" disabled="{{busy || uncertain}}">记录配送异常</button><button wx:if="{{canRetryDelivery}}" data-action="RETRY_DELIVERY" bindtap="act" disabled="{{busy || uncertain}}">恢复配送</button>
   </view>
-  <view wx:if="{{canComplete && order.deliveryMode === 'PICKUP'}}" class="pickup-footer"><button data-action="COMPLETE" bindtap="act" disabled="{{busy || uncertain || !verified || !goodsConfirmed}}">{{busy ? '正在提交…' : '确认核销并完成自提'}}</button></view>
+  <view wx:for="{{redeemItems}}" wx:key="orderLineId" class="card redemption-panel">
+   <view class="title">核销权益 · {{item.name || item.productName}}</view>
+   <view class="muted">核销范围：{{item.scopeLabel}}</view><view class="muted">有效期至 {{item.validUntilLabel}}</view>
+   <view class="redemption-stats"><view>购买 {{item.quantity}} 次</view><view>已核销 {{item.fulfillment.redeemedQuantity}} 次</view><view>已作废 {{item.fulfillment.voidedQuantity}} 次</view><view>售后冻结 {{item.fulfillment.heldQuantity || 0}} 次</view></view>
+   <view class="verified">当前可核销 {{item.fulfillment.availableQuantity}} 次</view>
+   <view wx:if="{{!item.canRedeem}}" class="notice">当前权益不可核销，请核对付款、有效期、剩余次数及售后状态。</view>
+   <block wx:if="{{item.canRedeem}}"><view class="muted">请按授权范围核销，并输入顾客出示的权益凭证。</view>
+   <input class="stock-input" placeholder="权益核销凭证（与自提码分开）" data-line-id="{{item.orderLineId}}" data-key="voucherCode" bindinput="redemptionInput" maxlength="200" value="{{redemptionDrafts[item.orderLineId].voucherCode}}" disabled="{{busy || uncertain}}"/>
+   <input class="stock-input" placeholder="本次核销次数" type="number" data-line-id="{{item.orderLineId}}" data-key="quantity" bindinput="redemptionInput" value="{{redemptionDrafts[item.orderLineId].quantity}}" disabled="{{busy || uncertain}}"/>
+   <input class="stock-input" placeholder="核销备注（可选）" data-line-id="{{item.orderLineId}}" data-key="note" bindinput="redemptionInput" maxlength="500" value="{{redemptionDrafts[item.orderLineId].note}}" disabled="{{busy || uncertain}}"/>
+   <button data-line-id="{{item.orderLineId}}" bindtap="redeem" disabled="{{busy || uncertain}}">{{busy ? '正在提交…' : '核销权益'}}</button></block>
+  </view>
+  <view wx:if="{{order.deliveryMode === 'EXPRESS'}}" class="notice">本中心只处理授权的服务权益，实物快递由平台发货。</view>
+  <view wx:if="{{canComplete && order.deliveryMode === 'PICKUP'}}" class="pickup-footer"><button data-action="COMPLETE" bindtap="act" disabled="{{busy || uncertain || !verified || !goodsConfirmed}}">{{busy ? '正在提交…' : '确认提货'}}</button></view>
  </block>
 </view>

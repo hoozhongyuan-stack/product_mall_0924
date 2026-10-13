@@ -66,7 +66,7 @@ def quote_shipping(lines, store, mode, address, amount, *, policy=None, now=None
               distanceMeters=None,campaignId=None,destinationDigest=hashlib.sha256(json.dumps(address,sort_keys=True).encode()).hexdigest())
     physical=[row for row in lines if row.get('fulfillmentKind')=='SHIP']
     if not physical:return base
-    if not store:return {**base,'eligible':False,'pending':True,'message':'请先选择前置仓后核对配送费用。'}
+    if not store and mode in ('PICKUP','DELIVERY'):return {**base,'eligible':False,'pending':True,'message':'请先选择前置仓后核对配送费用。'}
     if mode=='PICKUP':return base
     actual_mode=mode or 'EXPRESS'
     platform=_platform_free(policy,store,actual_mode,amount,now)
@@ -86,6 +86,8 @@ def quote_shipping(lines, store, mode, address, amount, *, policy=None, now=None
                 return {**base,'eligible':False,'pending':True,'message':'请选择收货地址后计算快递运费。'}
             from .courier import quote_courier
             base={**base,**quote_courier(physical,policy,address,amount,platform)}
+            base={**base,'platformBearsFen':base['platformBearsFen']+base['warehouseBearsFen'],'warehouseBearsFen':0}
+            if base['freeSource']=='WAREHOUSE':base={**base,'freeSource':'PLATFORM'}
         if max(base['costFen'],base['customerFeeFen'])>1_000_000_000:raise ShippingRuleError('配送费用超过上限，请调整选购数量。')
         if base['platformBearsFen']:base['campaignId']='platform-shipping-'+str(policy.revision)
         return base

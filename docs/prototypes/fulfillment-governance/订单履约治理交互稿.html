@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>订单履约治理 · 三端交互稿</title>
+  <style>:root{--brand:#a3202b;--brand-deep:#801b24;--soft:#fff2f0;--ink:#20252a;--muted:#626c75;--line:#e2e6e9;--paper:#fff;--bg:#f4f5f5;--good:#24765b;--warn:#815512;--radius:9px;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.55;color:var(--ink);background:var(--bg);font-variant-numeric:tabular-nums}
+*{box-sizing:border-box}body{margin:0}h1,h2,h3,p{margin:0}h1{font-size:25px;line-height:1.4;letter-spacing:-.02em}h2{font-size:19px;line-height:1.5}h3{font-size:15px}p{margin:7px 0 12px}button,input,select,textarea{font:inherit;color:inherit}button{min-height:40px;padding:8px 14px;background:var(--paper);border:1px solid #c7cdd2;border-radius:6px;cursor:pointer;white-space:nowrap}button:hover{background:#f0f2f3}button:disabled{background:#eceff1;color:#6b747c;border-color:#d9dfe3;cursor:not-allowed}input,select,textarea{min-height:42px;padding:9px 11px;border:1px solid #bbc3c9;border-radius:6px;background:var(--paper);max-width:100%;width:100%;caret-color:var(--brand)}input::placeholder,textarea::placeholder{color:#68727b}input[type=checkbox]{width:18px;min-height:18px;accent-color:var(--brand)}textarea{min-height:84px;resize:vertical}a{color:var(--brand);text-underline-offset:3px}:focus-visible{outline:3px solid #b44750;outline-offset:3px}::selection{background:#f4cdd2;color:#632331}::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-thumb{background:#aeb6bc;border-radius:6px}.primary{background:var(--brand);border-color:var(--brand);color:white}.primary:hover{background:var(--brand-deep)}.soft{background:var(--soft);border-color:#f0c6c9;color:var(--brand)}.quiet,.text-button{background:transparent;border-color:transparent}.text-button{color:var(--brand);padding:6px 8px;min-height:32px}.small{min-height:32px;padding:4px 10px;font-size:12px}.muted,small{color:var(--muted);font-size:12px}.break{overflow-wrap:anywhere}.icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}.row{display:flex;align-items:center;justify-content:space-between;gap:12px}.stack{display:flex;flex-direction:column;gap:6px}.wrap{flex-wrap:wrap}.tag{display:inline-flex;align-items:center;padding:3px 8px;border-radius:4px;background:#eef0f2;color:#4d5962;font-size:12px;white-space:nowrap}.tag.good{background:#e9f4ee;color:var(--good)}.tag.warn{background:#fff3dd;color:var(--warn)}.tag.brand{background:var(--soft);color:var(--brand)}.tag.blue{background:#edf3f9;color:#3d607f}.notice{padding:12px 14px;background:#f1f4f5;color:#4d5962;border-radius:6px;font-size:13px;line-height:1.65;margin:14px 0}.notice.warn{background:#fff5e3;color:var(--warn)}.notice.error{background:var(--soft);color:var(--brand)}.notice.good{background:#e9f4ee;color:var(--good)}.notice p{margin:4px 0 0}.review-header{background:white;min-height:72px;padding:12px 26px;display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line);position:relative;z-index:2}.identity{display:flex;align-items:center;gap:12px}.identity strong{font-size:18px}.draft{font-size:11px;color:#5e6972;background:#edf0f2;padding:3px 7px;border-radius:4px}.review-header nav{display:flex;gap:4px;background:#f2f3f4;padding:4px;border-radius:8px}.review-header nav button{border:0;background:transparent;min-height:38px;font-weight:550}.review-header nav button.active{background:var(--brand);color:white}.review-boundary{padding:9px 26px;color:#626c75;font-size:12px;background:#fafbfb;border-bottom:1px solid var(--line)}
+.admin-shell{display:grid;grid-template-columns:176px minmax(0,1fr);min-height:calc(100vh - 113px)}.sidebar{background:white;border-right:1px solid var(--line);padding:22px 13px}.sidebar .brand{font-size:16px;font-weight:700;padding:0 12px 24px}.sidebar button{display:flex;align-items:center;gap:12px;border:0;width:100%;margin-bottom:7px;padding:11px 12px}.sidebar button.active{background:var(--soft);color:var(--brand);font-weight:650}.sidebar .account{margin-top:40px;padding:12px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}.admin-main{padding:23px 28px 44px;min-width:0;max-width:1640px}.breadcrumbs{font-size:12px;color:var(--muted);margin-bottom:14px}.heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:18px 0}.heading p{margin:5px 0 0;color:var(--muted);font-size:13px}.subnav{display:flex;gap:24px;border-bottom:1px solid var(--line);margin-bottom:21px;overflow:auto}.subnav button{background:transparent;border:0;border-radius:0;padding:12px 0;border-bottom:2px solid transparent}.subnav button.active{border-bottom-color:var(--brand);color:var(--brand);font-weight:650}.panel{background:white;border:1px solid var(--line);border-radius:var(--radius);padding:21px}.panel+.panel{margin-top:18px}.task-tabs{display:flex;gap:8px;overflow:auto;padding:5px 0 17px}.task-tabs button{border:0;background:#f1f3f4;border-radius:6px;min-height:36px}.task-tabs button.active{background:var(--soft);color:var(--brand);font-weight:650}.task-tabs b{font-weight:600;margin-left:8px}.filters{display:grid;grid-template-columns:minmax(180px,1.4fr) 1fr 1fr auto;gap:12px;align-items:end;margin:15px 0 18px}.field{display:flex;flex-direction:column;gap:6px;font-size:13px}.field small{line-height:1.5}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;text-align:left;font-size:13px;min-width:850px}th{color:#5a6670;background:#f7f8f9;font-weight:550;white-space:nowrap}td,th{padding:15px 12px;border-bottom:1px solid var(--line);vertical-align:middle}tbody tr:hover{background:#fafbfb}td small{display:block;margin-top:4px}td strong{font-weight:550}.table-foot{display:flex;justify-content:space-between;align-items:center;padding:15px 0 0;font-size:12px;color:var(--muted)}.details-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(290px,.75fr);gap:20px;align-items:start}.section{padding:20px 0;border-top:1px solid var(--line)}.section:first-child{padding-top:0;border:0}.section h2{margin-bottom:14px}.facts{display:grid;grid-template-columns:1fr 1fr;gap:16px 22px;margin:15px 0 5px}.facts div{min-width:0}.facts dt{color:var(--muted);font-size:12px;margin-bottom:5px}.facts dd{margin:0;font-size:14px;overflow-wrap:anywhere}.product{display:flex;gap:14px;align-items:center;padding:16px 0}.product-mark{width:50px;height:55px;display:flex;align-items:center;justify-content:center;background:#f4eeed;border-radius:6px;color:#89524f;flex:none}.product-mark .icon{width:30px;height:35px}.product-info{min-width:0;flex:1}.product-info strong{font-size:14px}.product-info small{display:block;margin-top:4px}.price{color:var(--brand);font-weight:600;font-size:20px}.steps{display:flex;list-style:none;padding:0;margin:17px 0 23px;gap:0;overflow:auto}.steps li{position:relative;flex:1;min-width:90px;text-align:center;font-size:12px;color:#69747d;padding-top:24px}.steps li::before{content:"";position:absolute;top:4px;left:calc(50% - 5px);width:10px;height:10px;background:#d9dfe3;border-radius:50%;z-index:1}.steps li::after{content:"";position:absolute;top:8px;left:-50%;right:50%;height:1px;background:#d9dfe3}.steps li:first-child::after{display:none}.steps li.done::before,.steps li.current::before,.steps li.done::after,.steps li.current::after{background:var(--brand)}.steps li.current{font-weight:650;color:var(--brand)}.steps li.current::before{outline:4px solid #f7dbdd}.timeline{list-style:none;margin:0;padding:0}.timeline li{padding:0 0 18px 19px;position:relative;border-left:1px solid var(--line);margin-left:4px;font-size:13px}.timeline li::before{content:"";position:absolute;left:-4px;top:5px;background:#8a959e;border-radius:50%;width:7px;height:7px}.timeline li:last-child{padding-bottom:0;border-left-color:transparent}.timeline small{display:block;margin-top:4px}.action-box h2{margin-bottom:14px}.action-box .primary{width:100%;margin-top:10px}.action-box button.secondary{width:100%;margin-top:9px}.ledger-row{padding:12px 0;border-bottom:1px solid var(--line);font-size:13px}.ledger-row:last-child{border:0}.ledger-row b{font-weight:600}.count-strip{display:flex;gap:20px;flex-wrap:wrap;margin:12px 0}.count-strip div{font-size:12px;color:var(--muted)}.count-strip b{color:var(--ink);font-size:18px;display:block;margin-top:4px}.scope-options{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.scope-options button.active{color:var(--brand);background:var(--soft);border-color:var(--brand)}.policy-layout{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(300px,.85fr);gap:22px}.check-row{display:flex;align-items:center;gap:10px;margin:15px 0;font-size:14px}.policy-actions{display:flex;gap:10px;margin-top:22px}.definition{padding:14px 0;border-bottom:1px solid var(--line)}.definition:last-child{border:0}.definition strong{display:block}.definition p{font-size:13px;color:var(--muted);margin:5px 0 0}
+.mobile-stage{max-width:1280px;margin:0 auto;padding:25px 28px 44px;display:grid;grid-template-columns:260px 390px minmax(210px,1fr);gap:30px;align-items:start}.review-tools h1{font-size:22px;margin-bottom:6px}.review-tools p{font-size:13px;color:var(--muted)}.review-tools label{margin-top:22px}.scenario-list{display:flex;flex-direction:column;gap:6px;margin-top:12px}.scenario-list button{text-align:left;border-color:transparent;background:transparent;white-space:normal;line-height:1.5}.scenario-list button.active{color:var(--brand);background:var(--soft);font-weight:600}.scenario-list small{display:block;font-weight:400;margin-top:3px}.phone{width:390px;max-width:100%;height:790px;background:#f5f6f7;border:5px solid #273139;border-radius:34px;box-shadow:0 18px 45px #1e293415;overflow:hidden;display:flex;flex-direction:column}.device-status{display:flex;justify-content:space-between;align-items:center;padding:11px 22px 5px;height:35px;background:white;font-size:11px;font-weight:600;flex:none}.signal{display:flex;align-items:center;gap:4px}.signal svg{width:22px;height:12px;fill:none;stroke:currentColor;stroke-width:1.3}.mobile-title{display:grid;grid-template-columns:50px 1fr 50px;align-items:center;min-height:48px;flex:none;background:white;border-bottom:1px solid #eef0f2;padding:0 8px;text-align:center}.mobile-title strong{font-size:16px}.mobile-title button{padding:5px 6px;border:0;display:flex;align-items:center;justify-content:center}.mobile-title .capsule{font-size:11px;border:1px solid #d9dfe3;border-radius:20px;padding:4px 8px;min-width:48px}.phone-body{min-height:0;overflow:auto;flex:1;padding:15px 13px 22px}.phone .mobile-section{background:white;border-radius:10px;padding:17px 15px;margin-bottom:12px}.mobile-section h3{margin-bottom:12px}.phone .facts{gap:13px;grid-template-columns:1fr}.phone .facts dd{font-size:13px}.phone .product{padding:5px 0}.phone .price{font-size:18px}.phone .notice{font-size:12px;margin:12px 0;padding:11px}.mobile-status{padding:7px 2px 19px}.mobile-status h2{font-size:23px;color:var(--brand)}.mobile-status p{font-size:12px;color:#59656e;margin:6px 0}.mobile-footer{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px;flex:none;background:white;border-top:1px solid var(--line);padding:12px 13px 20px}.mobile-footer button{min-height:43px}.mobile-footer .primary{flex:1}.voucher-code{font-size:27px;font-weight:700;letter-spacing:.1em;text-align:center;padding:15px 0 8px;color:var(--ink)}.code-caption{text-align:center;font-size:11px;color:var(--muted);margin-bottom:12px}.voucher-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;padding:15px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:11px;color:var(--muted)}.voucher-stats b{font-size:19px;color:var(--ink);display:block}.available{display:flex;justify-content:space-between;align-items:center;padding-top:13px;font-size:12px}.available b{font-size:19px;color:var(--brand)}.phone .task-tabs{gap:6px;padding:0 0 12px;flex-wrap:wrap;overflow:visible}.phone .task-tabs button{font-size:11px;padding:6px 8px;min-height:34px;flex:1}.store-heading{display:flex;justify-content:space-between;align-items:center;background:white;padding:14px;flex:none}.store-heading strong{font-size:15px}.store-heading small{display:block;margin-top:3px}.mobile-order{border-top:1px solid var(--line);padding:16px 0}.mobile-order:first-child{border:0;padding-top:0}.mobile-order:last-child{padding-bottom:0}.mobile-order .row{font-size:12px}.mobile-order h3{font-size:14px;margin:11px 0 4px}.mobile-order .order-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:13px}.mobile-order p{font-size:12px;color:var(--muted);margin:4px 0}.mobile-order button{font-size:12px;min-height:36px;padding:6px 11px}.annotation{padding-top:11px}.annotation h2{font-size:17px;margin-bottom:17px}.annotation section{padding:17px 0;border-top:1px solid var(--line)}.annotation section:first-of-type{padding-top:0;border:0}.annotation h3{font-size:14px}.annotation p{font-size:13px;color:var(--muted);line-height:1.75}.annotation .ledger-row{padding:10px 0}.state-controls{margin-top:24px}.empty-state{padding:60px 22px;text-align:center;color:var(--muted)}.empty-state .icon{width:36px;height:36px;color:#8b959d}.empty-state h3{margin:15px 0 8px;color:var(--ink);font-size:16px}.empty-state p{font-size:13px}.skeleton{height:15px;background:#e8ecee;border-radius:5px;margin:14px 0;max-width:90%}.skeleton.large{height:95px;max-width:100%;margin-bottom:25px}.home-line{height:4px;width:30%;border-radius:5px;background:#273139;margin:0 auto 7px;flex:none}
+dialog{border:0;width:min(520px,calc(100% - 32px));padding:24px;border-radius:12px;box-shadow:0 20px 60px #0003;max-height:90vh;overflow:auto}dialog::backdrop{background:#18232966}.dialog-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px}.dialog-heading h2{font-size:20px}.dialog-heading button{padding:4px 8px;border:0}.dialog-facts{background:#f5f7f8;padding:12px 14px;border-radius:6px;font-size:13px;margin-bottom:18px}.dialog-facts small{display:block;margin-top:5px}dialog .field{margin:15px 0}.dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;border-top:1px solid var(--line);padding-top:17px}.dialog-error{color:var(--brand);font-size:13px;margin-top:13px}.dialog-error:empty{display:none}.verified{background:#e9f4ee;color:var(--good);font-size:13px;padding:12px;border-radius:6px;margin:14px 0}.verified:empty{display:none}#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,8px);max-width:calc(100vw - 32px);padding:12px 20px;background:#273139;color:white;border-radius:8px;box-shadow:0 8px 22px #15202b26;opacity:0;pointer-events:none;transition:opacity .18s ease-out,transform .18s ease-out;z-index:10}#toast.visible{opacity:1;transform:translate(-50%,0)}
+@media(max-width:1200px){.mobile-stage{grid-template-columns:220px 390px minmax(180px,1fr);gap:20px;padding:23px 20px}.admin-main{padding:21px}.details-layout{grid-template-columns:1fr 320px}.identity strong{font-size:16px}}
+@media(max-width:1000px){.mobile-stage{grid-template-columns:220px 390px;justify-content:center}.annotation{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:20px}.annotation h2{grid-column:1/-1;margin-bottom:0}.annotation section{border:0}.details-layout,.policy-layout{grid-template-columns:1fr}.review-header{gap:10px;padding:12px 18px}.draft{display:none}.filters{grid-template-columns:1fr 1fr}.admin-shell{grid-template-columns:145px minmax(0,1fr)}}
+@media(max-width:700px){.review-header{padding:12px;flex-wrap:wrap;gap:10px}.identity{flex:1}.review-header nav{order:3;width:100%;justify-content:space-between}.review-header nav button{flex:1;font-size:13px;padding:8px}.review-header #reset{font-size:12px;padding:6px 8px}.review-boundary{padding:9px 14px;line-height:1.6}.admin-shell{display:block}.sidebar{display:flex;padding:6px 12px;border:0;border-bottom:1px solid var(--line);gap:8px}.sidebar .brand,.sidebar .account{display:none}.sidebar button{width:auto;margin:0;padding:8px 13px}.sidebar button .icon{display:none}.admin-main{padding:17px 13px}.heading{align-items:flex-start;flex-wrap:wrap}.heading h1{font-size:22px}.heading p{font-size:12px}.panel{padding:16px}.facts{gap:15px}.filters{gap:10px}.filters>.field:first-child{grid-column:1/-1}.filters>button{align-self:end}.mobile-stage{display:flex;flex-direction:column;padding:17px 12px 30px;gap:17px}.review-tools{width:100%}.review-tools h1{font-size:21px}.review-tools label{margin-top:12px}.scenario-list{display:none}.review-tools>p{margin-bottom:9px}.phone{align-self:center;width:390px;height:780px}.annotation{display:block;width:100%;padding:5px 4px}.annotation section{padding:15px 0;border-top:1px solid var(--line)}.annotation h2{margin-bottom:15px}.state-controls{margin-top:14px}.subnav{gap:22px}.steps li{min-width:80px}.policy-actions{flex-wrap:wrap}.policy-actions button{flex:1}}
+@media(max-width:420px){.mobile-stage{padding:16px 0 25px}.review-tools,.annotation{padding:0 14px}.phone{width:100%;height:780px;border:0;border-radius:0;box-shadow:none}.device-status,.home-line{display:none}.phone-body{padding:14px 12px}.mobile-title{min-height:48px}.mobile-title strong{font-size:16px}.mobile-footer{padding-bottom:16px}.table-foot{gap:10px;flex-wrap:wrap}.facts{grid-template-columns:1fr}.mobile-order .row{gap:5px}.review-header nav button{padding:8px 5px;font-size:12px}.voucher-stats{gap:4px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+.mobile-title{grid-template-columns:68px 1fr 68px}.mobile-title .capsule{display:flex;align-items:center;justify-content:center;padding:3px 6px;min-width:66px;line-height:1}.phone .task-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.phone .task-tabs button{min-height:42px;font-size:12px;padding:6px 4px}.phone .mobile-order button{min-height:42px}.mobile-footer button{min-height:44px}
+</style>
+</head>
+<body>
+  <header class="review-header">
+    <div class="identity"><strong>订单履约治理</strong><span class="draft">HTML 评审稿</span></div>
+    <nav id="role-tabs" aria-label="选择预览端"></nav>
+    <button id="reset" class="quiet">重置演示</button>
+  </header>
+  <div class="review-boundary">仅模拟订单与库存；操作在当前页面联动，刷新后重置。此稿用于确认交互，尚未开发业务功能。</div>
+  <main id="app"></main>
+  <dialog id="action-dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module">// 本地评审模型；所有数据只在内存中变化，不连接商城服务。
+const stores = { sz: '深圳1号前置仓', ns: '南山前置仓', central: '平台总仓' };
+const actionLabels = {
+  PAY: '模拟付款成功', CANCEL: '取消订单', PREPARE: '确认备货完成', DISPATCH: '开始配送',
+  COMPLETE: '确认送达', PICKUP: '确认提货', SHIP: '快递发货', RECEIVE: '确认收货',
+  REDEEM: '核销权益', APPLY_AFTER: '申请售后', REJECT_AFTER: '驳回售后',
+  REFUND: '确认退款成功', FAIL_DELIVERY: '记录配送异常', RETRY_DELIVERY: '继续配送',
+};
+const isVirtual = order => order.kind !== 'PHYSICAL';
+const isPhysical = order => order.kind !== 'VIRTUAL';
+const unfinished = order => !['DONE', 'CANCELED', 'REFUNDED'].includes(order.stage);
+const makeOrder = (id, index, patch) => ({
+  id, no: `XS20261012100000${String(index).padStart(6, '0')}`, source: '普通销售',
+  name: '精酿啤酒组合', spec: '330ml × 6瓶', qty: 1, amount: 9800, kind: 'PHYSICAL',
+  mode: 'DELIVERY', store: 'sz', paid: true, stage: 'PREPARE', inventoryQty: 1,
+  redeemed: 0, voided: 0, frozen: 0, expired: false, scope: 'BOTH', scopeStores: ['sz'],
+  voucher: String(826410 + index), pickupCode: String(612800 + index), revision: 1,
+  date: '2026-12-31', createdAt: '2026-10-12 10:00', physicalDone: false, handedQty: 0,
+  address: '深圳市福田区深南大道 · 演示地址', recipient: '陈女士 · 138****6821',
+  ...patch,
+});
+
+function seed() {
+  const orders = [
+    makeOrder('delivery', 1, { qty: 2, inventoryQty: 2, amount: 19600 }),
+    makeOrder('pickup', 2, { mode: 'PICKUP', stage: 'READY', address: '深圳1号前置仓 · 福田区演示自提点' }),
+    makeOrder('express', 3, { mode: 'EXPRESS', store: null, name: '红葡萄酒双瓶装', spec: '750ml × 2瓶', amount: 21800 }),
+    makeOrder('virtual', 4, { kind: 'VIRTUAL', mode: 'REDEEM', store: null, name: '洗车服务次卡', spec: '标准洗车 · 5次', qty: 5, redeemed: 1, inventoryQty: 0, stage: 'REDEEM', amount: 15000 }),
+    makeOrder('platform-only', 5, { kind: 'VIRTUAL', mode: 'REDEEM', store: null, name: '线上咨询服务', spec: '30分钟 · 2次', qty: 2, scope: 'PLATFORM', scopeStores: [], inventoryQty: 0, stage: 'REDEEM', amount: 8000 }),
+    makeOrder('store-only', 6, { kind: 'VIRTUAL', mode: 'REDEEM', store: null, name: '咖啡兑换券', spec: '美式咖啡 · 3杯', qty: 3, scope: 'STORE', inventoryQty: 0, stage: 'REDEEM', amount: 4500 }),
+    makeOrder('expired', 7, { kind: 'VIRTUAL', mode: 'REDEEM', store: null, name: '已到期体验券', spec: '体验服务 · 2次', qty: 2, inventoryQty: 0, stage: 'REDEEM', expired: true, date: '2026-10-11', amount: 6000 }),
+    makeOrder('unpaid', 8, { paid: false, stage: 'UNPAID', qty: 2, inventoryQty: 2, amount: 19600 }),
+    makeOrder('mixed', 9, { kind: 'MIXED', mode: 'EXPRESS', store: null, name: '礼盒＋品鉴服务', spec: '礼盒1份＋品鉴3次', qty: 1, redeemQty: 3, inventoryQty: 1, amount: 26800 }),
+    makeOrder('dining', 10, { source: '餐饮联盟', no: 'CY20261012100000000001', name: '餐桌啤酒组合', stage: 'READY', address: '联盟演示餐厅 · 08号桌', recipient: '餐厅接收 · 139****2508', amount: 9800 }),
+    makeOrder('points', 11, { source: '积分兑换', no: 'JF20261012100000000001', mode: 'PICKUP', name: '积分兑换礼品', amount: 0, points: 1200, spec: '标准装 · 1份' }),
+    makeOrder('frozen', 12, { kind: 'VIRTUAL', mode: 'REDEEM', store: null, name: '售后中的洗车次卡', spec: '标准洗车 · 5次', qty: 5, redeemed: 1, frozen: 2, inventoryQty: 0, stage: 'REDEEM', amount: 15000 }),
+  ];
+  return {
+    orders, stock: { central: 40, sz: 20, ns: 18 }, reserved: { central: 0, sz: 2, ns: 0 },
+    policies: { virtual: { scope: 'BOTH', stores: ['sz'] } }, events: [], receipts: {},
+  };
+}
+
+function getOrder(state, id) {
+  const order = state.orders.find(item => item.id === id);
+  if (!order) throw new Error('订单不存在，请返回列表重新选择。');
+  return order;
+}
+
+function remaining(order) {
+  return Math.max(0, (order.redeemQty ?? order.qty) - order.redeemed - order.voided - order.frozen);
+}
+
+function physicalRemaining(order) {
+  return Math.max(0, order.qty - (order.handedQty || 0) - (order.kind === 'PHYSICAL' ? order.voided + order.frozen : 0));
+}
+
+function warehouseFor(order) {
+  if (!isPhysical(order)) return null;
+  return order.mode === 'EXPRESS' ? 'central' : order.store;
+}
+
+function scopeLabel(order) {
+  const names = order.scopeStores.map(id => stores[id]).join('、');
+  return order.scope === 'PLATFORM' ? '仅平台' : `${order.scope === 'BOTH' ? '平台＋' : ''}${names}`;
+}
+
+function statusLabel(order) {
+  if (order.stage === 'DONE') return '已完成';
+  if (order.stage === 'CANCELED') return '已取消';
+  if (order.stage === 'REFUNDED') return '已退款';
+  if (!order.paid) return '待付款';
+  if (order.kind === 'VIRTUAL') {
+    if (order.expired) return '已到期 · 待处理';
+    if (remaining(order) === 0 && order.frozen > 0) return '售后处理中';
+    return order.redeemed > 0 ? '部分核销' : '待核销';
+  }
+  if (order.kind === 'MIXED' && order.physicalDone) return '待核销';
+  if (order.stage === 'AFTER_DELIVERY') return '已交付 · 售后处理中';
+  const labels = { PREPARE: order.mode === 'EXPRESS' ? '待发货' : '待备货', READY: order.mode === 'PICKUP' ? '待自提' : '待配送', DISPATCHED: '配送中', FAILED: '配送异常', SHIPPED: '已发货' };
+  return labels[order.stage] || '待处理';
+}
+
+function canRedeem(order, actor) {
+  if (!isVirtual(order) || !order.paid || !unfinished(order) || order.expired || remaining(order) <= 0) return false;
+  if (actor.role === 'platform') return order.scope !== 'STORE';
+  return actor.role === 'store' && order.scope !== 'PLATFORM' && order.scopeStores.includes(actor.store);
+}
+
+function visibleOrders(state, actor) {
+  if (!actor?.permitted) return [];
+  if (['platform', 'customer'].includes(actor.role)) return state.orders;
+  if (actor.role !== 'store') return [];
+  return state.orders.filter(order =>
+    (order.kind === 'PHYSICAL' && order.mode !== 'EXPRESS' && order.store === actor.store) ||
+    (isVirtual(order) && order.scope !== 'PLATFORM' && order.scopeStores.includes(actor.store)));
+}
+
+function actionsFor(order, actor) {
+  if (!actor?.permitted || !['platform', 'store', 'customer'].includes(actor.role)) return [];
+  if (actor.role === 'customer') {
+    if (order.stage === 'UNPAID') return ['PAY', 'CANCEL'];
+    const receive = order.stage === 'SHIPPED' && !order.physicalDone ? ['RECEIVE'] : [];
+    const canAfter = order.paid && unfinished(order) && order.frozen === 0 &&
+      (isVirtual(order) ? remaining(order) > 0 : ['PREPARE', 'READY'].includes(order.stage) && physicalRemaining(order) > 0);
+    return [...receive, ...(canAfter ? ['APPLY_AFTER'] : [])];
+  }
+  const after = actor.role === 'platform' && order.frozen > 0 ? ['REFUND', 'REJECT_AFTER'] : [];
+  if (!order.paid || !unfinished(order)) return after;
+  const redeem = canRedeem(order, actor) ? ['REDEEM'] : [];
+  if (order.kind === 'VIRTUAL') return [...redeem, ...after];
+  if (physicalRemaining(order) <= 0) return [...redeem, ...after];
+  if (order.mode === 'EXPRESS') return [...(actor.role === 'platform' && order.stage === 'PREPARE' ? ['SHIP'] : []), ...redeem, ...after];
+  if (actor.role !== 'store' || actor.store !== order.store) return after;
+  const step = {
+    PREPARE: ['PREPARE'], READY: [order.mode === 'PICKUP' ? 'PICKUP' : 'DISPATCH'],
+    DISPATCHED: ['COMPLETE', 'FAIL_DELIVERY'], FAILED: ['RETRY_DELIVERY'],
+  };
+  return step[order.stage] || [];
+}
+
+function requireQuantity(qty, max) {
+  if (!Number.isSafeInteger(qty) || qty <= 0 || qty > max) throw new Error(`请输入1至${max}之间的整数数量。`);
+}
+
+function physicalPatch(order) {
+  const handedQty = (order.handedQty || 0) + physicalRemaining(order);
+  const physicalDone = handedQty + (order.kind === 'PHYSICAL' ? order.voided : 0) === order.qty;
+  const virtualDone = order.redeemed + order.voided === (order.redeemQty ?? order.qty) && order.frozen === 0;
+  const stage = !physicalDone ? 'AFTER_DELIVERY' : order.kind === 'MIXED' && !virtualDone ? 'SHIPPED' : 'DONE';
+  return { handedQty, physicalDone, stage };
+}
+
+function actionPatch(order, action, payload) {
+  const nextStage = { PREPARE: 'READY', DISPATCH: 'DISPATCHED', COMPLETE: 'DONE', PICKUP: 'DONE', RETRY_DELIVERY: 'DISPATCHED', CANCEL: 'CANCELED' };
+  if (action === 'PAY') return { paid: true, stage: isPhysical(order) ? 'PREPARE' : 'REDEEM' };
+  if (action === 'PICKUP' && payload.code !== order.pickupCode) throw new Error('自提凭证不匹配，请核对顾客订单中的自提码。');
+  if (action === 'SHIP') {
+    if (!['顺丰速运', '中通快递', '圆通速递', '顺丰'].includes(payload.carrier) ||
+      !/^[A-Za-z0-9-]{6,30}$/.test(payload.tracking || '')) throw new Error('请选择快递公司，并填写6至30位字母或数字运单号。');
+    return { stage: 'SHIPPED', carrier: payload.carrier, tracking: payload.tracking };
+  }
+  if (['RECEIVE', 'COMPLETE', 'PICKUP'].includes(action)) return physicalPatch(order);
+  if (action === 'FAIL_DELIVERY') {
+    if (typeof payload.reason !== 'string' || payload.reason.trim().length < 3 || payload.reason.length > 200) throw new Error('请填写3至200字的配送异常原因。');
+    return { stage: 'FAILED', failureReason: payload.reason.trim() };
+  }
+  if (action === 'REDEEM') {
+    if (payload.code !== order.voucher) throw new Error('核销凭证不匹配，请重新核对顾客出示的凭证。');
+    requireQuantity(payload.qty, remaining(order));
+    const redeemed = order.redeemed + payload.qty;
+    const complete = redeemed + order.voided === (order.redeemQty ?? order.qty) && order.frozen === 0;
+    return { redeemed, stage: complete && (order.kind !== 'MIXED' || order.physicalDone) ? 'DONE' : order.stage };
+  }
+  if (action === 'APPLY_AFTER') {
+    requireQuantity(payload.qty, isVirtual(order) ? remaining(order) : physicalRemaining(order));
+    return { frozen: payload.qty };
+  }
+  if (action === 'REJECT_AFTER') return { frozen: 0, ...(order.stage === 'AFTER_DELIVERY' ? { stage: 'PREPARE' } : {}) };
+  if (action === 'REFUND') {
+    const voided = order.voided + order.frozen;
+    const exhausted = voided + (order.kind === 'PHYSICAL' ? order.handedQty || 0 : order.redeemed) === (order.redeemQty ?? order.qty);
+    return { frozen: 0, voided, stage: exhausted && (order.kind !== 'MIXED' || order.physicalDone) ? (order.redeemed || order.handedQty ? 'DONE' : 'REFUNDED') : order.stage };
+  }
+  return { stage: nextStage[action] };
+}
+
+function inventoryEffect(state, order, action) {
+  const warehouse = warehouseFor(order);
+  if (!warehouse) return { stock: state.stock, reserved: state.reserved, delta: 0 };
+  const qty = order.inventoryQty || order.qty;
+  const delta = action === 'PAY' ? -qty : action === 'REFUND' && order.kind === 'PHYSICAL' ? order.frozen : 0;
+  if (delta < 0 && state.stock[warehouse] < qty) throw new Error('订单指定仓库存不足，请重新选购；系统不会改扣其他仓库存。');
+  const reservedDelta = ['PAY', 'CANCEL'].includes(action) ? -qty : 0;
+  return {
+    stock: delta ? { ...state.stock, [warehouse]: state.stock[warehouse] + delta } : state.stock,
+    reserved: reservedDelta ? { ...state.reserved, [warehouse]: Math.max(0, state.reserved[warehouse] + reservedDelta) } : state.reserved,
+    delta,
+  };
+}
+
+function transact(state, { id, action, actor, key, payload = {} }) {
+  if (!actor?.permitted || !['platform', 'store', 'customer'].includes(actor.role)) throw new Error('当前账号没有此操作权限。');
+  if (typeof key !== 'string' || !key.trim()) throw new Error('操作标识缺失，请重新打开操作窗口。');
+  const order = getOrder(state, id);
+  const request = JSON.stringify([id, action, actor.role, actor.store || null, Object.entries(payload).sort(([a], [b]) => a.localeCompare(b))]);
+  if (state.receipts[key]) {
+    if (state.receipts[key] !== request) throw new Error('相同操作标识的内容已改变，请先核查原操作结果。');
+    return state;
+  }
+  if (!actionsFor(order, actor).includes(action)) throw new Error('当前履约方、订单状态或售后冻结不允许此操作，请查看最新订单。');
+  const patch = actionPatch(order, action, payload);
+  const inventory = inventoryEffect(state, order, action);
+  const event = {
+    id: `${key}-event`, orderId: id, action, actor: actor.role === 'store' ? stores[actor.store] : actor.role === 'platform' ? '平台运营' : '顾客',
+    label: actionLabels[action], qty: payload.qty || (action === 'REFUND' ? order.frozen : ['PICKUP', 'COMPLETE', 'RECEIVE'].includes(action) ? physicalRemaining(order) : 0), delta: inventory.delta,
+    warehouse: warehouseFor(order), time: new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }),
+  };
+  return {
+    ...state, stock: inventory.stock, reserved: inventory.reserved,
+    orders: state.orders.map(item => item.id === id ? { ...item, ...patch, revision: item.revision + 1 } : item),
+    events: [...state.events, event], receipts: { ...state.receipts, [key]: request },
+  };
+}
+
+function updatePolicy(state, { scope, stores: enabledStores }) {
+  if (!['PLATFORM', 'STORE', 'BOTH'].includes(scope) || !Array.isArray(enabledStores) ||
+    enabledStores.some(id => !['sz', 'ns'].includes(id)) || (scope !== 'PLATFORM' && enabledStores.length === 0)) {
+    throw new Error('请选择核销范围；允许前置仓核销时，至少选择一个有效前置仓。');
+  }
+  return { ...state, policies: { ...state.policies, virtual: { scope, stores: scope === 'PLATFORM' ? [] : [...new Set(enabledStores)] } } };
+}
+
+function createVirtualDemo(state) {
+  const index = state.orders.length + 1;
+  const policy = state.policies.virtual;
+  const order = makeOrder(`new-virtual-${index}`, index, {
+    kind: 'VIRTUAL', mode: 'REDEEM', store: null, name: '新单 · 洗车服务次卡', spec: '标准洗车 · 5次',
+    qty: 5, inventoryQty: 0, stage: 'REDEEM', amount: 15000, scope: policy.scope, scopeStores: [...policy.stores],
+  });
+  return { ...state, orders: [...state.orders, order] };
+}
+
+
+
+const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+const money = cents => `¥${(cents / 100).toFixed(2)}`;
+const modeNames = { DELIVERY: '配送到家', PICKUP: '到仓自提', EXPRESS: '快递发货', REDEEM: '权益核销' };
+const scopeNames = { PLATFORM: '仅平台', STORE: '指定前置仓', BOTH: '平台＋指定前置仓' };
+const paths = {
+  orders: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2h6v4H9zM9 11h6M9 15h6"/>',
+  store: '<path d="M3 10h18l-2-6H5zM5 10v10h14V10M9 20v-6h6v6"/>',
+  back: '<path d="m15 5-7 7 7 7"/>',
+  close: '<path d="m6 6 12 12M18 6 6 18"/>',
+  box: '<path d="m3 7 9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10M7 5l10 4"/>',
+  ticket: '<path d="M3 7h18v4a2 2 0 0 0 0 4v4H3v-4a2 2 0 0 0 0-4zM15 7v3m0 3v2m0 2v2"/>',
+  empty: '<path d="M4 8h16v12H4zM7 8V4h10v4M8 13h8M10 17h4"/>',
+  lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4M12 14v3"/>',
+};
+const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.box}</svg>`;
+const tag = (text, tone = '') => `<span class="tag ${tone}">${esc(text)}</span>`;
+const actionButton = (action, order, primary = false) => `<button class="${primary ? 'primary' : 'secondary'}" data-action="${action}" data-id="${esc(order.id)}">${actionLabels[action]}</button>`;
+const orderAmount = order => order.points ? `${order.points} 积分` : money(order.amount);
+const ownerLabel = order => order.kind === 'VIRTUAL' ? scopeLabel(order) : order.mode === 'EXPRESS' ? '平台履约' : stores[order.store];
+const statusTag = order => tag(statusLabel(order), order.stage === 'DONE' ? 'good' : order.expired || order.frozen || order.stage === 'FAILED' ? 'warn' : 'brand');
+
+function product(order) {
+  return `<div class="product"><div class="product-mark">${icon(order.kind === 'VIRTUAL' ? 'ticket' : 'box')}</div><div class="product-info"><strong>${esc(order.name)}</strong><small>${esc(order.spec)}</small><small>${order.kind === 'VIRTUAL' ? '购买数量' : '商品数量'}：${order.qty}${order.kind === 'MIXED' ? ` · 服务${order.redeemQty}次` : ''}</small>${order.kind === 'PHYSICAL' && (order.handedQty || order.frozen || order.voided) ? `<small>已交付${order.handedQty || 0}件 · 售后冻结${order.frozen}件 · 已退款${order.voided}件</small>` : ''}</div><div>${orderAmount(order)}</div></div>`;
+}
+
+function explanation(order) {
+  if (!order.paid && order.stage === 'UNPAID') return '付款成功后开始备货。未付款库存仅占用，取消后释放。';
+  if (order.stage === 'CANCELED') return '订单已取消，原库存占用已释放。';
+  if (order.stage === 'REFUNDED') return '退款处理已完成，对应商品或权益已关闭。';
+  if (order.stage === 'DONE') return '本订单的有效履约义务已完成。';
+  if (order.expired) return '权益已到期，无法继续核销。剩余权益可申请售后，不自动视为消费完成。';
+  if (order.stage === 'FAILED') return `配送暂未完成：${order.failureReason || '请联系履约前置仓确认后续配送安排。'}`;
+  if (order.kind === 'VIRTUAL') return '出示本订单的核销凭证；每次核销后，平台和前置仓同步剩余次数。';
+  if (order.kind === 'MIXED') return '礼盒由平台快递发货；品鉴服务按授权范围核销，两项均结束后整单完成。';
+  const messages = {
+    PREPARE: order.mode === 'EXPRESS' ? '平台正在安排发货，发货后可查看运单。' : '前置仓正在备货，请留意履约进度。',
+    READY: order.mode === 'PICKUP' ? '商品已备好，请在自提点出示自提凭证。' : '商品已备好，前置仓即将安排配送。',
+    DISPATCHED: '前置仓正在配送，请保持接收电话畅通。', SHIPPED: '商品已通过快递寄出，收到商品后请确认收货。',
+  };
+  return messages[order.stage] || '请查看订单最新进度。';
+}
+
+function steps(order) {
+  if (order.kind === 'VIRTUAL') return '';
+  const route = order.mode === 'EXPRESS' ? [['UNPAID', '待付款'], ['PREPARE', '待发货'], ['SHIPPED', '已发货'], ['DONE', '已收货']] :
+    order.mode === 'PICKUP' ? [['UNPAID', '待付款'], ['PREPARE', '待备货'], ['READY', '待自提'], ['DONE', '已提货']] :
+      [['UNPAID', '待付款'], ['PREPARE', '待备货'], ['READY', '待配送'], ['DISPATCHED', '配送中'], ['DONE', '已送达']];
+  const stage = order.physicalDone ? 'DONE' : order.stage === 'FAILED' ? 'DISPATCHED' : order.stage;
+  const position = route.findIndex(([key]) => key === stage);
+  return `<ol class="steps" aria-label="履约进度">${route.map(([key, text], index) => `<li class="${index < position ? 'done' : index === position ? 'current' : ''}">${text}</li>`).join('')}</ol>`;
+}
+
+function timeline(state, order, customer = false) {
+  const records = state.events.filter(event => event.orderId === order.id).toReversed();
+  return `<ul class="timeline">${records.map(event => `<li>${esc(event.label)}${event.qty ? ` · ${event.qty}${order.kind === 'PHYSICAL' ? '件' : '次'}` : ''}<small>${esc(event.time)} · ${customer && event.actor === '顾客' ? '本人' : esc(event.actor)}${!customer && event.delta ? ` · ${stores[event.warehouse]}库存${event.delta > 0 ? '+' : ''}${event.delta}` : ''}</small></li>`).join('')}<li>${order.paid ? order.points ? '积分兑换成功' : '付款已确认' : '订单已创建'}<small>${esc(order.createdAt)}${customer ? '' : order.paid && order.kind !== 'VIRTUAL' ? ` · ${stores[warehouseFor(order)]}已扣销售库存` : ''}</small></li></ul>`;
+}
+
+function inventory(state, order) {
+  const warehouse = warehouseFor(order);
+  if (!warehouse) return `<div class="notice">该订单为虚拟权益。核销消耗剩余次数，不扣前置仓实物库存。</div>`;
+  return `<div class="ledger-row row"><span>扣库仓</span><b>${stores[warehouse]}</b></div><div class="ledger-row row"><span>销售账面余量</span><b>${state.stock[warehouse]}</b></div><div class="ledger-row row"><span>待付款占用</span><b>${state.reserved[warehouse]}</b></div><div class="ledger-row row"><span>当前可售</span><b>${state.stock[warehouse] - state.reserved[warehouse]}</b></div><p class="muted">数量为演示库存池的基础单位。付款时正式扣减，交付不再扣库。</p>`;
+}
+
+function stateScreen(kind, phone = false) {
+  if (kind === 'loading') return `<section class="${phone ? 'mobile-section' : 'panel'}" aria-busy="true" aria-label="订单加载中"><div class="skeleton large"></div><div class="skeleton"></div><div class="skeleton"></div><p class="muted">正在读取订单，请稍候…</p><button data-view-state="normal">演示加载完成</button></section>`;
+  const variants = {
+    empty: ['empty', '暂无符合条件的订单', '试试其他筛选条件，或返回全部订单。', '返回全部订单'],
+    error: ['empty', '订单暂时读取失败', '请检查网络后重试，已完成的操作不会因读取失败被撤销。', '重新加载'],
+    denied: ['lock', '暂无订单操作权限', '请联系管理员授权；当前不展示私人订单与凭证。', '恢复授权演示'],
+  };
+  const [symbol, title, description, action] = variants[kind];
+  return `<section class="${phone ? 'mobile-section' : 'panel'} empty-state">${icon(symbol)}<h3>${title}</h3><p>${description}</p><button data-view-state="normal">${action}</button></section>`;
+}
+
+function virtualNumbers(order) {
+  return `<div class="voucher-stats"><div><b>${order.redeemQty ?? order.qty}</b>购买</div><div><b>${order.redeemed}</b>已核销</div><div><b>${order.voided}</b>已作废</div><div><b>${order.frozen}</b>售后冻结</div></div><div class="available"><span>当前可核销${order.expired ? '（已到期）' : ''}</span><b>${order.expired ? 0 : remaining(order)} 次</b></div>`;
+}
+
+function stateSelector(value) {
+  return `<label class="field">界面状态<select id="view-state" aria-label="界面状态">${[['normal', '正常'], ['loading', '加载中'], ['empty', '空列表'], ['error', '网络错误'], ['denied', '无权限']].map(([key, text]) => `<option value="${key}" ${key === value ? 'selected' : ''}>${text}</option>`).join('')}</select></label>`;
+}
+
+
+
+function listView(state, ui, actor) {
+  const all = visibleOrders(state, actor);
+  const categories = [
+    ['ALL', '全部订单', () => true],
+    ['SHIP', '待平台发货', order => actionsFor(order, actor).includes('SHIP')],
+    ['REDEEM', '待平台核销', order => actionsFor(order, actor).includes('REDEEM')],
+    ['AFTER', '售后处理中', order => order.frozen > 0],
+  ];
+  const condition = categories.find(([key]) => key === ui.task)?.[2] || categories[0][2];
+  const filtered = all.filter(order => condition(order) &&
+    (ui.mode === 'ALL' || order.mode === ui.mode) &&
+    (ui.owner === 'ALL' || (ui.owner === 'PLATFORM' ? order.mode === 'EXPRESS' || order.kind === 'VIRTUAL' && order.scope !== 'STORE' : order.store === ui.owner || order.kind !== 'PHYSICAL' && order.scope !== 'PLATFORM' && order.scopeStores.includes(ui.owner))) &&
+    (!ui.search || `${order.no} ${order.name} ${order.source}`.includes(ui.search)));
+  const pages = Math.max(1, Math.ceil(filtered.length / 6));
+  const page = Math.min(ui.pagination, pages);
+  const rows = filtered.slice((page - 1) * 6, page * 6);
+  return `<div class="heading"><div><h1>订单管理</h1><p>统一查看订单，按履约职责提供操作。</p></div><span>${tag('平台运营', 'blue')}</span></div>
+    <div class="notice">配送、自提由对应前置仓中心执行；平台后台负责快递发货、授权虚拟核销和资金售后。</div>
+    <section class="panel"><div class="task-tabs">${categories.map(([key, text, filter]) => `<button class="${ui.task === key ? 'active' : ''}" data-task="${key}">${text}<b>${all.filter(filter).length}</b></button>`).join('')}</div>
+    <form id="filters" class="filters"><label class="field">订单搜索<input name="search" value="${esc(ui.search)}" placeholder="订单号、商品名称或订单来源"></label>
+    <label class="field">交付方式<select name="mode"><option value="ALL">全部方式</option>${Object.entries(modeNames).map(([key, value]) => `<option value="${key}" ${ui.mode === key ? 'selected' : ''}>${value}</option>`).join('')}</select></label>
+    <label class="field">履约归属<select name="owner">${[['ALL', '全部履约方'], ['PLATFORM', '平台履约／核销'], ['sz', '深圳1号前置仓']].map(([key, value]) => `<option value="${key}" ${ui.owner === key ? 'selected' : ''}>${value}</option>`).join('')}</select></label><button class="primary">查询</button></form>
+    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>订单 / 商品</th><th>来源</th><th>交付方式</th><th>履约方 / 扣库仓</th><th>状态</th><th>实付</th><th>操作</th></tr></thead><tbody>${rows.map(order => {
+      const actions = actionsFor(order, actor);
+      const primary = actions.find(action => ['SHIP', 'REDEEM', 'REFUND'].includes(action));
+      return `<tr><td><strong>${esc(order.name)}</strong><small>${esc(order.no)}</small></td><td>${tag(order.source)}</td><td>${modeNames[order.mode]}${order.kind === 'MIXED' ? '<small>＋权益核销</small>' : ''}</td><td>${esc(ownerLabel(order))}<small>${order.kind === 'VIRTUAL' ? '共享剩余权益' : order.mode === 'EXPRESS' ? '扣平台总仓' : '扣本前置仓'}</small></td><td>${statusTag(order)}${order.frozen ? `<small>售后冻结${order.frozen}${order.kind === 'PHYSICAL' ? '件' : '次'}</small>` : ''}</td><td>${orderAmount(order)}</td><td><button class="text-button" data-open="${order.id}">详情</button>${primary ? actionButton(primary, order).replace('class="secondary"', 'class="text-button"') : ''}</td></tr>`;
+    }).join('')}</tbody></table></div><div class="table-foot"><span>共 ${filtered.length} 笔订单 · 每页6笔</span><div class="row"><button class="small" data-pagination="${page - 1}" ${page === 1 ? 'disabled' : ''}>上一页</button><span>${page} / ${pages}</span><button class="small" data-pagination="${page + 1}" ${page === pages ? 'disabled' : ''}>下一页</button></div></div>` : stateScreen('empty')}
+    </section>`;
+}
+
+function actionPanel(state, order, actor) {
+  const actions = actionsFor(order, actor);
+  return `<section class="panel action-box"><h2>当前可操作</h2>${order.kind === 'PHYSICAL' && order.mode !== 'EXPRESS' ? `<div class="notice">由${stores[order.store]}中心完成备货和交付。</div>` : ''}${order.kind !== 'PHYSICAL' && order.scope === 'STORE' ? '<div class="notice">该权益仅允许指定前置仓核销。</div>' : ''}
+    ${order.frozen ? `<div class="notice warn">有${order.frozen}${order.kind === 'PHYSICAL' ? '件商品' : '次权益'}正在售后。冻结部分不可继续履约。</div>` : ''}
+    ${actions.length ? actions.map((action, index) => actionButton(action, order, index === 0)).join('') : `<p class="muted">${order.expired ? '权益已到期，可通过售后处理剩余数量。' : '当前没有平台履约动作。'}</p>`}
+    <button class="secondary" data-to-role="customer" data-id="${order.id}">查看顾客订单详情</button></section>
+    <section class="panel"><h2>库存归属</h2>${inventory(state, order)}</section>`;
+}
+
+function detailView(state, ui, actor) {
+  const order = state.orders.find(item => item.id === ui.selected);
+  return `<button class="text-button" data-back>${icon('back')} 返回订单列表</button><div class="heading"><div><h1>${esc(order.name)}</h1><p class="break">${esc(order.no)}</p></div><div class="row wrap">${tag(order.source)}${statusTag(order)}</div></div>
+    <div class="details-layout"><section class="panel">
+    <div class="section"><h2>履约信息</h2>${steps(order)}<dl class="facts"><div><dt>交付方式</dt><dd>${modeNames[order.mode]}${order.kind === 'MIXED' ? '＋权益核销' : ''}</dd></div><div><dt>履约方</dt><dd>${esc(ownerLabel(order))}</dd></div><div><dt>支付状态</dt><dd>${order.paid ? order.points ? '积分已扣除' : '已确认收款' : '待付款'}</dd></div><div><dt>交付地点</dt><dd>${order.kind === 'VIRTUAL' ? '按核销范围提供服务' : esc(order.address)}</dd></div></dl><div class="notice">${esc(explanation(order))}</div>${order.tracking ? `<p>快递：${esc(order.carrier)} · 运单：${esc(order.tracking)}</p>` : ''}</div>
+    <div class="section"><h2>商品与金额</h2>${product(order)}<div class="row"><span>订单实付</span><span class="price">${orderAmount(order)}</span></div><p class="muted">${order.mode === 'EXPRESS' ? '平台快递按平台交易规则结算，不自动产生前置仓履约收益。' : order.kind === 'VIRTUAL' ? '虚拟服务结算独立于实物进货成本分润。' : '前置仓成本、运费与分润沿用成交时保存的规则。'}</p></div>
+    ${order.kind !== 'PHYSICAL' ? `<div class="section"><h2>核销权益</h2><p class="muted">核销范围：${esc(scopeLabel(order))} · 有效至 ${order.date}</p>${virtualNumbers(order)}<p class="muted">核销凭证由顾客出示，后台通过输入凭证核验。</p></div>` : ''}
+    <div class="section"><h2>操作记录</h2>${timeline(state, order)}</div></section><aside>${actionPanel(state, order, actor)}</aside></div>`;
+}
+
+function policyView(state, ui) {
+  const draft = ui.policyDraft || state.policies.virtual;
+  const old = state.orders.find(item => item.id === 'virtual');
+  return `<div class="heading"><div><h1>虚拟商品核销范围</h1><p>商品配置影响新成交订单；已有订单保留原核销范围。</p></div>${tag('洗车服务次卡', 'blue')}</div>
+    <div class="policy-layout"><section class="panel"><h2>允许在哪里核销</h2><div class="scope-options">${Object.entries(scopeNames).map(([key, value]) => `<button class="${draft.scope === key ? 'active' : ''}" data-scope="${key}">${value}</button>`).join('')}</div>
+    ${draft.scope === 'PLATFORM' ? '<div class="notice">仅平台后台可核销，前置仓中心不显示此商品的核销任务。</div>' : `<h3>指定前置仓</h3>${['sz', 'ns'].map(id => `<label class="check-row"><input type="checkbox" data-policy-store="${id}" ${draft.stores.includes(id) ? 'checked' : ''}>${stores[id]}</label>`).join('')}<p class="muted">至少选择一个前置仓。员工仍须取得本仓核销权限。</p>`}
+    <div class="notice">各核销端共用凭证、剩余次数与记录。平台核销2次后，前置仓只能使用剩余次数。</div><div class="policy-actions"><button class="primary" id="save-policy">保存演示配置</button><button id="new-virtual">按已保存配置生成演示新单</button></div><p class="muted" style="margin-top:12px">此处保存仅在当前页面有效，刷新后重置。</p></section>
+    <section class="panel"><h2>成交快照对照</h2><div class="definition"><strong>当前已保存配置</strong><p>${esc(scopeLabel({ scope: state.policies.virtual.scope, scopeStores: state.policies.virtual.stores }))}</p></div><div class="definition"><strong>原有洗车次卡订单</strong><p>${esc(old.no)}</p><p>冻结范围：${esc(scopeLabel(old))} · 当前可核销${remaining(old)}次</p></div>${state.orders.filter(order => order.id.startsWith('new-virtual')).map(order => `<div class="definition"><strong>新生成订单</strong><p>${esc(order.no)}</p><p>冻结范围：${esc(scopeLabel(order))}</p><button class="text-button" data-open="${order.id}">查看订单</button></div>`).join('')}
+    <div class="notice warn">已有订单不随配置改动。若要改变旧单权益，需要另行授权的售后流程。</div></section></div>`;
+}
+
+function adminView(state, ui, actor) {
+  return `<div class="admin-shell"><aside class="sidebar"><div class="brand">商城管理后台</div><button class="${ui.page !== 'policy' ? 'active' : ''}" data-admin-page="list">${icon('orders')}订单</button><button class="${ui.page === 'policy' ? 'active' : ''}" data-admin-page="policy">${icon('ticket')}虚拟商品</button><div class="account">平台运营<br>当前范围：全部订单</div></aside><div class="admin-main"><div class="breadcrumbs">商城管理后台 / ${ui.page === 'policy' ? '商品 / 核销范围' : '订单 / ' + (ui.page === 'detail' ? '订单详情' : '订单管理')}</div>
+    <nav class="subnav" aria-label="订单与商品二级菜单"><button class="${ui.page !== 'policy' ? 'active' : ''}" data-admin-page="list">订单管理</button><button class="${ui.page === 'policy' ? 'active' : ''}" data-admin-page="policy">核销范围配置</button></nav>
+    ${ui.viewState !== 'normal' ? stateScreen(ui.viewState) : ui.page === 'detail' ? detailView(state, ui, actor) : ui.page === 'policy' ? policyView(state, ui) : listView(state, ui, actor)}
+    <details class="state-controls"><summary>评审辅助：查看加载、空列表、错误与无权限状态</summary>${stateSelector(ui.viewState)}</details></div></div>`;
+}
+
+
+
+function mobileTitle(title, back = true) {
+  return `<div class="mobile-title">${back ? `<button aria-label="返回订单列表" data-back>${icon('back')}</button>` : '<span></span>'}<strong>${title}</strong><span class="capsule" aria-label="小程序菜单示意"><svg viewBox="0 0 52 20" width="52" height="20" aria-hidden="true"><g fill="currentColor"><circle cx="8" cy="10" r="1.5"/><circle cx="14" cy="10" r="1.5"/><circle cx="20" cy="10" r="1.5"/></g><path d="M29 3v14" fill="none" stroke="#d9dfe3"/><circle cx="41" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="41" cy="10" r="2.1" fill="currentColor"/></svg></span></div>`;
+}
+
+function voucher(order, customer) {
+  const isPickup = order.mode === 'PICKUP' && order.kind === 'PHYSICAL';
+  if (isPickup) {
+    const active = order.paid && !['DONE', 'REFUNDED', 'CANCELED'].includes(order.stage) && physicalRemaining(order) > 0;
+    return `<section class="mobile-section"><h3>自提凭证</h3>${customer && active ? `<div class="voucher-code">${order.pickupCode}</div><div class="code-caption">演示码 · 不可用于真实提货</div>` : `<p class="muted">${customer ? '本订单已交付、关闭或售后处理中。' : '顾客出示自提码后，核验并一次交付剩余商品。'}</p>`}<div class="notice">自提凭证用于确认实物交付，与虚拟权益核销凭证分开。</div></section>`;
+  }
+  if (order.kind === 'PHYSICAL') return '';
+  const active = order.paid && !order.expired && remaining(order) > 0;
+  return `<section class="mobile-section"><h3>核销权益</h3>${customer && active ? `<div class="voucher-code">${order.voucher}</div><div class="code-caption">演示码 · 不可用于真实核销</div>` : `<p class="muted">${customer ? order.expired ? '已到期，凭证不可继续使用。' : '当前没有可使用的权益。' : '输入顾客出示的凭证，核验剩余次数后核销。'}</p>`}${virtualNumbers(order)}<p class="muted" style="margin-top:12px">核销范围：${esc(scopeLabel(order))}<br>有效至：${order.date}（当天有效）</p>${order.frozen ? `<div class="notice warn">${order.frozen}次售后冻结，暂不可核销。其余有效次数可继续使用。</div>` : ''}</section>`;
+}
+
+function orderDetail(state, order, actor) {
+  const customer = actor.role === 'customer';
+  const actions = actionsFor(order, actor);
+  const primary = actions.find(action => !['APPLY_AFTER', 'CANCEL', 'FAIL_DELIVERY'].includes(action));
+  const other = actions.filter(action => action !== primary);
+  return `${mobileTitle(customer ? '订单详情' : order.kind === 'VIRTUAL' ? '核销订单详情' : '订单详情')}
+    <div class="phone-body"><section class="mobile-status"><h2>${statusLabel(order)}</h2><p>${esc(explanation(order))}</p></section>
+    ${order.kind !== 'VIRTUAL' ? `<section class="mobile-section"><div class="row"><strong>${modeNames[order.mode]}</strong>${tag(order.source)}</div>${steps(order)}<dl class="facts"><div><dt>${order.mode === 'EXPRESS' ? '发货方' : '履约前置仓'}</dt><dd>${esc(ownerLabel(order))}</dd></div><div><dt>${order.mode === 'PICKUP' ? '自提地点' : '送达地址'}</dt><dd>${esc(order.address)}</dd></div>${order.mode === 'PICKUP' ? '<div><dt>自提时间</dt><dd>营业时段内 · 演示 09:00–21:00</dd></div>' : `<div><dt>接收人</dt><dd>${esc(order.recipient)}</dd></div>`}</dl>${order.tracking ? `<div class="notice">${esc(order.carrier)}<br>运单号：${esc(order.tracking)}<br><small>物流轨迹为评审示例，暂无外部查询。</small></div>` : ''}</section>` : ''}
+    ${voucher(order, customer)}<section class="mobile-section"><h3>商品信息</h3>${product(order)}<div class="row"><span class="muted">${order.points ? '兑换积分' : '订单实付'}</span><span class="price">${orderAmount(order)}</span></div></section>
+    <section class="mobile-section"><h3>订单信息</h3><dl class="facts"><div><dt>订单编号</dt><dd>${esc(order.no)}</dd></div><div><dt>订单来源</dt><dd>${order.source}</dd></div><div><dt>创建时间</dt><dd>${order.createdAt}</dd></div></dl></section>
+    <section class="mobile-section"><h3>${customer ? '订单进度' : '履约记录'}</h3>${timeline(state, order, customer)}</section>
+    ${!customer && order.kind === 'MIXED' ? '<div class="notice">本中心只处理授权服务权益。礼盒的快递发货和物流由平台负责。</div>' : ''}
+    ${customer && order.kind === 'PHYSICAL' && ['DONE', 'DISPATCHED', 'SHIPPED', 'FAILED'].includes(order.stage) ? '<div class="notice">已交付或在途商品需要退货验收。此稿演示未交付退款，退货验收沿用既有售后流程。</div>' : ''}
+    </div><div class="mobile-footer">${other.map(action => actionButton(action, order)).join('')}${primary ? actionButton(primary, order, true) : `<span class="muted">${customer ? '请留意订单最新进度' : '当前无可执行的履约动作'}</span>`}</div>`;
+}
+
+function storeList(state, ui, actor) {
+  const all = visibleOrders(state, actor);
+  const groups = [
+    ['ALL', '全部', () => true], ['PREPARE', '待备货', order => actionsFor(order, actor).includes('PREPARE')],
+    ['DISPATCH', '待配送', order => actionsFor(order, actor).includes('DISPATCH')],
+    ['COMPLETE', '配送中', order => ['DISPATCHED', 'FAILED'].includes(order.stage)],
+    ['PICKUP', '待自提', order => actionsFor(order, actor).includes('PICKUP')],
+    ['REDEEM', '待核销', order => actionsFor(order, actor).includes('REDEEM')],
+  ];
+  const filter = groups.find(([key]) => key === ui.storeTask)?.[2] || groups[0][2];
+  const shown = all.filter(filter);
+  return `${mobileTitle('前置仓中心', false)}<div class="store-heading"><div><strong>${stores[ui.store]}</strong><small>履约与核销工作台</small></div>${tag('营业中', 'good')}</div><div class="phone-body"><div class="task-tabs">${groups.map(([key, label, condition]) => `<button class="${ui.storeTask === key ? 'active' : ''}" data-store-task="${key}">${label}<b>${all.filter(condition).length}</b></button>`).join('')}</div>
+    ${shown.length ? `<section class="mobile-section">${shown.map(order => `<article class="mobile-order"><div class="row">${tag(modeNames[order.mode])}${statusTag(order)}</div><h3>${esc(order.name)}</h3><p class="break">${esc(order.no)}</p><p>${order.kind === 'PHYSICAL' ? order.mode === 'PICKUP' ? '顾客到仓提货' : esc(order.address) : `可核销${order.expired ? 0 : remaining(order)}次 · ${esc(scopeLabel(order))}`}</p>${order.frozen ? `<p>售后冻结${order.frozen}${order.kind === 'PHYSICAL' ? '件' : '次'}</p>` : ''}<div class="order-actions"><button data-open="${order.id}">查看详情</button>${actionsFor(order, actor)[0] ? actionButton(actionsFor(order, actor)[0], order, true) : ''}</div></article>`).join('')}</section>` : stateScreen('empty', true)}<div class="notice">本仓负责配送、自提和授权虚拟核销。平台快递不进入本仓履约待办。</div></div>`;
+}
+
+function customerList(state) {
+  return `${mobileTitle('我的订单', false)}<div class="phone-body"><section class="mobile-section">${state.orders.map(order => `<article class="mobile-order"><div class="row">${tag(order.source)}${statusTag(order)}</div><h3>${esc(order.name)}</h3><p>${esc(modeNames[order.mode])} · ${orderAmount(order)}</p><div class="order-actions"><button data-open="${order.id}">查看订单</button></div></article>`).join('')}</section></div>`;
+}
+
+function annotation(state, ui, order) {
+  return `<aside class="annotation"><h2>联动评审</h2><section><h3>当前订单归属</h3><p>${order.kind === 'VIRTUAL' ? `核销范围：${esc(scopeLabel(order))}。两端共用剩余次数。` : `${modeNames[order.mode]}，${esc(ownerLabel(order))}。${order.kind === 'MIXED' ? '实物与权益分别完成。' : ''}`}</p><button class="small" data-to-role="${ui.role === 'store' ? 'customer' : 'store'}" data-id="${order.id}">${ui.role === 'store' ? '切到顾客端看结果' : '切到前置仓处理'}</button>${ui.role === 'customer' ? `<button class="small" data-to-role="platform" data-id="${order.id}" style="margin-top:8px">切到平台处理</button>` : ''}</section>
+    <section><h3>模拟库存观察</h3>${inventory(state, order)}</section><section><h3>建议体验</h3><p>配送：前置仓备货 → 配送 → 送达。<br>自提：顾客看码 → 前置仓核验提货。<br>虚拟：平台核销 → 前置仓查看剩余。<br>售后：顾客申请 → 平台退款或驳回。</p></section><section>${stateSelector(ui.viewState)}</section></aside>`;
+}
+
+function mobileView(state, ui, actor) {
+  if (ui.viewState === 'denied' || !actor.permitted) {
+    return `<div class="mobile-stage"><aside class="review-tools"><h1>${ui.role === 'store' ? '前置仓中心' : '顾客订单详情'}</h1><p>当前身份未获授权，不展示订单数据。</p>${stateSelector('denied')}</aside><section class="phone" aria-label="无权限手机预览">${mobileTitle('订单权限', false)}<div class="phone-body">${stateScreen('denied', true)}</div></section></div>`;
+  }
+  const eligible = visibleOrders(state, { ...actor, permitted: true });
+  const selected = state.orders.find(order => order.id === ui.selected) || eligible[0] || state.orders[0];
+  const accessible = eligible.some(order => order.id === selected.id);
+  const options = ui.role === 'store' ? eligible : state.orders;
+  const content = ui.viewState !== 'normal' ? `${mobileTitle(ui.role === 'store' ? '前置仓中心' : '订单详情', false)}<div class="phone-body">${stateScreen(ui.viewState, true)}</div>` :
+    ui.page === 'list' ? ui.role === 'store' ? storeList(state, ui, actor) : customerList(state) :
+      accessible ? orderDetail(state, selected, actor) : `${mobileTitle('订单详情')}<div class="phone-body"><div class="notice warn">该订单不属于本仓履约或核销范围。请返回本仓列表选择订单。</div><button data-back>查看本仓订单</button></div>`;
+  return `<div class="mobile-stage"><aside class="review-tools"><h1>${ui.role === 'store' ? '前置仓中心' : '顾客订单详情'}</h1><p>${ui.role === 'store' ? '只处理本仓履约与获授权权益。' : '查看交付进度、提货码与剩余权益。'}</p>${ui.role === 'store' ? `<label class="field">当前授权前置仓<select id="store-select">${['sz', 'ns'].map(id => `<option value="${id}" ${ui.store === id ? 'selected' : ''}>${stores[id]}</option>`).join('')}</select></label>` : ''}
+    <label class="field">选择评审订单<select id="scenario-select">${options.length ? options.map(order => `<option value="${order.id}" ${selected.id === order.id ? 'selected' : ''}>${esc(order.name)} · ${modeNames[order.mode]}</option>`).join('') : '<option value="">本仓暂无订单</option>'}</select></label><div class="scenario-list">${options.slice(0, 8).map(order => `<button class="${selected.id === order.id && ui.page === 'detail' ? 'active' : ''}" data-open="${order.id}">${esc(order.name)}<small>${order.source} · ${statusLabel(order)}</small></button>`).join('')}</div><button class="text-button" data-back style="margin-top:12px">${ui.role === 'store' ? '返回履约工作台' : '查看我的全部订单'}</button></aside>
+    <section class="phone" aria-label="${ui.role === 'store' ? '前置仓中心' : '顾客订单'}手机预览"><div class="device-status"><span>9:41</span><span class="signal"><span>5G</span><svg viewBox="0 0 25 12" aria-hidden="true"><rect x="1" y="1" width="20" height="10" rx="2"/><path d="M23 4v4M4 4h14v4H4z"/></svg></span></div>${content}<div class="home-line"></div></section>${annotation(state, ui, selected)}</div>`;
+}
+
+
+
+let state = seed();
+let ui = { role: 'platform', page: 'list', selected: 'delivery', store: 'sz', viewState: 'normal', task: 'ALL', storeTask: 'ALL', mode: 'ALL', owner: 'ALL', search: '', pagination: 1, policyDraft: null };
+let pending = null;
+let toastTimer;
+const app = document.querySelector('#app');
+const dialog = document.querySelector('#action-dialog');
+const actor = () => ({ role: ui.role, store: ui.role === 'store' ? ui.store : undefined, permitted: ui.viewState !== 'denied' });
+
+function toast(message) {
+  const element = document.querySelector('#toast');
+  element.textContent = message;
+  element.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => element.classList.remove('visible'), 3200);
+}
+
+function render() {
+  document.querySelector('#role-tabs').innerHTML = [['platform', '平台后台'], ['store', '前置仓中心'], ['customer', '顾客订单详情']].map(([key, name]) => `<button class="${ui.role === key ? 'active' : ''}" aria-pressed="${ui.role === key}" data-role="${key}">${name}</button>`).join('');
+  app.innerHTML = ui.role === 'platform' ? adminView(state, ui, actor()) : mobileView(state, ui, actor());
+}
+
+function setUi(patch) { ui = { ...ui, ...patch }; render(); }
+
+function switchRole(role, id) {
+  const order = getOrder(state, id || ui.selected);
+  const store = role === 'store' ? order.store || order.scopeStores[0] || ui.store : ui.store;
+  setUi({ role, selected: order.id, store, page: id ? 'detail' : role === 'customer' ? 'detail' : 'list', viewState: 'normal' });
+  window.scrollTo({ top: 0 });
+}
+
+function dialogFields(action, order) {
+  const note = `<div class="notice">${warehouseFor(order) ? `交付不重复扣库存；本订单扣库仓为${stores[warehouseFor(order)]}。` : '本次核销消耗订单权益，不扣实物库存。'}</div>`;
+  if (action === 'SHIP') return `<label class="field">快递公司<select name="carrier" required><option value="">请选择快递公司</option>${['顺丰速运', '中通快递', '圆通速递'].map(value => `<option>${value}</option>`).join('')}</select></label><label class="field">运单号<input name="tracking" required minlength="6" maxlength="30" pattern="[A-Za-z0-9-]{6,30}" placeholder="6至30位字母或数字"></label>${note}`;
+  if (['REDEEM', 'PICKUP'].includes(action)) return `<label class="field">${action === 'REDEEM' ? '核销凭证' : '自提凭证'}<input name="code" inputmode="numeric" autocomplete="off" required pattern="[0-9]{6}" maxlength="6" placeholder="输入顾客出示的6位演示码"></label><button type="button" id="verify-code">核验凭证</button><div id="verification" class="verified" role="status"></div>${action === 'REDEEM' ? `<label class="field">本次核销数量<input name="qty" type="number" inputmode="numeric" required min="1" max="${remaining(order)}" step="1" value="1"><small>当前可核销${remaining(order)}次，已扣除售后冻结数量。</small></label>` : `<p class="muted" style="margin-top:12px">本次交付${physicalRemaining(order)}件${order.frozen ? `，另有${order.frozen}件售后冻结，不在本次交付内` : ''}。</p>`}${note}`;
+  if (action === 'APPLY_AFTER') return `<label class="field">申请数量<input name="qty" type="number" inputmode="numeric" required min="1" max="${order.kind === 'PHYSICAL' ? physicalRemaining(order) : remaining(order)}" value="1" step="1"></label><label class="field">申请原因<textarea name="reason" required minlength="3" maxlength="200" placeholder="请填写申请原因"></textarea></label><div class="notice warn">提交后冻结对应数量，等待平台审核。${order.kind === 'MIXED' ? '本示例售后针对未核销服务次数。' : order.kind === 'PHYSICAL' ? '本示例仅演示未交付退款。' : '已核销部分须另行人工审核，不自动恢复次数。'}</div>`;
+  if (action === 'FAIL_DELIVERY') return '<label class="field">配送异常原因<textarea name="reason" required minlength="3" maxlength="200" placeholder="例如顾客暂时无法接收"></textarea></label><div class="notice warn">记录异常不会标记已送达，后续可以继续配送。</div>';
+  if (action === 'REFUND') return `<div class="notice warn">确认${order.frozen}${order.kind === 'PHYSICAL' ? '件商品' : '次未核销权益'}的退款已实际成功。${order.kind === 'PHYSICAL' ? `对应数量回补${stores[warehouseFor(order)]}。` : '对应次数作废，已核销记录保留。'}</div><p class="muted">此按钮仅模拟成功事实，不发起真实退款或资金操作。</p>`;
+  if (action === 'REJECT_AFTER') return `<div class="notice">驳回后释放${order.frozen}${order.kind === 'PHYSICAL' ? '件商品' : '次权益'}的售后冻结，可恢复符合条件的履约。</div>`;
+  if (action === 'PAY') return `<div class="notice">模拟可信付款成功，正式扣减${stores[warehouseFor(order)]}库存${order.inventoryQty}个基础单位。原库存占用同时释放。</div>`;
+  if (action === 'CANCEL') return '<div class="notice">取消未付款订单，只释放原仓库存占用，不增加销售账面库存。</div>';
+  return `<p>${{ PREPARE: '请确认本单可履约商品已备齐。', DISPATCH: '请确认可履约商品已交给配送人员。', COMPLETE: '请确认本次配送商品已实际送达顾客。', RECEIVE: '请确认本次快递商品已收到。', RETRY_DELIVERY: '继续配送，本单仍须实际送达后才完成。' }[action]}</p>${order.kind === 'PHYSICAL' ? `<p class="muted">本次可交付${physicalRemaining(order)}件${order.frozen ? `，另有${order.frozen}件售后冻结` : ''}。</p>` : ''}${note}`;
+}
+
+function openAction(action, id) {
+  const order = getOrder(state, id);
+  if (!actionsFor(order, actor()).includes(action)) return toast('当前账号或订单状态不允许此操作。');
+  pending = { id, action, actor: { ...actor() }, key: crypto.randomUUID(), revision: order.revision };
+  dialog.innerHTML = `<form id="action-form"><div class="dialog-heading"><h2 id="dialog-title">${actionLabels[action]}</h2><button type="button" data-close aria-label="关闭操作窗口">${icon('close')}</button></div><div class="dialog-facts"><strong>${esc(order.name)}</strong><small class="break">${esc(order.no)}</small><small>履约／核销方：${order.kind === 'VIRTUAL' ? esc(scopeLabel(order)) : order.mode === 'EXPRESS' ? '平台' : stores[order.store]}</small></div>${dialogFields(action, order)}<p class="dialog-error" id="dialog-error" role="alert"></p><div class="dialog-actions"><button type="button" data-close>取消</button><button class="primary" id="confirm-action">${actionLabels[action]}</button></div></form>`;
+  dialog.showModal();
+}
+
+function closeDialog() { dialog.close(); pending = null; }
+
+function verifyCode() {
+  const order = getOrder(state, pending.id);
+  const code = dialog.querySelector('[name=code]').value;
+  const expected = pending.action === 'REDEEM' ? order.voucher : order.pickupCode;
+  const error = dialog.querySelector('#dialog-error');
+  const preview = dialog.querySelector('#verification');
+  if (code !== expected) {
+    error.textContent = '凭证不匹配，请核对顾客出示的订单凭证。';
+    preview.textContent = '';
+    return;
+  }
+  error.textContent = '';
+  preview.textContent = pending.action === 'REDEEM' ? `凭证有效，当前可核销${remaining(order)}次。请确认本次使用数量。` : `凭证有效，可交付${physicalRemaining(order)}件商品。`;
+}
+
+function submitAction(event) {
+  event.preventDefault();
+  const form = event.target;
+  if (!form.checkValidity()) return form.reportValidity();
+  const values = Object.fromEntries(new FormData(form));
+  const payload = { ...values, ...(values.qty !== undefined ? { qty: Number(values.qty) } : {}) };
+  try {
+    if (getOrder(state, pending.id).revision !== pending.revision) throw new Error('订单状态已变化，请关闭窗口后重新核对。');
+    state = transact(state, { ...pending, payload });
+    const label = actionLabels[pending.action];
+    ui = { ...ui, selected: pending.id };
+    closeDialog();
+    render();
+    toast(`${label}已记录，三端状态已同步。`);
+  } catch (error) { dialog.querySelector('#dialog-error').textContent = error.message; }
+}
+
+function savePolicy() {
+  try {
+    state = updatePolicy(state, ui.policyDraft || state.policies.virtual);
+    ui = { ...ui, policyDraft: null };
+    render();
+    toast('演示配置已保存；已有订单的核销范围保持不变。');
+  } catch (error) { toast(error.message); }
+}
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button || button.disabled) return;
+  const data = button.dataset;
+  if (data.role) return switchRole(data.role);
+  if (data.toRole) return switchRole(data.toRole, data.id);
+  if (data.open) return setUi({ selected: data.open, page: 'detail', viewState: 'normal' });
+  if ('back' in data) return setUi({ page: 'list' });
+  if (data.adminPage) return setUi({ page: data.adminPage, viewState: 'normal' });
+  if (data.task) return setUi({ task: data.task, pagination: 1 });
+  if (data.storeTask) return setUi({ storeTask: data.storeTask, page: 'list' });
+  if (data.pagination) return setUi({ pagination: Number(data.pagination) });
+  if (data.viewState) return setUi({ viewState: data.viewState, search: '', mode: 'ALL', owner: 'ALL', task: 'ALL', storeTask: 'ALL', pagination: 1 });
+  if (data.action) return openAction(data.action, data.id);
+  if ('close' in data) return closeDialog();
+  if (data.scope) return setUi({ policyDraft: { ...(ui.policyDraft || state.policies.virtual), scope: data.scope } });
+  if (button.id === 'verify-code') return verifyCode();
+  if (button.id === 'save-policy') return savePolicy();
+  if (button.id === 'new-virtual') {
+    state = createVirtualDemo(state);
+    ui = { ...ui, selected: state.orders.at(-1).id };
+    render();
+    return toast('演示新单已生成，使用已保存的核销范围。');
+  }
+  if (button.id === 'reset') {
+    state = seed();
+    ui = { ...ui, page: ui.role === 'customer' ? 'detail' : 'list', selected: 'delivery', store: 'sz', policyDraft: null, task: 'ALL', storeTask: 'ALL', mode: 'ALL', owner: 'ALL', search: '', pagination: 1, viewState: 'normal' };
+    render();
+    toast('演示已重置，所有订单和库存恢复初始值。');
+  }
+});
+
+document.addEventListener('change', event => {
+  const element = event.target;
+  if (element.id === 'view-state') return setUi({ viewState: element.value });
+  if (element.id === 'scenario-select' && element.value) return setUi({ selected: element.value, page: 'detail', viewState: 'normal' });
+  if (element.id === 'store-select') return setUi({ store: element.value, page: 'list', storeTask: 'ALL' });
+  if (element.dataset.policyStore) {
+    const draft = ui.policyDraft || state.policies.virtual;
+    const enabledStores = element.checked ? [...draft.stores, element.dataset.policyStore] : draft.stores.filter(id => id !== element.dataset.policyStore);
+    return setUi({ policyDraft: { ...draft, stores: enabledStores } });
+  }
+  if (element.name === 'code') dialog.querySelector('#verification').textContent = '';
+});
+
+document.addEventListener('submit', event => {
+  if (event.target.id === 'action-form') return submitAction(event);
+  if (event.target.id === 'filters') {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.target));
+    setUi({ search: values.search.trim(), mode: values.mode, owner: values.owner, pagination: 1 });
+  }
+});
+dialog.addEventListener('cancel', () => { pending = null; });
+render();
+</script>
+</body>
+</html>

@@ -98,17 +98,13 @@ def options(member, order_id):
         remaining = line.quantity - (a.refunded_qty if a else 0)
         candidates = []
         if line.fulfillment_kind == "SHIP":
-            candidates = [
-                (
-                    (
-                        "RETURN_REFUND"
-                        if common["shipment"] is not None
-                        else "REFUND_ONLY"
-                    ),
-                    "UNUSED",
-                    remaining,
-                )
-            ]
+            from fulfillment.physical import physical_quantities
+            dispatched = physical_quantities(line)['dispatchedQuantity']
+            completed_cases = list(AfterSaleCase.objects.filter(order_line=line, status='COMPLETED').values('kind', 'quantity', 'return_acceptance__refund_quantity'))
+            refunded_unshipped = sum(row['quantity'] for row in completed_cases if row['kind'] == 'REFUND_ONLY')
+            returned = sum(row['return_acceptance__refund_quantity'] if row['return_acceptance__refund_quantity'] is not None else row['quantity'] for row in completed_cases if row['kind'] == 'RETURN_REFUND')
+            candidates = [('REFUND_ONLY', 'UNUSED', min(remaining, line.quantity-dispatched-refunded_unshipped)),
+                          ('RETURN_REFUND', 'UNUSED', min(remaining, dispatched-returned))]
         else:
             v = vouchers.get(line.id)
             if v:

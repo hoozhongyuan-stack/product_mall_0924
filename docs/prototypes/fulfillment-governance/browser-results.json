@@ -1,0 +1,70 @@
+{
+  "passed": 14,
+  "failed": 0,
+  "errors": [],
+  "cases": [
+    {
+      "name": "平台无前置仓配送操作，前置仓配送闭环和异常恢复",
+      "passed": true
+    },
+    {
+      "name": "顾客自提码，错误码拒绝，正确码交付",
+      "passed": true
+    },
+    {
+      "name": "平台快递发货与顾客收货联动",
+      "passed": true
+    },
+    {
+      "name": "平台核销后前置仓共享剩余次数",
+      "passed": true
+    },
+    {
+      "name": "权益售后冻结、退款作废与共享剩余量",
+      "passed": true
+    },
+    {
+      "name": "实物部分冻结继续配送，剩余退款回补原仓",
+      "passed": true
+    },
+    {
+      "name": "混合单服务售后不阻断礼盒发货，所有义务结束才完成",
+      "passed": true
+    },
+    {
+      "name": "未付款不能履约，付款扣指定仓一次，取消只释放占用",
+      "passed": true
+    },
+    {
+      "name": "核销范围配置保留旧单，演示新单使用新范围",
+      "passed": true
+    },
+    {
+      "name": "虚拟授权仓筛选，搜索空态与恢复",
+      "passed": true
+    },
+    {
+      "name": "手机异常状态与无权限时不显示私人订单",
+      "passed": true
+    },
+    {
+      "name": "到期权益拒绝核销，平台专属和仓专属范围隔离",
+      "passed": true
+    },
+    {
+      "name": "1440 / 390 / 320布局和弹窗宽度",
+      "passed": true
+    },
+    {
+      "name": "独立HTML可通过本地文件直接打开并操作",
+      "passed": true
+    }
+  ],
+  "screenshots": [
+    "desktop.png",
+    "store-desktop.png",
+    "customer-desktop.png",
+    "mobile.png",
+    "user-320.png"
+  ]
+}

@@ -46,6 +46,8 @@ class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="products")
     fulfillment_kind = models.CharField(max_length=6, choices=Fulfillment.choices)
     redeem_valid_until = models.DateField(null=True, blank=True)
+    redeem_scope = models.CharField(max_length=8, choices=[(value,value) for value in ("PLATFORM","STORE","BOTH")], default="PLATFORM")
+    redeem_store_ids = models.JSONField(default=list)
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.DRAFT)
     unit_conversion = models.JSONField(null=True, blank=True, default=None)
     ever_on_sale = models.BooleanField(default=False)
@@ -63,6 +65,7 @@ class Product(models.Model):
         db_table = "product"
         indexes = [models.Index(fields=["category", "status"], name="product_cat_status_idx")]
         constraints = [
+            models.CheckConstraint(condition=(models.Q(redeem_scope="PLATFORM", redeem_store_ids=[]) | (models.Q(fulfillment_kind="REDEEM", redeem_scope__in=["STORE","BOTH"]) & ~models.Q(redeem_store_ids=[]))), name="product_redeem_scope_valid"),
             models.UniqueConstraint(Upper("product_no"), name="unique_product_no_upper"),
             models.CheckConstraint(
                 condition=(models.Q(status="DRAFT", ever_on_sale=False) |

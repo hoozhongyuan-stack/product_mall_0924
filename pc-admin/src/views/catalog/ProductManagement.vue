@@ -13,6 +13,8 @@ import CatalogOperationDialog from './CatalogOperationDialog.vue'
 import ProductMediaEditor from './ProductMediaEditor.vue'
 import ProductDescriptionEditor from './ProductDescriptionEditor.vue'
 import { ApiError, api, type Account } from '../../api'
+import RedemptionScopeFields from './RedemptionScopeFields.vue'
+import type {RedeemScope} from '../../shared/fulfillment-policy'
 import ProductCreateForm from './ProductCreateForm.vue'
 import ProductSpecEditor from './ProductSpecEditor.vue'
 import ProductSalePanel, { type ProductSalePreviewItem } from './ProductSalePanel.vue'
@@ -111,6 +113,8 @@ const productName = ref('')
 const productCategoryId = ref('')
 const productFulfillment = ref<'SHIP' | 'REDEEM'>('SHIP')
 const productRedeemValidUntil = ref('')
+const productRedeemScope = ref<RedeemScope>('PLATFORM')
+const productRedeemStoreIds = ref<string[]>([])
 const productDescription = ref('')
 const productMainImage = ref<Asset | null>(null)
 const productGalleryImages = ref<Asset[]>([])
@@ -140,6 +144,8 @@ const productDirty = computed(() => {
   return productName.value !== original.name || productCategoryId.value !== original.categoryId
     || productFulfillment.value !== original.fulfillmentKind
     || (productFulfillment.value === 'REDEEM' ? productRedeemValidUntil.value : '') !== (original.redeemValidUntil || '')
+    || productRedeemScope.value !== (original.redeemScope || 'PLATFORM')
+    || [...productRedeemStoreIds.value].sort().join(',') !== [...(original.redeemStoreIds || [])].sort().join(',')
     || productDescription.value !== (original.descriptionHtml || '')
     || productMainImage.value?.assetId !== (original.mainImage?.assetId ?? undefined)
     || productGalleryImages.value.map((item) => item.assetId).join(',') !== (original.galleryImages || []).map((item) => item.assetId).join(',')
@@ -320,6 +326,8 @@ async function openProduct(id: string) {
     productCategoryId.value = item.categoryId
     productFulfillment.value = item.fulfillmentKind
     productRedeemValidUntil.value = item.redeemValidUntil || ''
+    productRedeemScope.value = item.redeemScope || 'PLATFORM'
+    productRedeemStoreIds.value = [...(item.redeemStoreIds || [])]
     productDescription.value = item.descriptionHtml || ''
     productMainImage.value = item.mainImage ?? null
     productGalleryImages.value = item.galleryImages || []
@@ -332,6 +340,7 @@ async function openProduct(id: string) {
 async function saveProduct() {
   const target = editingProduct.value
   if (!target || saving.value || specBusy.value || !canWrite.value) return
+  if (productFulfillment.value==='REDEEM' && productRedeemScope.value!=='PLATFORM' && !productRedeemStoreIds.value.length) {productEditorError.value='至少选择一个前置仓。';return}
   const activeCategory = activeLeafCategories.value.some((item) => item.id === productCategoryId.value)
   productFieldErrors.value = {
     ...(productName.value.trim() ? {} : { name: '请填写商品名称。' }),
@@ -355,6 +364,8 @@ async function saveProduct() {
     const saved = await api<ProductDetail>(`/products/${target.productId}`, { method: 'PATCH', body: JSON.stringify({ name: productName.value.trim(),
       categoryId: productCategoryId.value, fulfillmentKind: productFulfillment.value,
       redeemValidUntil: productFulfillment.value === 'REDEEM' ? productRedeemValidUntil.value || null : null,
+      redeemScope: productFulfillment.value === 'REDEEM' ? productRedeemScope.value : 'PLATFORM',
+      redeemStoreIds: productFulfillment.value === 'REDEEM' && productRedeemScope.value !== 'PLATFORM' ? productRedeemStoreIds.value : [],
       descriptionHtml: productDescription.value.trim(), expectedRevision: target.productRevision,
       mainImageAssetId: productMainImage.value?.assetId ?? null,
       galleryAssetIds: productGalleryImages.value.map((item) => item.assetId),
@@ -364,6 +375,8 @@ async function saveProduct() {
     productCategoryId.value = saved.categoryId
     productFulfillment.value = saved.fulfillmentKind
     productRedeemValidUntil.value = saved.redeemValidUntil || ''
+    productRedeemScope.value = saved.redeemScope || 'PLATFORM'
+    productRedeemStoreIds.value = [...(saved.redeemStoreIds || [])]
     productDescription.value = saved.descriptionHtml || ''
     productMainImage.value = saved.mainImage
     productGalleryImages.value = saved.galleryImages
@@ -605,7 +618,7 @@ function exportSelected() {
   if (!selectedProducts.value.length) return
   const header = ['商品编号', '商品名称', '商品类型', '分类', 'SKU总数', '在售SKU数', '最低日常价（元）', '最高日常价（元）', '商品状态']
   const rows = selectedProducts.value.map((row) => [row.productNo, row.name,
-    row.fulfillmentKind === 'SHIP' ? '快递发货' : '到店核销', categoryName(row.categoryId), row.skuCount,
+    row.fulfillmentKind === 'SHIP' ? '实物商品' : '虚拟商品／服务', categoryName(row.categoryId), row.skuCount,
     row.onSaleSkuCount, row.minListPriceFen === null ? '' : fenToYuan(row.minListPriceFen),
     row.maxListPriceFen === null ? '' : fenToYuan(row.maxListPriceFen), row.status])
   const csv = csvTable([header, ...rows])
@@ -636,7 +649,7 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
     <form class="catalog-filters" role="search" @submit.prevent="applyFilters">
       <label>搜索商品或 SKU<input v-model="keyword" placeholder="名称或编号" /></label>
       <label>分类<select v-model="categoryId"><option value="">全部分类</option><option v-for="item in categories.filter((row) => row.parentId)" :key="item.id" :value="item.id">{{ item.name }}</option></select></label>
-      <label>商品类型<select v-model="fulfillmentFilter"><option value="">全部类型</option><option value="SHIP">快递发货</option><option value="REDEEM">到店核销</option></select></label>
+      <label>商品类型<select v-model="fulfillmentFilter"><option value="">全部类型</option><option value="SHIP">实物商品</option><option value="REDEEM">虚拟商品／服务</option></select></label>
       <label v-if="listMode === 'PRODUCT'">商品状态<select v-model="productStatusFilter"><option value="">全部状态</option><option value="DRAFT">草稿</option><option value="ON_SALE">在售</option><option value="OFF_SALE">下架</option></select></label>
       <label>SKU 状态<select v-model="statusFilter"><option value="">全部状态</option><option value="ON_SALE">{{ listMode === 'PRODUCT' ? '包含上架 SKU' : '上架' }}</option><option value="OFF_SALE">{{ listMode === 'PRODUCT' ? '包含下架 SKU' : '下架' }}</option></select></label>
       <button class="primary-button" type="submit" :disabled="loading">查询</button><button class="secondary-button" type="button" :disabled="loading" @click="clearFilters">重置</button>
@@ -659,7 +672,7 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
           <tbody v-for="row in pageData.rows" :key="row.productId"><tr>
             <td><input type="checkbox" :aria-label="`选择商品 ${row.productNo}`" :checked="selectedProductIds.includes(row.productId)" @change="setSelected(row.productId, ($event.target as HTMLInputElement).checked)" /></td>
             <td><div class="catalog-product-identity"><img v-if="listMediaUrl(row.mainImage) && !failedProductImages.includes(row.productId)" :src="listMediaUrl(row.mainImage)" :alt="`${row.name}主图`" loading="lazy" decoding="async" @error="failedProductImages=[...failedProductImages,row.productId]" /><span v-else class="catalog-image-empty">{{row.mainImage?'图片暂不可用':'无图'}}</span><div><strong class="strong-cell">{{ row.name }}</strong><small class="catalog-product-meta">商品编号 {{ row.productNo }}</small></div></div></td>
-            <td v-if="productColumnVisible('category')">{{ row.fulfillmentKind === 'SHIP' ? '快递发货' : '到店核销' }}<small class="catalog-product-meta">{{ categoryName(row.categoryId) }}</small></td>
+            <td v-if="productColumnVisible('category')">{{ row.fulfillmentKind === 'SHIP' ? '实物商品' : '虚拟商品／服务' }}<small class="catalog-product-meta">{{ categoryName(row.categoryId) }}</small></td>
             <td v-if="productColumnVisible('price')" class="catalog-price">{{ priceRange(row) }}</td><td v-if="productColumnVisible('sku')">{{ row.skuCount }} 个<small class="catalog-product-meta">{{ row.onSaleSkuCount }} 个 SKU 已上架</small></td>
             <td v-if="productColumnVisible('status')"><AdminStatusBadge :status="row.status" :label="row.status === 'DRAFT' ? '草稿' : row.status === 'ON_SALE' ? '在售' : '下架'" /><small v-if="row.manuallyOffSale" class="catalog-product-meta">商品手动下架，SKU 状态已保留</small></td>
             <td class="catalog-actions"><button class="text-button" type="button" :aria-expanded="expandedProductId === row.productId" :aria-controls="`sku-detail-${row.productId}`" @click="toggleProduct(row.productId)">{{ expandedProductId === row.productId ? '收起规格' : '展开规格' }}</button><button v-if="canWrite" class="text-button" type="button" :disabled="productLoading" @click="openProduct(row.productId)">编辑商品</button><button v-if="canProductSale && row.status !== 'ON_SALE'" class="text-button" type="button" :disabled="productSaleBusy" @click="startProductSale('ON_SALE', row)">上架商品</button><button v-if="canProductSale && row.status === 'ON_SALE'" class="text-button danger" type="button" :disabled="productSaleBusy" @click="startProductSale('OFF_SALE', row)">下架商品</button></td>
@@ -672,7 +685,7 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
           <tbody><tr v-for="row in skuPage.rows" :key="row.skuId">
             <td><input type="checkbox" :aria-label="`选择 ${row.skuCode}`" :checked="selectedSkuIds.includes(row.skuId)" @change="setSelected(row.skuId, ($event.target as HTMLInputElement).checked)" /></td>
             <td><strong class="strong-cell">{{ row.productName }}</strong><span class="catalog-specs">{{ row.specs.length ? row.specs.map((spec) => `${spec.name}：${spec.value}`).join(' · ') : '默认规格' }}</span><small class="catalog-product-meta">商品编号 {{ row.productNo }} · {{ categoryName(row.categoryId) }}</small></td>
-            <td v-if="skuColumnVisible('type')">{{ row.fulfillmentKind === 'SHIP' ? '快递发货' : '到店核销' }}</td>
+            <td v-if="skuColumnVisible('type')">{{ row.fulfillmentKind === 'SHIP' ? '实物商品' : '虚拟商品／服务' }}</td>
             <td class="code">{{ row.skuCode }}</td>
             <td v-if="skuColumnVisible('price')" class="catalog-price">¥{{ fenToYuan(row.listPriceFen) }}</td>
             <td v-if="skuColumnVisible('grades')" class="catalog-grade-cell"><div v-if="grades.some((grade) => grade.enabled)" class="catalog-grade-list"><span v-for="grade in grades.filter((item) => item.enabled)" :key="grade.id">{{ grade.name }}：{{ row.gradePrices.find((price) => price.gradeId === grade.id) ? `¥${fenToYuan(row.gradePrices.find((price) => price.gradeId === grade.id)!.priceFen)}` : '沿用日常价' }}</span></div><span v-else>暂无启用的等级</span></td>
@@ -749,11 +762,12 @@ function created() { createBusy.value = false; formOpen.value = false; createDir
       <p v-if="productEditorError" class="error notice" role="alert">{{ productEditorError }}</p>
       <div class="form-grid"><label>商品名称<input :disabled="saving || specBusy" ref="productNameInput" v-model="productName" maxlength="120" required :aria-invalid="!!productFieldErrors.name" @input="productFieldErrors.name = undefined" /><small v-if="productFieldErrors.name" class="catalog-field-error">{{ productFieldErrors.name }}</small></label>
         <label>二级分类<select :disabled="saving || specBusy" ref="productCategorySelect" v-model="productCategoryId" required :aria-invalid="!!productFieldErrors.category" @change="productFieldErrors.category = undefined"><option value="" disabled>请选择</option><option v-for="item in categories.filter((row) => row.parentId && row.status === 'ACTIVE' && categories.some((parent) => parent.id === row.parentId && parent.status === 'ACTIVE'))" :key="item.id" :value="item.id">{{ item.name }}</option></select><small v-if="productFieldErrors.category" class="catalog-field-error">{{ productFieldErrors.category }}</small></label>
-        <label>履约方式<select :disabled="saving || specBusy" v-model="productFulfillment"><option value="SHIP">发货</option><option value="REDEEM">核销</option></select></label>
+        <label>商品类型<select :disabled="saving || specBusy" v-model="productFulfillment" aria-label="商品类型"><option value="SHIP">实物商品</option><option value="REDEEM">虚拟商品／服务</option></select></label>
         <label v-if="productFulfillment === 'REDEEM'">核销截止日期（截止日当天有效）<input :disabled="saving || specBusy" v-model="productRedeemValidUntil" type="date" /></label>
         </div>
       <p class="help-text">商品当前{{ editingProduct.status === 'DRAFT' ? '为草稿' : editingProduct.status === 'ON_SALE' ? '在售' : '已下架' }}。商品列表可整体上下架；SKU 状态保留各规格的独立售卖选择。</p>
       <p v-if="!canStatus" class="help-text">当前账号没有调整 SKU 上下架状态的权限。</p>
+      <RedemptionScopeFields v-if="productFulfillment==='REDEEM'" v-model:scope="productRedeemScope" v-model:store-ids="productRedeemStoreIds" :saved-stores="editingProduct?.redeemStores" :disabled="saving||specBusy||!canWrite" />
       <ProductMediaEditor v-model:main-image="productMainImage" v-model:gallery-images="productGalleryImages" v-model:video="productVideo"
         :target-key="JSON.stringify([account.accountId, editingProduct.productId])" :can-upload="canUpload" :disabled="saving || specBusy || !canWrite"
         @busy-change="productMediaBusy = $event" />

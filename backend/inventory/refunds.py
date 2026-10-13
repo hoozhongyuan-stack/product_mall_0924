@@ -14,9 +14,6 @@ def restore_unshipped_refund_locked(line, quantity, case_id):
         raise ValueError("退款回库数量或来源不正确。")
     if line.fulfillment_kind != "SHIP":
         raise ValueError("此入口只回补未发货实物。")
-    from fulfillment.store_service import physical_handoff_fact
-    if physical_handoff_fact(line.order) is not None:
-        raise ValueError("已经交付的实物须通过退货验收回库。")
     previous = InventoryLedger.objects.filter(refund_case_id=case_id).first()
     if previous:
         if previous.refund_order_line_id != line.id or previous.operation_quantity != quantity:
@@ -30,7 +27,9 @@ def restore_unshipped_refund_locked(line, quantity, case_id):
         raise ValueError("原销售库存凭证不一致。")
     prior_quantity = InventoryLedger.objects.filter(refund_order_line=line).aggregate(
         total=Sum("operation_quantity"))["total"] or 0
-    if prior_quantity + quantity > line.quantity:
+    from fulfillment.physical import physical_quantities
+    handed = physical_quantities(line)["dispatchedQuantity"]
+    if prior_quantity + quantity > line.quantity - handed:
         raise ValueError("累计退款回库超过原购买数量。")
     balance = InventoryBalance.objects.select_for_update().get(pk=reservation.balance_id)
     if balance.warehouse_id != line.warehouse_id or balance.sku_id != resolve_anchor_id(line.sku_id):
@@ -62,7 +61,8 @@ def record_return_disposition_locked(line, acceptance, actor):
         sale.sku_id!=line.sku_id or sale.unit_version_id!=line.unit_version_id or sale.ratio!=line.ratio):
         raise ValueError("原销售库存凭证不一致。")
     prior=ReturnDisposition.objects.filter(order_line=line).aggregate(total=Sum("received_quantity"))["total"] or 0
-    if prior+acceptance.received_quantity>line.quantity: raise ValueError("累计实际退回数量超过购买数量。")
+    from fulfillment.physical import physical_quantities
+    if prior+acceptance.received_quantity>physical_quantities(line)["dispatchedQuantity"]: raise ValueError("累计实际退回数量超过已交付数量。")
     result=ReturnDisposition.objects.create(case_id=acceptance.case_id,acceptance_id=acceptance.id,order_line=line,
         received_quantity=acceptance.received_quantity,salable_quantity=acceptance.salable_quantity,
         damaged_quantity=acceptance.received_quantity-acceptance.salable_quantity,actor=actor,reason=acceptance.reason)

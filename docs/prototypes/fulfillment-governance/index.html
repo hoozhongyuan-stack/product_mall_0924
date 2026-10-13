@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>订单履约治理 · 三端交互稿</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="review-header">
+    <div class="identity"><strong>订单履约治理</strong><span class="draft">HTML 评审稿</span></div>
+    <nav id="role-tabs" aria-label="选择预览端"></nav>
+    <button id="reset" class="quiet">重置演示</button>
+  </header>
+  <div class="review-boundary">仅模拟订单与库存；操作在当前页面联动，刷新后重置。此稿用于确认交互，尚未开发业务功能。</div>
+  <main id="app"></main>
+  <dialog id="action-dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>

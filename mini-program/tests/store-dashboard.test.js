@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict')
 const dashboard=require('../lib/store-dashboard')
 test('overview preserves unknown counts and zero, and emits permission-specific shortcuts',()=>{
  const summary=dashboard.present({stats:{waitingPreparation:2,waitingPickup:0,waitingDelivery:1,waitingShipment:3,totalOrders:8,activeAfterSales:1}},['orders','accounts'])
- assert.equal(summary.todos[1].count,0);assert.equal(summary.totalOrders,8)
+ assert.equal(summary.todos.find(row=>row.key==='waitingPickup').count,0);assert.equal(summary.totalOrders,8)
  assert.ok(summary.shortcuts.some(x=>x.key==='verify'&&x.fulfillment==='WAITING_PICKUP'))
  assert.ok(!summary.shortcuts.some(x=>x.section==='products'))
  assert.equal(dashboard.present({stats:null},['products']).totalOrders,null)
@@ -15,7 +15,7 @@ function mount(){let config;global.Page=c=>config=c;delete require.cache[require
 function ready(permissions){storage.clear();storage.set('mall.memberToken','member');const p=mount();p.identity='member';p.choose({id:'s',name:'仓',permissions});return p}
 test('dashboard loads real overview and requests account only with accounts permission',async()=>{
  const old=api.get,paths=[];api.get=async path=>{paths.push(path);return path.endsWith('/account')?{balance:{availableFen:9200}}:{stats:{waitingPickup:4,totalOrders:9}}}
- const p=ready(['orders']);await p.loadSection();assert.equal(p.data.overview.todos[1].count,4);assert.ok(!paths.some(x=>x.endsWith('/account')))
+ const p=ready(['orders']);await p.loadSection();assert.equal(p.data.overview.todos.find(row=>row.key==='waitingPickup').count,4);assert.ok(!paths.some(x=>x.endsWith('/account')))
  const q=ready(['accounts']);await q.loadSection();assert.equal(q.data.account.available,'¥92.00');api.get=old
 })
 test('todo and account shortcuts use real filters and isolated account subviews',async()=>{

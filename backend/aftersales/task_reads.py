@@ -17,7 +17,11 @@ def with_line_quantities(lines):
         quantity=Sum(Coalesce('return_acceptance__refund_quantity', 'quantity'))).values('quantity')
     held = cases.filter(status__in=ACTIVE).values('order_line_id').annotate(
         quantity=Sum('unredeemed_quantity')).values('quantity')
+    unshipped_refunded = cases.filter(status='COMPLETED', kind='REFUND_ONLY').values('order_line_id').annotate(quantity=Sum('quantity')).values('quantity')
+    unshipped_held = cases.filter(status__in=ACTIVE, kind='REFUND_ONLY').values('order_line_id').annotate(quantity=Sum('quantity')).values('quantity')
     return lines.alias(
         task_refunded_quantity=Coalesce(Subquery(refunded, output_field=IntegerField()), 0),
+        task_refunded_unshipped=Coalesce(Subquery(unshipped_refunded, output_field=IntegerField()), 0),
+        task_held_unshipped=Coalesce(Subquery(unshipped_held, output_field=IntegerField()), 0),
         task_held_unredeemed=Coalesce(Subquery(held, output_field=IntegerField()), 0),
     )

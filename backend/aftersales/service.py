@@ -58,15 +58,20 @@ def _eligibility(order, line, kind, scope, quantity, facts=None):
     if line.fulfillment_kind == "SHIP":
         if scope != "UNUSED":
             raise AfterSaleError("发货商品不支持核销范围。")
-        from fulfillment.store_service import physical_handoff_fact
-        shipment = facts["shipment"] if facts is not None else physical_handoff_fact(order)
-        if shipment is not None:
-            if kind != "RETURN_REFUND":
-                _fail("已发货商品需申请退货退款。", "RETURN_REQUIRED")
-            if shipment.confirmed_at and timezone.now() > shipment.confirmed_at + timedelta(days=snapshot.received_window_days):
-                _fail("已超过收货后售后时限。", "AFTERSALE_EXPIRED")
-        elif kind != "REFUND_ONLY":
-            _fail("未发货商品使用仅退款。", "REFUND_ONLY_REQUIRED")
+        from fulfillment.physical import line_handoff_fact, physical_quantities
+        dispatched = physical_quantities(line)['dispatchedQuantity']
+        completed = list(AfterSaleCase.objects.filter(order_line=line, status='COMPLETED').values('kind', 'quantity', 'return_acceptance__refund_quantity'))
+        refunded_unshipped = sum(row['quantity'] for row in completed if row['kind'] == 'REFUND_ONLY')
+        returned = sum(row['return_acceptance__refund_quantity'] if row['return_acceptance__refund_quantity'] is not None else row['quantity'] for row in completed if row['kind'] == 'RETURN_REFUND')
+        if kind == 'REFUND_ONLY':
+            if quantity > line.quantity - dispatched - refunded_unshipped:
+                _fail('申请数量超过未交付可退款数量。', 'RETURN_REQUIRED')
+        else:
+            if not dispatched or quantity > dispatched - returned:
+                _fail('申请数量超过已交付可退货数量。', 'REFUND_ONLY_REQUIRED')
+            shipment = line_handoff_fact(line)
+            if shipment and shipment.confirmed_at and timezone.now() > shipment.confirmed_at + timedelta(days=snapshot.received_window_days):
+                _fail('已超过收货后售后时限。', 'AFTERSALE_EXPIRED')
     else:
         if kind != "REFUND_ONLY":
             raise AfterSaleError("核销商品使用仅退款。")

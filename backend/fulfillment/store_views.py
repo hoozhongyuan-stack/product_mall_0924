@@ -34,10 +34,10 @@ def orders_view(request, store_id, order_id=None):
                 raise FulfillmentError('请提供防重复请求标识。') from exc
             operate(member, store_id, order_id, parse_json(request), key)
         if order_id:
-            row = Order.objects.filter(pk=order_id, store_id=store_id).first()
+            row = scoped_orders(store_id).filter(pk=order_id).first()
             if not row:
                 raise FulfillmentError('订单不存在。', 'ORDER_NOT_FOUND', 404)
-            return response(request, order_data(row))
+            return response(request, scoped_order_data(row, store_id))
         if set(request.GET) - {'page', 'status', 'fulfillment'} or any(len(request.GET.getlist(key)) != 1 for key in request.GET):
             raise FulfillmentError('订单筛选参数不正确。')
         try:
@@ -46,7 +46,7 @@ def orders_view(request, store_id, order_id=None):
             raise FulfillmentError('页码不正确。') from exc
         if not 1 <= page <= 10000:
             raise FulfillmentError('页码不正确。')
-        rows = Order.objects.filter(store_id=store_id).order_by('-created_at')
+        rows = scoped_orders(store_id).order_by('-created_at', '-id')
         state = request.GET.get('status')
         if state:
             if state not in ('PENDING_PAYMENT', 'PAID', 'CLOSED'):
@@ -57,13 +57,13 @@ def orders_view(request, store_id, order_id=None):
         if task:
             if task not in TASK_FIELDS:
                 raise FulfillmentError('履约任务不正确。')
-            rows=filter_order_tasks(rows,task)
+            rows=filter_order_tasks(rows,task,store_id=store_id)
         total=rows.count()
         page_rows=list(rows.prefetch_related('lines')[(page-1)*20:page*20])
         from .read import page_fulfillment_summaries
-        facts=page_fulfillment_summaries(page_rows)
+        facts=page_fulfillment_summaries(page_rows, store_id=store_id)
         items=[{'orderId':str(row.id),'orderNo':row.order_no,'status':row.status,
-            'storeId':str(row.store_id),'storeName':row.store_snapshot.get('name'),
+            'storeId':str(row.store_id) if row.store_id else None,'storeName':row.store_snapshot.get('name'),
             'deliveryMode':row.delivery_mode,'revision':row.revision,'payableFen':row.payable_fen,
             'createdAt':row.created_at.isoformat(),'items':[{'orderLineId':str(line.id),'name':line.product_name,
                 'quantity':line.quantity,'saleUnit':line.sale_unit} for line in row.lines.all()],
@@ -99,7 +99,7 @@ def aftersales_view(request, store_id, case_id=None):
             except (ValueError,AttributeError) as exc:
                 raise AfterSaleError('请提供防重复请求标识。') from exc
             record_note(member,store_id,case_id,parse_json(request),key)
-        rows=AfterSaleCase.objects.filter(order_line__order__store_id=store_id).select_related('order_line__order').order_by('-created_at')
+        rows=scoped_aftersales(store_id).select_related('order_line__order').order_by('-created_at')
         if case_id:
             case=rows.filter(pk=case_id).first()
             if not case:
@@ -125,3 +125,54 @@ def aftersales_view(request, store_id, case_id=None):
         return error(request,exc.status,exc.code,str(exc))
     except ValueError as exc:
         return error(request,400,'VALIDATION_FAILED',str(exc))
+
+
+@csrf_exempt
+@cache_control(private=True, no_store=True)
+@vary_on_headers('Authorization', 'Cookie')
+@guarded
+def redemptions_view(request, store_id, order_id):
+    bad = method(request, 'POST')
+    if bad:
+        return bad
+    member, denied = require_member(request)
+    if denied:
+        return denied
+    try:
+        from .redemption import store_redeem
+        key = UUID(request.headers.get('Idempotency-Key', ''))
+        row = store_redeem(member, store_id, order_id, parse_json(request), key)
+        return response(request, scoped_order_data(row, store_id))
+    except FulfillmentError as exc:
+        return error(request, exc.status, exc.code, str(exc))
+    except (ValueError, AttributeError):
+        return error(request, 400, 'VALIDATION_FAILED', '核销请求或防重复标识不正确。')
+
+
+def scoped_orders(store_id):
+    from django.db.models import Q
+    return Order.objects.filter(Q(store_id=store_id, delivery_mode__in=['PICKUP', 'DELIVERY']) |
+        Q(lines__fulfillment_kind='REDEEM', lines__redeem_scope_snapshot__scope__in=['STORE', 'BOTH'],
+          lines__redeem_scope_snapshot__contains={'stores': [{'storeId': str(store_id)}]})).distinct()
+
+
+def scoped_order_data(order, store_id):
+    from .redemption import permitted
+    from .read import page_fulfillment_summaries
+    data = order_data(order)
+    if data.get('storeDelivery') and str(order.store_id) != str(store_id):
+        data = {**data, 'storeDelivery': {**data['storeDelivery'], 'events': []}}
+    lines = {str(line.id): line for line in order.lines.all()}
+    for item in data['items']:
+        progress = item.get('fulfillment') or {}
+        if progress.get('kind') == 'REDEEM':
+            progress['canRedeemStore'] = progress.get('canRedeemStore', False) and permitted(lines[item['orderLineId']], store_id)
+    return {**data, **page_fulfillment_summaries([order], store_id=store_id)[order.id]}
+
+
+def scoped_aftersales(store_id):
+    from django.db.models import Q
+    from aftersales.models import AfterSaleCase
+    return AfterSaleCase.objects.filter(Q(order_line__order__store_id=store_id, order_line__order__delivery_mode__in=['PICKUP', 'DELIVERY']) |
+        Q(order_line__fulfillment_kind='REDEEM', order_line__redeem_scope_snapshot__scope__in=['STORE', 'BOTH'],
+          order_line__redeem_scope_snapshot__contains={'stores': [{'storeId': str(store_id)}]}))
